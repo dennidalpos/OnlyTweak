@@ -1,0 +1,14 @@
+dist/
+artifacts/
+
+# Direttive locali distribuite da SecondBrain su questa postazione.
+AGENTS.md
+
+# Configurazioni personali e file temporanei degli editor.
+.vs/
+.vscode/
+*.user
+*.suo
+*.tmp
+.env
+.env.*
