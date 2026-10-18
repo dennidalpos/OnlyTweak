@@ -23,13 +23,18 @@ namespace OnlyTweakWindows
                 Throws(delegate { ProcessService.ValidateTarget("shell:::arbitrary"); },"non consentita");
             });
             Test("launcher: usa il backend interattivo per destinazioni approvate",delegate {
+                // I gestori reali dipendono dal sistema (per esempio windowsdefender: manca su Windows Server):
+                // le destinazioni senza gestore devono essere rifiutate senza raggiungere il backend.
                 List<string> targets=new List<string>(); ProcessService process=new ProcessService(targets.Add);
-                process.LaunchTarget("ms-settings:yourinfo",Ignore);
-                process.LaunchTarget(ProcessService.ClassicPrinters,Ignore);
-                process.LaunchTarget("windowsdefender://smartapp/",Ignore);
-                Assert(targets.SequenceEqual(new[] { "ms-settings:yourinfo",ProcessService.ClassicPrinters,"windowsdefender://smartapp/" }),"Contesto interattivo aggirato.");
+                List<string> expected=new List<string>();
+                foreach (string target in new[] { "ms-settings:yourinfo",ProcessService.ClassicPrinters,"windowsdefender://smartapp/" })
+                {
+                    if (process.TargetUnavailable(target)==null) { process.LaunchTarget(target,Ignore); expected.Add(target); }
+                    else Throws(delegate { process.LaunchTarget(target,Ignore); },"non disponibile");
+                }
+                Assert(targets.SequenceEqual(expected),"Contesto interattivo aggirato.");
                 Throws(delegate { process.LaunchTarget("https://evil.test/",Ignore); },"non consentita");
-                Assert(targets.Count==3,"Destinazione vietata inoltrata.");
+                Assert(targets.Count==expected.Count,"Destinazione vietata inoltrata.");
             });
             Test("protezioni: criterio SmartScreen applicato e ripristinato con assenze",delegate {
                 FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"smartscreen");
