@@ -447,6 +447,24 @@ namespace OnlyTweakWindows
                     Assert(info.TabStop && info.AccessibleDescription==app.Catalog.Accounts.Detail && form.Tips.GetToolTip(info)==app.Catalog.Accounts.Detail,"Dettaglio Account non accessibile.");
                 }
             });
+            Test("UI: dettaglio Info solo su richiesta e chiuso con finestra spostata o chiusa",delegate {
+                AppServices app=new AppServices();
+                MenuDialog form=new MenuDialog(app,app.Catalog.Accounts) { ShowInTaskbar=false };
+                // Il banco non può portare la finestra in primo piano: ShowAlways evita il solo controllo di attivazione.
+                form.Tips.ShowAlways=true;
+                try
+                {
+                    form.Show(); Application.DoEvents();
+                    InfoIcon info=Descendants(form).OfType<InfoIcon>().Single();
+                    Assert(form.ActiveControl!=info && VisibleTooltips()==0,"Dettaglio aperto all'avvio della finestra.");
+                    info.Focus(); Application.DoEvents(); Assert(VisibleTooltips()==0,"Dettaglio aperto dal solo focus.");
+                    info.ShowDetail(); Application.DoEvents(); Assert(VisibleTooltips()>0,"Dettaglio non mostrato su richiesta.");
+                    form.Left+=24; Application.DoEvents(); Assert(VisibleTooltips()==0,"Dettaglio rimasto dopo lo spostamento della finestra.");
+                    info.ShowDetail(); Application.DoEvents(); Assert(VisibleTooltips()>0,"Dettaglio non riaperto.");
+                    form.Close(); Application.DoEvents(); Assert(VisibleTooltips()==0,"Dettaglio rimasto dopo la chiusura.");
+                }
+                finally { form.Dispose(); }
+            });
             Test("UI: senza font icone nessun errore e nessun glifo",delegate {
                 string family=Theme.IconFamily; Theme.IconFamily=null;
                 try
@@ -577,6 +595,23 @@ namespace OnlyTweakWindows
         [DllImport("kernel32.dll")] private static extern IntPtr LockResource(IntPtr resource);
         [DllImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool FreeLibrary(IntPtr module);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool PrintWindow(IntPtr window,IntPtr dc,uint flags);
+        private delegate bool WindowCallback(IntPtr window,IntPtr parameter);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool EnumThreadWindows(uint thread,WindowCallback callback,IntPtr parameter);
+        [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr window,StringBuilder name,int length);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(IntPtr window);
+        [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+        // Finestre tooltip di Windows visibili nel thread dell'interfaccia.
+        private static int VisibleTooltips()
+        {
+            int count=0;
+            EnumThreadWindows(GetCurrentThreadId(),delegate(IntPtr window,IntPtr parameter) {
+                StringBuilder name=new StringBuilder(256); GetClassName(window,name,name.Capacity);
+                // WinForms registra la classe con un prefisso, per esempio WindowsForms10.tooltips_class32.app...
+                if (name.ToString().Contains("tooltips_class32") && IsWindowVisible(window)) count++;
+                return true;
+            },IntPtr.Zero);
+            return count;
+        }
         [DllImport("user32.dll",EntryPoint="SendMessageW")] private static extern IntPtr ScrollPosition(IntPtr window,int message,IntPtr wParam,ref Point point);
     }
     internal sealed class FakeRegistry : IRegistryStore

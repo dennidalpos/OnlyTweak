@@ -115,11 +115,23 @@ namespace OnlyTweakWindows
             TextRenderer.DrawText(e.Graphics,Text,Font,new Rectangle(x,Padding.Top,Math.Max(1,Width-x-Padding.Right),Height-Padding.Vertical),ForeColor,Flags);
         }
     }
-    // Icona Info focalizzabile: il dettaglio compare come tooltip al passaggio del mouse e al focus da tastiera.
+    // Icona Info focalizzabile: il dettaglio compare al passaggio del mouse, al clic o con Invio/Spazio/F1.
+    // Il tooltip richiesto esplicitamente ha una durata limitata e si chiude all'uscita del focus o quando
+    // la finestra si sposta, si disattiva o si chiude: non resta sospeso sopra altre finestre.
     internal sealed class InfoIcon : Control
     {
+        internal const int DetailDuration=10000;
         private readonly ToolTip tips;
         private bool hovered;
+        internal void ShowDetail() { if (IsHandleCreated && Visible) tips.Show(Text,this,0,Height+2,DetailDuration); }
+        internal void HideDetail() { if (IsHandleCreated) tips.Hide(this); }
+        protected override void OnClick(EventArgs e) { Focus(); ShowDetail(); base.OnClick(e); }
+        protected override bool IsInputKey(Keys keyData) { return keyData==Keys.Enter || base.IsInputKey(keyData); }
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (e.KeyCode==Keys.Enter || e.KeyCode==Keys.Space || e.KeyCode==Keys.F1) { ShowDetail(); e.Handled=true; }
+            base.OnKeyDown(e);
+        }
         public InfoIcon(ToolTip tips,string detail)
         {
             this.tips=tips;
@@ -130,8 +142,8 @@ namespace OnlyTweakWindows
         }
         protected override void OnMouseEnter(EventArgs e) { hovered=true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hovered=false; Invalidate(); base.OnMouseLeave(e); }
-        protected override void OnEnter(EventArgs e) { Invalidate(); tips.Show(Text,this,0,Height+2); base.OnEnter(e); }
-        protected override void OnLeave(EventArgs e) { Invalidate(); tips.Hide(this); base.OnLeave(e); }
+        protected override void OnEnter(EventArgs e) { Invalidate(); base.OnEnter(e); }
+        protected override void OnLeave(EventArgs e) { Invalidate(); HideDetail(); base.OnLeave(e); }
         protected override void OnPaint(PaintEventArgs e)
         {
             Color color=Focused||hovered ? Theme.Accent : Theme.Muted;
@@ -213,7 +225,7 @@ namespace OnlyTweakWindows
         public DarkForm(string title,string subtitle) : this(title,subtitle,null,null) { }
         public DarkForm(string title,string subtitle,string glyph,string detail)
         {
-            Tips=new ToolTip { AutoPopDelay=30000,InitialDelay=400,ReshowDelay=100,OwnerDraw=true };
+            Tips=new ToolTip { AutoPopDelay=InfoIcon.DetailDuration,InitialDelay=400,ReshowDelay=100,OwnerDraw=true };
             Tips.Popup+=delegate(object sender,PopupEventArgs e) {
                 Size size=TextRenderer.MeasureText(Tips.GetToolTip(e.AssociatedControl)??"",Font,new Size(420,0),TextFormatFlags.WordBreak);
                 e.ToolTipSize=new Size(size.Width+20,size.Height+14);
@@ -242,7 +254,6 @@ namespace OnlyTweakWindows
             Label heading=Theme.Heading(title,glyph); Heading=(GlyphLabel)heading;
             Subtitle=Theme.Label(subtitle,Theme.Muted);
             header.Controls.Add(heading,0,1); header.SetColumnSpan(heading,2); header.Controls.Add(Subtitle,0,2);
-            InfoIcon info=null;
             if (!String.IsNullOrEmpty(detail)) { info=new InfoIcon(Tips,detail); header.Controls.Add(info,1,2); }
             else header.SetColumnSpan(Subtitle,2);
             header.SizeChanged+=delegate {
@@ -255,12 +266,23 @@ namespace OnlyTweakWindows
             Feedback=Theme.Label("",Theme.Muted); Feedback.Dock=DockStyle.Top; Feedback.Padding=new Padding(26,9,26,0); Feedback.Visible=false;
             Footer.Paint+=delegate(object sender,PaintEventArgs e) { using (Pen pen=new Pen(Theme.Border)) e.Graphics.DrawLine(pen,24,0,Footer.Width-24,0); };
             Root.Controls.Add(header,0,0); Root.Controls.Add(Content,0,1); Root.Controls.Add(Feedback,0,2); Root.Controls.Add(Footer,0,3); Controls.Add(Root);
+            // L'icona Info segue contenuti e pulsanti nell'ordine di tabulazione: all'apertura il focus non finisce sull'intestazione.
+            header.TabIndex=Root.Controls.Count;
+            Move+=delegate { HideTips(); }; ResizeBegin+=delegate { HideTips(); };
         }
+        private readonly InfoIcon info;
+        // Chiude sia i tooltip al passaggio del mouse sia il dettaglio richiesto dall'icona Info.
+        internal void HideTips()
+        {
+            if (info!=null) info.HideDetail();
+            if (Tips.Active) { Tips.Active=false; Tips.Active=true; }
+        }
+        protected override void OnFormClosing(FormClosingEventArgs e) { HideTips(); base.OnFormClosing(e); }
         protected void SetFeedback(string text)
         { if (IsDisposed) return; Feedback.Text=text; Feedback.Visible=!String.IsNullOrEmpty(text); Feedback.MaximumSize=new Size(Math.Max(100,ClientSize.Width-16),0); }
         protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); ApplyFrame(); }
         protected override void OnActivated(EventArgs e) { base.OnActivated(e); ApplyFrame(); }
-        protected override void OnDeactivate(EventArgs e) { base.OnDeactivate(e); ApplyFrame(); }
+        protected override void OnDeactivate(EventArgs e) { HideTips(); base.OnDeactivate(e); ApplyFrame(); }
         private void ApplyFrame()
         {
             if (!IsHandleCreated) return;

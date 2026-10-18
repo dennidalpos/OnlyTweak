@@ -29,7 +29,7 @@ I tweak reversibili si applicano direttamente, con esito inline. Diagnostica e m
 
 Stampanti offre **Vista classica** (Dispositivi e stampanti) e, separatamente, **Stampanti e scanner** nelle Impostazioni moderne. Strumenti Windows include **Gestione computer**, **Pannello di controllo** e **Programmi e funzionalità** prima dell'alternativa moderna Applicazioni installate. Componenti, console e destinazioni Shell sono controllati prima dell'avvio; Windows può comunque reindirizzare una vista su build differenti. La sola richiesta di apertura non certifica la finestra effettivamente mostrata.
 
-Ogni area ha un'icona del font di sistema Segoe Fluent Icons, incluso in Windows 11. Le card mostrano una riga breve; avvertenze e dettagli sono nel tooltip, anche tramite l'icona Info raggiungibile da tastiera, e restano completi nelle conferme e per i lettori di schermo.
+Ogni area ha un'icona del font di sistema Segoe Fluent Icons, incluso in Windows 11. Le card mostrano una riga breve; avvertenze e dettagli sono nel tooltip, anche tramite l'icona Info (clic, oppure Invio, Spazio o F1 da tastiera). I tooltip si chiudono da soli dopo 10 secondi e quando la finestra si sposta, perde il primo piano o si chiude. I testi completi restano nelle conferme e per i lettori di schermo.
 
 Titolo e contorni della finestra, pulsanti, conferme, riquadri, selezioni, avanzamento e scrollbar dell'app condividono una palette scura con accento verde acqua. Le scrollbar verticali dei menu e della lista stampanti e quelle verticali/orizzontali dell'output sono disegnate dall'app. I dialoghi esterni Windows e dei driver mantengono il proprio tema di sistema.
 

@@ -26,6 +26,13 @@
   - glifi dei menu;
   - tooltip e descrizione accessibile completi;
   - assenza del font icone senza errori.
+- Correzione dei tooltip che restavano visibili sullo schermo:
+  - **Causa:** l'icona Info era il primo controllo tabulabile, quindi riceveva il focus all'apertura e mostrava un tooltip senza scadenza. In più, i tooltip al passaggio del mouse duravano 30 s e non si chiudevano alla disattivazione della finestra.
+  - **Ora:**
+    - l'icona Info segue contenuti e pulsanti nell'ordine di tabulazione;
+    - il dettaglio si apre solo con clic, Invio, Spazio o F1 e dura 10 s;
+    - tutti i tooltip si chiudono quando la finestra si sposta, si ridimensiona, si disattiva o si chiude.
+  - Il test con la finestra tooltip reale (`EnumThreadWindows`) fallisce sul codice precedente e passa con la correzione.
 - Il tooltip non compare nei render statici. Al 200% simulato l'icona Info risulta più bassa del sottotitolo perché il banco non scala i caratteri; va verificata con DPI reali.
 
 ## Correzioni di layout del 18 ottobre 2026
