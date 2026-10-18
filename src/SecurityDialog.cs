@@ -109,8 +109,13 @@ namespace OnlyTweakWindows
         private void Arrange()
         {
             int width=Math.Max(100,layout.ClientSize.Width-6),height=Padding.Vertical+8;
+            // Un motivo vuoto non deve riservare una riga sopra i pulsanti.
+            reason.Visible=reason.Text.Length>0;
             foreach (Label label in new[] { title,detail,state,reason })
-            { label.MaximumSize=new Size(width,0); height+=label.GetPreferredSize(new Size(width,0)).Height+label.Margin.Vertical; }
+            {
+                label.MaximumSize=new Size(width,0);
+                if (label.Visible) height+=label.GetPreferredSize(new Size(width,0)).Height+label.Margin.Vertical;
+            }
             height+=buttons.GetPreferredSize(new Size(width,0)).Height;
             if (Height!=height) Height=height;
         }

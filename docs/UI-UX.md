@@ -1,5 +1,17 @@
 # Revisione UI/UX — 1.2.0
 
+## Correzioni di layout del 18 ottobre 2026
+
+Misure sui render al 100%, prima → dopo, con le stesse condizioni (`test.cmd --artifact --ui --read-only --render`):
+
+- Home: finestra 960×760 e righe della griglia da 88 px. La nota sulla persistenza delle modifiche è visibile senza scorrere; prima finiva fuori dall'area visibile e compariva una scrollbar.
+- Strumenti Windows: il margine destro della colonna non si applica più alla tessera su due colonne. Il bordo destro passa da x=906 a x=912, come la riga sopra.
+- Titoli: `HeadingLabel` disegna il titolo a 22pt con il margine GDI del carattere del contenitore. Il bordo sinistro passa da 47-50 px a 42-45 px, allineato a sottotitolo (42-43) e intestazione (41); lo scarto residuo dipende dalla forma della prima lettera.
+- Protezioni: il motivo vuoto non riserva più una riga sopra i pulsanti.
+- Operazione: margine laterale 26 come le altre finestre. Le etichette passano da x=40 a x=42; l'output resta a x=37, allineato alla lista stampanti.
+
+Colori e palette sono invariati. I render a 150/200% scalano le dimensioni ma non i caratteri: non provano l'assenza di testo tagliato con DPI reali.
+
 ## Aggiornamento del 16 ottobre 2026
 
 - Home a sette categorie: aggiunti Compatibilità e protezioni e Account, mantenendo due colonne e la riga Strumenti Windows a larghezza intera.

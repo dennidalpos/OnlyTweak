@@ -30,6 +30,11 @@ namespace OnlyTweakWindows
         }
         public static Label Label(string text,Color color)
         { return new Label { Text=text,AutoSize=true,ForeColor=color,BackColor=Color.Transparent,Margin=new Padding(0,0,0,10),UseMnemonic=false }; }
+        public static Label Heading(string text)
+        {
+            Label label=new HeadingLabel { Text=text,AutoSize=true,ForeColor=Text,BackColor=Color.Transparent,Margin=new Padding(0,0,0,8),UseMnemonic=false };
+            label.Font=new Font("Segoe UI",22F,FontStyle.Bold); return label;
+        }
         public static Label Section(string text)
         {
             Label label=Label(text.ToUpperInvariant(),Muted);
@@ -41,6 +46,26 @@ namespace OnlyTweakWindows
             GraphicsPath path=new GraphicsPath(); int size=Math.Max(2,Math.Min(radius*2,Math.Min(rectangle.Width,rectangle.Height)));
             path.AddArc(rectangle.Left,rectangle.Top,size,size,180,90); path.AddArc(rectangle.Right-size,rectangle.Top,size,size,270,90);
             path.AddArc(rectangle.Right-size,rectangle.Bottom-size,size,size,0,90); path.AddArc(rectangle.Left,rectangle.Bottom-size,size,size,90,90); path.CloseFigure(); return path;
+        }
+    }
+    // GDI aggiunge un margine laterale proporzionale al carattere: a 22pt il titolo rientrerebbe
+    // rispetto alle righe a 8-10pt. Il titolo usa invece il margine del carattere del contenitore.
+    internal sealed class HeadingLabel : Label
+    {
+        private const TextFormatFlags Flags=TextFormatFlags.NoPadding|TextFormatFlags.WordBreak|TextFormatFlags.NoPrefix;
+        // Margine GDI delle Label (GlyphOverhangPadding): circa un sesto dell'altezza del carattere.
+        private int Inset()
+        { return (int)Math.Ceiling((Parent==null ? Font : Parent.Font).Height/6F); }
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            int inset=Inset(),width=MaximumSize.Width>0 ? Math.Max(1,MaximumSize.Width-Padding.Horizontal-inset) : Int32.MaxValue;
+            Size text=TextRenderer.MeasureText(Text,Font,new Size(width,Int32.MaxValue),Flags);
+            return new Size(text.Width+Padding.Horizontal+inset,text.Height+Padding.Vertical);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            int inset=Inset();
+            TextRenderer.DrawText(e.Graphics,Text,Font,new Rectangle(Padding.Left+inset,Padding.Top,Math.Max(1,Width-Padding.Horizontal-inset),Height-Padding.Vertical),ForeColor,Flags);
         }
     }
     internal sealed class DarkButton : Button
@@ -107,7 +132,7 @@ namespace OnlyTweakWindows
             Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.Percent,100)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             TableLayoutPanel header=new TableLayoutPanel { Dock=DockStyle.Top,AutoSize=true,ColumnCount=1,Padding=new Padding(26,22,26,8),Margin=Padding.Empty };
             Label eyebrow=Theme.Label("ONLYTWEAK  /  WINDOWS 11",Theme.Accent); eyebrow.Font=new Font("Segoe UI",8F,FontStyle.Bold);
-            Label heading=Theme.Label(title,Theme.Text); heading.Font=new Font("Segoe UI",22F,FontStyle.Bold); heading.Margin=new Padding(0,0,0,8);
+            Label heading=Theme.Heading(title);
             Subtitle=Theme.Label(subtitle,Theme.Muted);
             header.Controls.Add(eyebrow,0,0); header.Controls.Add(heading,0,1); header.Controls.Add(Subtitle,0,2);
             header.SizeChanged+=delegate { int width=Math.Max(100,header.ClientSize.Width-header.Padding.Horizontal); heading.MaximumSize=new Size(width,0); Subtitle.MaximumSize=new Size(width,0); };

@@ -29,7 +29,7 @@ namespace OnlyTweakWindows
         {
             this.app=app; this.action=action;
             this.confirmationGranted=confirmationGranted;
-            Content.Padding=new Padding(24,4,24,4);
+            Content.Padding=new Padding(26,4,26,4);
             TableLayoutPanel layout=new TableLayoutPanel { Dock=DockStyle.Fill, ColumnCount=1, RowCount=5 };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -38,7 +38,7 @@ namespace OnlyTweakWindows
             Label scope=Theme.Label("Ambito: " + action.Scope,Theme.Muted);
             Label warning=Theme.Label(startAutomatically ? "Risultato e avanzamento dell'operazione." : action.Confirmation ?? "Premi Esegui per avviare questa azione.",Theme.Muted);
             layout.SizeChanged+=delegate { scope.MaximumSize=new Size(Math.Max(100,layout.ClientSize.Width-12),0); warning.MaximumSize=scope.MaximumSize; };
-            output=Theme.Output(); output.Text="Pronto. Nessuna operazione eseguita.";
+            output=Theme.Output(); output.Text="Pronto. Nessuna operazione eseguita."; output.Margin=new Padding(0,3,0,3);
             status=Theme.Label("Verifica disponibilità...",Theme.Muted); status.Margin=new Padding(0,10,0,6);
             progress=new ActivityBar { Dock=DockStyle.Fill,Visible=false,Margin=Padding.Empty };
             layout.Controls.Add(scope,0,0); layout.Controls.Add(warning,0,1); layout.Controls.Add(output,0,2); layout.Controls.Add(status,0,3); layout.Controls.Add(progress,0,4);

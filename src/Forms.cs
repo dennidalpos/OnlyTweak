@@ -10,10 +10,11 @@ namespace OnlyTweakWindows
     {
         public MainForm(AppServices app) : base("OnlyTweakWindows","Tweak, stampanti e manutenzione. Scegli da dove iniziare.")
         {
-            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(960,700);
+            StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(960,760);
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
             stack.Controls.Add(Theme.Label(EnvironmentInfo.Summary+"\n"+EnvironmentInfo.Account+"  ·  Amministratore",Theme.Muted));
-            TableLayoutPanel grid=new TableLayoutPanel { Height=376,ColumnCount=2,RowCount=4,BackColor=Theme.Background,Margin=new Padding(0,10,0,14) };
+            // Quattro righe da 88: le schede restano alte almeno quanto Theme.Card e la nota finale resta visibile al 100%.
+            TableLayoutPanel grid=new TableLayoutPanel { Height=4*88,ColumnCount=2,RowCount=4,BackColor=Theme.Background,Margin=new Padding(0,10,0,14) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
             for (int i=0;i<4;i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,25F));
             AddTile(grid,"Stampanti","Stampanti, code e ripristino spooler",0,0,delegate { using (PrinterDialog form=new PrinterDialog(app)) form.ShowDialog(this); });
@@ -23,9 +24,9 @@ namespace OnlyTweakWindows
             AddTile(grid,"Compatibilità e protezioni","Blocchi app, integrità della memoria e driver",0,2,delegate { using (SecurityDialog form=new SecurityDialog(app)) form.ShowDialog(this); });
             AddTile(grid,"Account","Account locale, Microsoft e utenti del PC",1,2,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Accounts)) form.ShowDialog(this); });
             Button tools=AddTile(grid,"Strumenti Windows","Gestione computer, dispositivi, servizi e impostazioni",0,3,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Tools)) form.ShowDialog(this); });
-            grid.SetColumnSpan(tools,2); stack.Controls.Add(grid);
+            grid.SetColumnSpan(tools,2); tools.Margin=new Padding(0,0,0,10); stack.Controls.Add(grid);
             Label note=Theme.Label("Le modifiche restano attive dopo la chiusura. Cronologia e ripristino dei valori precedenti sono disponibili solo in questa sessione.",Theme.Muted);
-            note.Font=new Font("Segoe UI",9F); stack.Controls.Add(note);
+            note.Font=new Font("Segoe UI",9F); note.Margin=Padding.Empty; stack.Controls.Add(note);
             Footer.Controls.Add(Theme.Button("Cronologia",delegate { using (TextDialog form=new TextDialog("Cronologia della sessione",app.History.Read())) form.ShowDialog(this); }));
         }
         private static Button AddTile(TableLayoutPanel grid,string title,string description,int column,int row,EventHandler clicked)
