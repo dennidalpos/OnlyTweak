@@ -7,6 +7,9 @@ namespace OnlyTweakWindows
     internal sealed class ActionSpec
     {
         public string Id, Title, Description, Scope, Confirmation, Restart;
+        // Riga breve per le card; Description resta il testo completo (tooltip, accessibilità, dettaglio operazione).
+        public string Summary;
+        public string CardText { get { return String.IsNullOrEmpty(Summary) ? Description : Summary; } }
         public Action<Action<string>> Execute;
         public Func<string> Unavailable;
         public bool OpensWindow;

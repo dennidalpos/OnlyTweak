@@ -5,10 +5,16 @@ namespace OnlyTweakWindows
 {
     internal sealed class MenuDefinition
     {
-        public string Title, Description;
+        // Description è il sottotitolo breve; Detail contiene avvertenze e contesto mostrati nel tooltip Info.
+        public string Title, Description, Glyph, Detail;
         public readonly List<ActionSpec> Actions = new List<ActionSpec>();
         public readonly List<MenuDefinition> Children = new List<MenuDefinition>();
-        public MenuDefinition(string title, string description) { Title=title; Description=description; }
+        public MenuDefinition(string title, string description, string glyph, string detail) { Title=title; Description=description; Glyph=glyph; Detail=detail; }
+        public IEnumerable<ActionSpec> AllActions()
+        {
+            foreach (ActionSpec action in Actions) yield return action;
+            foreach (MenuDefinition child in Children) foreach (ActionSpec action in child.AllActions()) yield return action;
+        }
     }
     internal sealed class ActionCatalog
     {
@@ -20,7 +26,7 @@ namespace OnlyTweakWindows
         {
             this.app=app;
             ClassicPrinterView=Target("printers.classic","Dispositivi e stampanti — vista classica","Apre la vista classica disponibile su questa build. In alternativa usa Stampanti e scanner.",ProcessService.ClassicPrinters);
-            Spool = new MenuDefinition("Spooler di stampa", "Interventi sul servizio locale. La pulizia globale elimina i lavori di tutte le stampanti locali, anche di altri utenti.");
+            Spool = new MenuDefinition("Spooler di stampa", "Stato, riavvio e pulizia delle code locali.", Glyphs.Print, "Interventi sul servizio locale. La pulizia globale elimina i lavori di tutte le stampanti locali, anche di altri utenti.");
             Spool.Actions.Add(new ActionSpec("spool.status", "Leggi stato spooler", "Legge lo stato del servizio di stampa senza modificarlo.", "Computer locale", delegate(Action<string> log) { log("Spooler: " + app.Spool.Status()); }));
             Spool.Actions.Add(new ActionSpec("spool.restart", "Riavvia spooler", "Arresta e riavvia il servizio senza cancellare i file delle code. Il tipo di avvio resta quello configurato.", "Computer locale", app.Spool.Restart) {
                 Confirmation="Le stampe in corso possono interrompersi. Il servizio verrà avviato anche se inizialmente fermo. Procedere?" });
@@ -31,12 +37,12 @@ namespace OnlyTweakWindows
                 Confirmation="La barra delle applicazioni scomparirà temporaneamente e le finestre della shell potranno chiudersi. Completa prima copie e spostamenti. Procedere?",
                 Unavailable=ShellService.Unavailable };
 
-            Network = new MenuDefinition("Rete", "Diagnostica, interventi separati e collegamenti alle impostazioni di rete.");
-            MenuDefinition networkInfo = new MenuDefinition("Informazioni di rete", "Lettura delle interfacce e della configurazione attuale.");
+            Network = new MenuDefinition("Rete", "Diagnostica, ripristino e impostazioni di rete.", Glyphs.Network, null);
+            MenuDefinition networkInfo = new MenuDefinition("Informazioni di rete", "Lettura delle interfacce e della configurazione attuale.", Glyphs.Diagnostic, null);
             networkInfo.Actions.Add(new ActionSpec("network.info", "Schede, indirizzi IP e DNS", "Elenca interfacce, stato, indirizzi IP, gateway e DNS.", "Computer locale · sola lettura", ProcessService.ReadNetwork));
             networkInfo.Actions.Add(Command("network.ipconfig", "Configurazione completa", "Mostra l'output di ipconfig /all.", "ipconfig.exe", "/all", false));
             Network.Children.Add(networkInfo);
-            MenuDefinition resets = new MenuDefinition("Ripristino rete", "Ogni intervento è indipendente. I reset possono interrompere la connessione e richiedere il riavvio manuale.");
+            MenuDefinition resets = new MenuDefinition("Ripristino rete", "Reset indipendenti della rete.", Glyphs.Repair, "Ogni intervento è indipendente. I reset possono interrompere la connessione e richiedere il riavvio manuale.");
             resets.Actions.Add(Command("network.dns", "Svuota cache DNS", "Elimina la cache locale delle risoluzioni DNS. Non cambia i server DNS configurati.", "ipconfig.exe", "/flushdns", false));
             ActionSpec winsock = Command("network.winsock", "Ripristina Winsock", "Ripristina il catalogo Winsock tramite netsh winsock reset.", "netsh.exe", "winsock reset", false);
             winsock.Confirmation="Il reset può interrompere la rete e influire su software VPN o filtri di rete. Sarà necessario riavviare manualmente il PC. Procedere?";
@@ -47,13 +53,13 @@ namespace OnlyTweakWindows
             tcp.Restart="Riavvia manualmente il PC e verifica la configurazione IP/DNS.";
             resets.Actions.Add(tcp);
             Network.Children.Add(resets);
-            MenuDefinition networkSettings = new MenuDefinition("Impostazioni rete", "Apre gli strumenti di Windows senza applicare modifiche automaticamente.");
+            MenuDefinition networkSettings = new MenuDefinition("Impostazioni rete", "Strumenti di Windows, senza modifiche automatiche.", Glyphs.Settings, null);
             networkSettings.Actions.Add(SystemTool("network.connections", "Connessioni di rete", "Gestione delle schede e dei protocolli di rete.", "control.exe", "ncpa.cpl"));
             networkSettings.Actions.Add(Settings("network.proxy", "Impostazioni proxy", "Configurazione proxy dell'account.", "ms-settings:network-proxy"));
             Network.Children.Add(networkSettings);
 
-            Maintenance = new MenuDefinition("Manutenzione Windows", "Controlli e riparazioni separati. Durante l'esecuzione l'app resta aperta; non è previsto l'arresto forzato delle riparazioni.");
-            MenuDefinition checks = new MenuDefinition("Verifica e riparazione", "SFC e DISM possono richiedere diversi minuti. Leggi sempre il riepilogo dello strumento.");
+            Maintenance = new MenuDefinition("Manutenzione Windows", "Verifiche, riparazioni e spazio su disco.", Glyphs.Repair, "Controlli e riparazioni separati. Durante l'esecuzione l'app resta aperta; non è previsto l'arresto forzato delle riparazioni.");
+            MenuDefinition checks = new MenuDefinition("Verifica e riparazione", "Controlli SFC e DISM.", Glyphs.Diagnostic, "SFC e DISM possono richiedere diversi minuti. Leggi sempre il riepilogo dello strumento.");
             checks.Actions.Add(Command("sfc.verify", "SFC · verifica", "Controlla i file protetti di Windows senza ripararli (sfc /verifyonly).", "sfc.exe", "/verifyonly", true));
             ActionSpec sfc = Command("sfc.repair", "SFC · ripara", "Controlla e ripara i file protetti (sfc /scannow). Se DISM rileva problemi, esegui prima la sua riparazione e poi SFC.", "sfc.exe", "/scannow", true);
             sfc.Confirmation="SFC può sostituire file di sistema danneggiati. Lascia completare l'operazione. Procedere?";
@@ -63,12 +69,12 @@ namespace OnlyTweakWindows
             dism.Confirmation="DISM può modificare i componenti di Windows e scaricare file di riparazione. Lascia completare l'operazione. Procedere?";
             checks.Actions.Add(dism);
             Maintenance.Children.Add(checks);
-            MenuDefinition cleanup = new MenuDefinition("Spazio su disco", "La scelta di cosa eliminare resta negli strumenti Windows.");
+            MenuDefinition cleanup = new MenuDefinition("Spazio su disco", "La scelta di cosa eliminare resta negli strumenti Windows.", Glyphs.Delete, null);
             cleanup.Actions.Add(SystemTool("storage.cleanup", "Apri Pulizia disco", "Apre Pulizia disco: seleziona lì gli elementi da rimuovere.", "cleanmgr.exe", ""));
             cleanup.Actions.Add(Settings("storage.settings", "Impostazioni archiviazione", "Spazio occupato, file temporanei e Sensore memoria.", "ms-settings:storagesense"));
             Maintenance.Children.Add(cleanup);
 
-            Tools = new MenuDefinition("Strumenti Windows", "Accesso diretto agli strumenti di sistema. Le modifiche si eseguono nelle rispettive finestre.");
+            Tools = new MenuDefinition("Strumenti Windows", "Strumenti di sistema in finestre separate.", Glyphs.Apps, "Accesso diretto agli strumenti di sistema. Le modifiche si eseguono nelle rispettive finestre.");
             Tools.Actions.Add(ConsoleTool("tools.computer","Gestione computer","Dischi, eventi, servizi e strumenti amministrativi.","compmgmt.msc"));
             Tools.Actions.Add(SystemTool("tools.control","Pannello di controllo","Apre il Pannello di controllo classico.","control.exe",""));
             Tools.Actions.Add(SystemTool("tools.programs","Programmi e funzionalità","Gestione classica delle applicazioni desktop. Per le altre app usa Applicazioni installate.","control.exe","appwiz.cpl"));
@@ -80,7 +86,7 @@ namespace OnlyTweakWindows
             Tools.Actions.Add(Settings("tools.startup", "Applicazioni all'avvio", "Gestione dei programmi avviati all'accesso.", "ms-settings:startupapps"));
             Tools.Actions.Add(Settings("tools.update", "Windows Update", "Stato aggiornamenti e opzioni di Windows Update.", "ms-settings:windowsupdate"));
             Tools.Actions.Add(SystemTool("tools.system", "Informazioni di sistema", "Configurazione hardware e software del PC.", "msinfo32.exe", ""));
-            Accounts=new MenuDefinition("Account","Passaggio ad account locale, collegamenti e utenti del PC si gestiscono in Windows. Rimuovere un utente dal PC può eliminare i suoi dati locali; la chiusura online riguarda l'intero account Microsoft.");
+            Accounts=new MenuDefinition("Account","Account, collegamenti e utenti del PC.",Glyphs.Contact,"Passaggio ad account locale, collegamenti e utenti del PC si gestiscono in Windows. Rimuovere un utente dal PC può eliminare i suoi dati locali; la chiusura online riguarda l'intero account Microsoft.");
             Accounts.Actions.Add(Settings("accounts.info","Le tue informazioni / passa ad account locale","Apri Le tue informazioni e scegli Accedi con un account locale. Conserva un metodo di accesso al PC.","ms-settings:yourinfo"));
             Accounts.Actions.Add(Settings("accounts.apps","Account usati dalle app","Gestisci o rimuovi i collegamenti usati da posta e altre applicazioni.","ms-settings:emailandaccounts"));
             Accounts.Actions.Add(Settings("accounts.work","Accesso lavoro o scuola","Gestisci e scollega account aziendali o scolastici nella procedura Windows.","ms-settings:workplace"));
@@ -92,6 +98,33 @@ namespace OnlyTweakWindows
             Accounts.Actions.Add(local);
             Accounts.Actions.Add(Target("accounts.portal","Portale account Microsoft","Gestisci profilo, dispositivi e servizi. Verifica l'account connesso nel browser.","https://account.microsoft.com/"));
             Accounts.Actions.Add(Target("accounts.close","Procedura di chiusura dell'account Microsoft","Apre la guida ufficiale alla chiusura online: riguarda anche i servizi e i dati associati. Accesso, scelta dell'account e conferma finale avvengono sul sito Microsoft.","https://support.microsoft.com/it-it/accounts-billing/manage/how-to-close-your-microsoft-account"));
+            ApplySummaries();
+        }
+        // Righe brevi delle card; il testo completo resta in Description (tooltip, accessibilità, dettaglio operazione).
+        private static readonly Dictionary<string,string> Summaries=new Dictionary<string,string> {
+            { "spool.status","Stato del servizio, senza modifiche." },{ "spool.restart","Riavvia il servizio senza cancellare le code." },
+            { "spool.clean","Elimina i lavori di tutte le code locali." },{ "explorer.restart","Aggiorna desktop e barra delle applicazioni." },
+            { "network.info","Interfacce, IP, gateway e DNS." },{ "network.ipconfig","Output di ipconfig /all." },
+            { "network.dns","Svuota la cache locale delle risoluzioni." },{ "network.winsock","netsh winsock reset; richiede il riavvio." },
+            { "network.tcpip","netsh int ip reset; richiede il riavvio." },{ "network.connections","Schede e protocolli di rete." },
+            { "network.proxy","Proxy dell'account." },{ "sfc.verify","Controlla i file protetti senza ripararli." },
+            { "sfc.repair","Ripara i file protetti (sfc /scannow)." },{ "dism.scan","Analizza l'archivio componenti." },
+            { "dism.repair","Ripara l'archivio componenti." },{ "storage.cleanup","Scegli in Windows cosa eliminare." },
+            { "storage.settings","Spazio, file temporanei e Sensore memoria." },{ "tools.computer","Dischi, eventi e servizi." },
+            { "tools.control","Pannello di controllo classico." },{ "tools.programs","App desktop, vista classica." },
+            { "tools.devices","Dispositivi e driver." },{ "tools.services","Servizi di Windows." },{ "tools.events","Registri di sistema e app." },
+            { "tools.tasks","Processi e prestazioni." },{ "tools.apps","Elenco e gestione delle app." },{ "tools.startup","Programmi avviati all'accesso." },
+            { "tools.update","Aggiornamenti di Windows." },{ "tools.system","Hardware e software del PC." },
+            { "accounts.info","Passa a un account locale." },{ "accounts.apps","Account di posta e app." },
+            { "accounts.work","Account aziendali o scolastici." },{ "accounts.users","Aggiungi o rimuovi utenti." },
+            { "accounts.classic","Gestione classica degli utenti (netplwiz)." },{ "accounts.local","Console Utenti e gruppi locali." },
+            { "accounts.portal","Profilo, dispositivi e servizi online." },{ "accounts.close","Guida ufficiale alla chiusura online." }
+        };
+        private void ApplySummaries()
+        {
+            List<ActionSpec> actions=new List<ActionSpec> { ExplorerRestart };
+            foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools,Accounts }) actions.AddRange(menu.AllActions());
+            foreach (ActionSpec action in actions) { string summary; if (Summaries.TryGetValue(action.Id,out summary)) action.Summary=summary; }
         }
         public ActionSpec ConsoleTool(string id,string title,string description,string console)
         {

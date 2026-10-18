@@ -1,5 +1,33 @@
 # Revisione UI/UX — 1.2.0
 
+## Meno testo e icone delle aree — 18 ottobre 2026
+
+- Icone dal font di sistema [Segoe Fluent Icons](https://learn.microsoft.com/en-us/windows/apps/design/style/segoe-fluent-icons-font), incluso in Windows 11, con Segoe MDL2 Assets come alternativa. Nessun file aggiunto all'EXE; se nessuno dei due font è presente le icone vengono omesse.
+- Dove compaiono le icone:
+  - tessere della home e titolo di ogni finestra (Stampanti, Aspetto, Rete, Manutenzione, Protezioni, Account, Strumenti);
+  - sezioni dei menu;
+  - card delle azioni, per tipo: strumento esterno, lettura, intervento con conferma.
+- Le card mostrano una riga breve, i sottotitoli una frase; avvertenze e contesto sono nel tooltip dell'icona Info, focalizzabile da tastiera. Il testo completo resta:
+  - nelle conferme delle azioni distruttive;
+  - nella finestra dell'operazione;
+  - nella descrizione accessibile per i lettori di schermo.
+- L'eyebrow «ONLYTWEAK / WINDOWS 11» resta solo nella home.
+- Caratteri visibili, prima → dopo:
+
+| Elemento | Prima | Dopo |
+|---|---|---|
+| Card | 2557 | 1141 |
+| Sottotitoli | 1185 | 437 |
+| Schede protezioni | 1052 | 298 |
+
+- Colori e palette invariati; le icone usano i token esistenti (accento per le aree, testo secondario per i tipi, avviso per le conferme).
+- Verifica: `test.cmd --artifact --ui --read-only --render`, 74 test superati. Coprono:
+  - testi brevi (massimo 70 caratteri, una frase);
+  - glifi dei menu;
+  - tooltip e descrizione accessibile completi;
+  - assenza del font icone senza errori.
+- Il tooltip non compare nei render statici. Al 200% simulato l'icona Info risulta più bassa del sottotitolo perché il banco non scala i caratteri; va verificata con DPI reali.
+
 ## Correzioni di layout del 18 ottobre 2026
 
 Misure sui render al 100%, prima → dopo, con le stesse condizioni (`test.cmd --artifact --ui --read-only --render`):

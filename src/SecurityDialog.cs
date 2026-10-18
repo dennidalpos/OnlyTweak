@@ -12,15 +12,15 @@ namespace OnlyTweakWindows
         private readonly List<SecurityPane> panes=new List<SecurityPane>();
         private readonly Button refresh;
         private bool loading;
-        public SecurityDialog(AppServices app,bool loadOnShown=true) : base("Compatibilità e protezioni",
-            "Ambito: computer locale, tutti gli utenti. Ogni modifica richiede conferma; il ripristino iniziale resta disponibile solo nella sessione. Nessun riavvio automatico.")
+        public SecurityDialog(AppServices app,bool loadOnShown=true) : base("Compatibilità e protezioni","Computer locale, tutti gli utenti.",Glyphs.Shield,
+            "Ogni modifica richiede conferma; il ripristino iniziale resta disponibile solo nella sessione. Nessun riavvio automatico.")
         {
             this.app=app;
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
             foreach (SecurityDefinition definition in app.Security.Definitions)
             {
-                if (definition.Id=="hvci") stack.Controls.Add(Theme.Section("Isolamento core"));
-                SecurityPane pane=new SecurityPane(app,definition,Change,SetFeedback); panes.Add(pane); stack.Controls.Add(pane);
+                if (definition.Id=="hvci") stack.Controls.Add(Theme.Section("Isolamento core",Glyphs.Shield));
+                SecurityPane pane=new SecurityPane(app,definition,Change,SetFeedback); pane.Describe(Tips); panes.Add(pane); stack.Controls.Add(pane);
             }
             refresh=Theme.Button("Aggiorna stato",async delegate { await RefreshStates(); }); Footer.Controls.Add(refresh);
             if (loadOnShown) Shown+=async delegate { await RefreshStates(); };
@@ -89,7 +89,8 @@ namespace OnlyTweakWindows
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             for (int i=0;i<5;i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             title=Theme.Label(definition.Title,Theme.Text); title.Font=new Font("Segoe UI",11F,FontStyle.Bold);
-            detail=Theme.Label(definition.Description,Theme.Muted); detail.Font=new Font("Segoe UI",9F);
+            detail=Theme.Label(definition.Summary??definition.Description,Theme.Muted); detail.Font=new Font("Segoe UI",9F);
+            AccessibleName=definition.Title; AccessibleDescription=definition.Description;
             state=Theme.Label("Stato non ancora letto.",Theme.Accent); state.Font=new Font("Segoe UI",9F);
             reason=Theme.Label("",Theme.Warning); reason.Font=new Font("Segoe UI",9F);
             buttons=new FlowLayoutPanel { AutoSize=true,Dock=DockStyle.Fill,WrapContents=true,Margin=Padding.Empty };
@@ -119,6 +120,8 @@ namespace OnlyTweakWindows
             height+=buttons.GetPreferredSize(new Size(width,0)).Height;
             if (Height!=height) Height=height;
         }
+        internal void Describe(ToolTip tips)
+        { if (Definition.Summary!=null) { tips.SetToolTip(title,Definition.Description); tips.SetToolTip(detail,Definition.Description); } }
         internal void SetBusy() { if (on!=null) { on.Enabled=false; off.Enabled=false; restore.Enabled=false; } }
         internal void ShowFailure(string message) { SetBusy(); state.Text="Stato sconosciuto."; reason.Text=message; Arrange(); }
         internal void ShowState(SecurityStatus status)

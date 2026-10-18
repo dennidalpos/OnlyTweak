@@ -17,27 +17,30 @@ namespace OnlyTweakWindows
             TableLayoutPanel grid=new TableLayoutPanel { Height=4*88,ColumnCount=2,RowCount=4,BackColor=Theme.Background,Margin=new Padding(0,10,0,14) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
             for (int i=0;i<4;i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,25F));
-            AddTile(grid,"Stampanti","Stampanti, code e ripristino spooler",0,0,delegate { using (PrinterDialog form=new PrinterDialog(app)) form.ShowDialog(this); });
-            AddTile(grid,"Aspetto ed Esplora file","Menu classico, estensioni e selezione",1,0,delegate { using (AppearanceDialog form=new AppearanceDialog(app)) form.ShowDialog(this); });
-            AddTile(grid,"Rete","Indirizzi, DNS e ripristino connessioni",0,1,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Network)) form.ShowDialog(this); });
-            AddTile(grid,"Manutenzione","Integrità Windows e spazio su disco",1,1,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Maintenance)) form.ShowDialog(this); });
-            AddTile(grid,"Compatibilità e protezioni","Blocchi app, integrità della memoria e driver",0,2,delegate { using (SecurityDialog form=new SecurityDialog(app)) form.ShowDialog(this); });
-            AddTile(grid,"Account","Account locale, Microsoft e utenti del PC",1,2,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Accounts)) form.ShowDialog(this); });
-            Button tools=AddTile(grid,"Strumenti Windows","Gestione computer, dispositivi, servizi e impostazioni",0,3,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Tools)) form.ShowDialog(this); });
+            AddTile(grid,"Stampanti","Stampanti, code e spooler",Glyphs.Print,0,0,delegate { using (PrinterDialog form=new PrinterDialog(app)) form.ShowDialog(this); });
+            AddTile(grid,"Aspetto ed Esplora file","Menu classico, estensioni e selezione",Glyphs.Personalize,1,0,delegate { using (AppearanceDialog form=new AppearanceDialog(app)) form.ShowDialog(this); });
+            AddTile(grid,"Rete","Indirizzi, DNS e ripristino",Glyphs.Network,0,1,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Network)) form.ShowDialog(this); });
+            AddTile(grid,"Manutenzione","Integrità Windows e spazio su disco",Glyphs.Repair,1,1,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Maintenance)) form.ShowDialog(this); });
+            AddTile(grid,"Compatibilità e protezioni","Blocchi app, memoria e driver",Glyphs.Shield,0,2,delegate { using (SecurityDialog form=new SecurityDialog(app)) form.ShowDialog(this); });
+            AddTile(grid,"Account","Account e utenti del PC",Glyphs.Contact,1,2,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Accounts)) form.ShowDialog(this); });
+            Button tools=AddTile(grid,"Strumenti Windows","Gestione computer, dispositivi e servizi",Glyphs.Apps,0,3,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Tools)) form.ShowDialog(this); });
             grid.SetColumnSpan(tools,2); tools.Margin=new Padding(0,0,0,10); stack.Controls.Add(grid);
-            Label note=Theme.Label("Le modifiche restano attive dopo la chiusura. Cronologia e ripristino dei valori precedenti sono disponibili solo in questa sessione.",Theme.Muted);
-            note.Font=new Font("Segoe UI",9F); note.Margin=Padding.Empty; stack.Controls.Add(note);
-            Footer.Controls.Add(Theme.Button("Cronologia",delegate { using (TextDialog form=new TextDialog("Cronologia della sessione",app.History.Read())) form.ShowDialog(this); }));
+            const string persistence="Le modifiche restano attive dopo la chiusura. Cronologia e ripristino dei valori precedenti sono disponibili solo in questa sessione.";
+            Label note=Theme.Label("Ripristino e cronologia valgono solo per questa sessione.",Theme.Muted);
+            note.Font=new Font("Segoe UI",9F); note.Margin=Padding.Empty; note.AccessibleDescription=persistence; Tips.SetToolTip(note,persistence); stack.Controls.Add(note);
+            Footer.Controls.Add(Theme.Button("Cronologia",delegate { using (TextDialog form=new TextDialog("Cronologia della sessione",app.History.Read(),Glyphs.History)) form.ShowDialog(this); }));
         }
-        private static Button AddTile(TableLayoutPanel grid,string title,string description,int column,int row,EventHandler clicked)
+        private static Button AddTile(TableLayoutPanel grid,string title,string description,string glyph,int column,int row,EventHandler clicked)
         {
-            Button button=Theme.Card(title,description,clicked); button.Dock=DockStyle.Fill; button.Margin=new Padding(column==0 ? 0 : 6,0,column==0 ? 6 : 0,10);
+            DarkButton button=(DarkButton)Theme.Card(title,description,clicked,glyph); button.GlyphColor=Theme.Accent;
+            button.Dock=DockStyle.Fill; button.Margin=new Padding(column==0 ? 0 : 6,0,column==0 ? 6 : 0,10);
             grid.Controls.Add(button,column,row); return button;
         }
     }
     internal sealed class TextDialog : DarkForm
     {
-        public TextDialog(string title,string text) : base(title,"Informazioni della sessione corrente.")
+        public TextDialog(string title,string text) : this(title,text,Glyphs.Document) { }
+        public TextDialog(string title,string text,string glyph) : base(title,"Informazioni della sessione corrente.",glyph,null)
         {
             Content.Padding=new Padding(26,8,26,16); DarkOutput output=Theme.Output(); output.Text=text; Content.Controls.Add(output);
             Footer.Controls.Add(Theme.Button("Copia testo",delegate { if (output.TextLength>0) Clipboard.SetText(output.Text); }));
@@ -45,29 +48,42 @@ namespace OnlyTweakWindows
     }
     internal sealed class MenuDialog : DarkForm
     {
-        public MenuDialog(AppServices app,MenuDefinition menu) : base(menu.Title,menu.Description)
+        public MenuDialog(AppServices app,MenuDefinition menu) : base(menu.Title,menu.Description,menu.Glyph,menu.Detail)
         {
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack); AddActions(stack,app,menu);
             foreach (MenuDefinition child in menu.Children)
-            { stack.Controls.Add(Theme.Section(child.Title)); AddActions(stack,app,child); }
+            {
+                Label section=Theme.Section(child.Title,child.Glyph);
+                if (!String.IsNullOrEmpty(child.Detail)) { section.AccessibleDescription=child.Detail; Tips.SetToolTip(section,child.Detail); }
+                stack.Controls.Add(section); AddActions(stack,app,child);
+            }
         }
         private void AddActions(StackPanel stack,AppServices app,MenuDefinition menu)
         {
             foreach (ActionSpec action in menu.Actions)
             {
                 ActionSpec selected=action;
-                stack.Controls.Add(Theme.Card(action.Title,action.Description,async delegate { await ActionDispatcher.Invoke(this,app,selected,SetFeedback); }));
+                stack.Controls.Add(ActionCard(action,async delegate { await ActionDispatcher.Invoke(this,app,selected,SetFeedback); }));
             }
         }
+        // Card con glifo del tipo di azione e riga breve; il testo completo resta nel tooltip e per i lettori di schermo.
+        internal static Button ActionCard(ActionSpec action,EventHandler clicked,ToolTip tips)
+        {
+            Button card=Theme.Card(action.Title,action.CardText,clicked,Glyphs.ForAction(action)); card.AccessibleDescription=action.Description;
+            if (action.CardText!=action.Description) tips.SetToolTip(card,action.Description);
+            return card;
+        }
+        private Button ActionCard(ActionSpec action,EventHandler clicked) { return ActionCard(action,clicked,Tips); }
     }
     internal sealed class AppearanceDialog : DarkForm
     {
-        public AppearanceDialog(AppServices app) : base("Aspetto ed Esplora file","Stato e comandi nello stesso pannello. Account: "+EnvironmentInfo.Account)
+        public AppearanceDialog(AppServices app) : base("Aspetto ed Esplora file","Tweak dell'account "+EnvironmentInfo.Account+".",Glyphs.Personalize,
+            "Stato e comandi nello stesso pannello. Le modifiche riguardano l'account che esegue l'app.")
         {
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
-            foreach (TweakDefinition definition in app.Tweaks.Definitions) stack.Controls.Add(new TweakPane(app,definition));
-            stack.Controls.Add(Theme.Section("Applica alla shell"));
-            stack.Controls.Add(Theme.Card("Riavvia Esplora risorse","Aggiorna il desktop e la barra delle applicazioni, con conferma",delegate { OperationDialog.Open(this,app,app.Catalog.ExplorerRestart); }));
+            foreach (TweakDefinition definition in app.Tweaks.Definitions) { TweakPane pane=new TweakPane(app,definition); pane.Describe(Tips); stack.Controls.Add(pane); }
+            stack.Controls.Add(Theme.Section("Applica alla shell",Glyphs.Settings));
+            stack.Controls.Add(MenuDialog.ActionCard(app.Catalog.ExplorerRestart,delegate { OperationDialog.Open(this,app,app.Catalog.ExplorerRestart); },Tips));
             FormClosing+=delegate(object sender,FormClosingEventArgs e) { if (app.Coordinator.IsBusy) e.Cancel=true; };
         }
     }
@@ -75,7 +91,7 @@ namespace OnlyTweakWindows
     {
         private readonly AppServices app;
         private readonly TweakDefinition definition;
-        private readonly Label state;
+        private readonly Label state,title,detail;
         private readonly Button restore,on,off;
         private readonly FlowLayoutPanel buttons;
         public TweakPane(AppServices app,TweakDefinition definition)
@@ -87,9 +103,9 @@ namespace OnlyTweakWindows
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Label title=Theme.Label(definition.Title,Theme.Text); title.Font=new Font("Segoe UI",11F,FontStyle.Bold); title.Margin=new Padding(0,0,0,5);
-            string description=definition.Id=="classic" ? "Tweak non ufficiale: il risultato dipende dalla build. Può richiedere il riavvio di Esplora risorse." : definition.Description;
-            Label detail=Theme.Label(description,Theme.Muted); detail.Font=new Font("Segoe UI",9F); detail.Margin=new Padding(0,0,0,5);
+            title=Theme.Label(definition.Title,Theme.Text); title.Font=new Font("Segoe UI",11F,FontStyle.Bold); title.Margin=new Padding(0,0,0,5);
+            detail=Theme.Label(definition.Summary??definition.Description,Theme.Muted); detail.Font=new Font("Segoe UI",9F); detail.Margin=new Padding(0,0,0,5);
+            AccessibleName=definition.Title; AccessibleDescription=definition.Description;
             state=Theme.Label("",Theme.Accent); state.Font=new Font("Segoe UI",9F); state.Margin=Padding.Empty;
             buttons=new FlowLayoutPanel { Dock=DockStyle.Fill,AutoSize=true,WrapContents=true,Margin=Padding.Empty,Padding=Padding.Empty };
             on=Theme.Button(definition.EnabledLabel,async delegate { await Change(true,false); });
@@ -106,6 +122,8 @@ namespace OnlyTweakWindows
             };
             RefreshState();
         }
+        internal void Describe(ToolTip tips)
+        { if (definition.Summary!=null) { tips.SetToolTip(title,definition.Description); tips.SetToolTip(detail,definition.Description); } }
         private async Task Change(bool enabled,bool restoring)
         {
             on.Enabled=false; off.Enabled=false; restore.Enabled=false;
@@ -137,7 +155,7 @@ namespace OnlyTweakWindows
         private readonly Button refresh;
         private readonly List<Button> selectedButtons=new List<Button>();
         private readonly AppServices app;
-        public PrinterDialog(AppServices app,bool loadOnShown=true) : base("Stampanti","Seleziona una stampante: proprietà, preferenze e coda si aprono direttamente.")
+        public PrinterDialog(AppServices app,bool loadOnShown=true) : base("Stampanti","Seleziona una stampante per proprietà, preferenze e coda.",Glyphs.Print,null)
         {
             this.app=app;
             TableLayoutPanel layout=new TableLayoutPanel { Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Padding=new Padding(26,4,26,12) };

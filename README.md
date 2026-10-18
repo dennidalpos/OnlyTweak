@@ -29,6 +29,8 @@ I tweak reversibili si applicano direttamente, con esito inline. Diagnostica e m
 
 Stampanti offre **Vista classica** (Dispositivi e stampanti) e, separatamente, **Stampanti e scanner** nelle Impostazioni moderne. Strumenti Windows include **Gestione computer**, **Pannello di controllo** e **Programmi e funzionalità** prima dell'alternativa moderna Applicazioni installate. Componenti, console e destinazioni Shell sono controllati prima dell'avvio; Windows può comunque reindirizzare una vista su build differenti. La sola richiesta di apertura non certifica la finestra effettivamente mostrata.
 
+Ogni area ha un'icona del font di sistema Segoe Fluent Icons, incluso in Windows 11. Le card mostrano una riga breve; avvertenze e dettagli sono nel tooltip, anche tramite l'icona Info raggiungibile da tastiera, e restano completi nelle conferme e per i lettori di schermo.
+
 Titolo e contorni della finestra, pulsanti, conferme, riquadri, selezioni, avanzamento e scrollbar dell'app condividono una palette scura con accento verde acqua. Le scrollbar verticali dei menu e della lista stampanti e quelle verticali/orizzontali dell'output sono disegnate dall'app. I dialoghi esterni Windows e dei driver mantengono il proprio tema di sistema.
 
 Tab e Maiusc+Tab spostano il focus e mantengono visibili i comandi nei gruppi scorrevoli. Invio attiva il pulsante selezionato/predefinito ed Esc chiude il modale quando non è in corso un'operazione. La lista stampanti supporta frecce, Home/Fine, Pagina su/giù e gli elementi accessibili per lettori di schermo. Le finestre sono ridimensionabili.

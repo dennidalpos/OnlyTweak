@@ -61,7 +61,7 @@ namespace OnlyTweakWindows
     }
     internal sealed class TweakDefinition
     {
-        public string Id, Title, Description, Path, ValueName, EnabledLabel, DisabledLabel;
+        public string Id, Title, Description, Summary, Path, ValueName, EnabledLabel, DisabledLabel;
         public object EnabledData, DisabledData;
         public bool DeleteWhenDisabled;
         public RegistryValueKind Kind;
@@ -84,14 +84,15 @@ namespace OnlyTweakWindows
             Definitions = new List<TweakDefinition> {
                 new TweakDefinition { Id="classic", Title="Menu contestuale classico", Path=ClassicPath, ValueName="", Kind=RegistryValueKind.String,
                     EnabledData="", DeleteWhenDisabled=true, EnabledLabel="Attiva menu classico", DisabledLabel="Menu Windows 11",
+                    Summary="Tweak non ufficiale: l'effetto dipende dalla build.",
                     Description="Tweak non ufficiale. Imposta il menu classico tramite registro; l'effetto dipende dalla build di Windows. Dopo la modifica riavvia Esplora risorse con il pulsante dedicato oppure disconnettiti. Lo stato indica il registro, non una verifica visiva del menu." },
-                Explorer("extensions", "Estensioni dei file", "HideFileExt", 0, 1, "Mostra estensioni", "Nascondi estensioni", "Mostra anche le estensioni dei tipi di file conosciuti, per esempio .pdf e .exe."),
-                Explorer("hidden", "File e cartelle nascosti", "Hidden", 1, 2, "Mostra nascosti", "Nascondi nascosti", "Visualizza i normali elementi nascosti. I file protetti di sistema restano protetti."),
-                Explorer("checkboxes", "Caselle di selezione", "AutoCheckSelect", 1, 0, "Attiva caselle", "Disattiva caselle", "Aggiunge caselle di selezione agli elementi in Esplora file.")
+                Explorer("extensions", "Estensioni dei file", "HideFileExt", 0, 1, "Mostra estensioni", "Nascondi estensioni", "Mostra anche le estensioni dei tipi di file conosciuti, per esempio .pdf e .exe.","Mostra estensioni come .pdf e .exe."),
+                Explorer("hidden", "File e cartelle nascosti", "Hidden", 1, 2, "Mostra nascosti", "Nascondi nascosti", "Visualizza i normali elementi nascosti. I file protetti di sistema restano protetti.","Mostra gli elementi nascosti, non quelli di sistema."),
+                Explorer("checkboxes", "Caselle di selezione", "AutoCheckSelect", 1, 0, "Attiva caselle", "Disattiva caselle", "Aggiunge caselle di selezione agli elementi in Esplora file.",null)
             };
         }
-        private static TweakDefinition Explorer(string id, string title, string name, int enabled, int disabled, string on, string off, string description)
-        { return new TweakDefinition { Id=id, Title=title, Path=ExplorerPath, ValueName=name, Kind=RegistryValueKind.DWord, EnabledData=enabled, DisabledData=disabled, EnabledLabel=on, DisabledLabel=off, Description=description }; }
+        private static TweakDefinition Explorer(string id, string title, string name, int enabled, int disabled, string on, string off, string description, string summary)
+        { return new TweakDefinition { Id=id, Title=title, Path=ExplorerPath, ValueName=name, Kind=RegistryValueKind.DWord, EnabledData=enabled, DisabledData=disabled, EnabledLabel=on, DisabledLabel=off, Description=description, Summary=summary }; }
         public string Describe(TweakDefinition definition)
         {
             RegistryValueState value = store.Read(definition.Path, definition.ValueName);

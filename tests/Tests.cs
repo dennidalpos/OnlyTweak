@@ -214,6 +214,22 @@ namespace OnlyTweakWindows
                 Assert(ids.Count==35,"Catalogo incompleto: attese 35 azioni, trovate " + ids.Count + ".");
                 Assert(ids.Contains("tools.computer") && ids.Contains("tools.programs") && ids.Contains("accounts.close"),"Collegamenti mancanti.");
             });
+            Test("catalogo: righe brevi, glifi e testo completo conservato",delegate {
+                AppServices app=new AppServices(); int brief=0,full=0;
+                List<ActionSpec> actions=new List<ActionSpec> { app.Catalog.ExplorerRestart };
+                foreach (MenuDefinition menu in new[] { app.Catalog.Network,app.Catalog.Maintenance,app.Catalog.Tools,app.Catalog.Spool,app.Catalog.Accounts })
+                {
+                    ValidateGlyphs(menu); actions.AddRange(menu.AllActions());
+                }
+                foreach (ActionSpec action in actions)
+                {
+                    AssertBrief(action.CardText,action.Id); Assert(action.Description.Length>=action.CardText.Length,"Descrizione completa persa: "+action.Id);
+                    brief+=action.CardText.Length; full+=action.Description.Length;
+                }
+                foreach (SecurityDefinition definition in app.Security.Definitions) AssertBrief(definition.Summary??definition.Description,definition.Id);
+                foreach (TweakDefinition definition in app.Tweaks.Definitions) AssertBrief(definition.Summary??definition.Description,definition.Id);
+                Console.WriteLine("Testo delle card: "+brief+" caratteri visibili su "+full+" del testo completo.");
+            });
             Test("cronologia: solo istanza corrente",delegate {
                 SessionHistory history=new SessionHistory(); history.Add("test");
                 Assert(history.Read().Contains("test") && !new SessionHistory().Read().Contains("test"),"Cronologia condivisa o mancante.");
@@ -224,6 +240,18 @@ namespace OnlyTweakWindows
             foreach (ActionSpec action in menu.Actions)
                 Assert(ids.Add(action.Id) && action.Execute!=null && !String.IsNullOrWhiteSpace(action.Scope) && !String.IsNullOrWhiteSpace(action.Description),"Azione incompleta o duplicata: " + action.Id);
             foreach (MenuDefinition child in menu.Children) ValidateMenu(child,ids);
+        }
+        private static void ValidateGlyphs(MenuDefinition menu)
+        {
+            Assert(!String.IsNullOrEmpty(menu.Glyph),"Menu senza glifo: "+menu.Title);
+            Assert(menu.Description.Length<=70,"Sottotitolo troppo lungo: "+menu.Title);
+            foreach (MenuDefinition child in menu.Children) ValidateGlyphs(child);
+        }
+        // Una sola riga e una sola frase: le avvertenze estese restano nel tooltip e nelle conferme.
+        private static void AssertBrief(string text,string id)
+        {
+            Assert(!String.IsNullOrWhiteSpace(text) && text.Length<=70,"Testo breve assente o troppo lungo ("+text.Length+"): "+id);
+            Assert(text.TrimEnd('.').IndexOf(". ",StringComparison.Ordinal)<0,"Più frasi nel testo breve: "+id);
         }
         private static void ReadOnlySmoke()
         {
@@ -395,6 +423,41 @@ namespace OnlyTweakWindows
                     Assert(Descendants(form).OfType<Button>().Count(b=>b.AccessibleDescription!=null)==7,"Rete richiede ancora sottosezioni intermedie.");
                 foreach (ActionSpec action in app.Catalog.Tools.Actions) Assert(action.OpensWindow,"Strumento non diretto: "+action.Id);
                 Assert(app.Catalog.PrinterDialog("/p","Proprietà","Test").OpensWindow&&!app.Catalog.PurgePrinter("Test").OpensWindow,"Classificazione stampanti errata.");
+            });
+            Test("UI: icone, testo completo nel tooltip ed eyebrow solo nella home",delegate {
+                AppServices app=new AppServices();
+                using (MenuDialog form=new MenuDialog(app,app.Catalog.Network))
+                {
+                    foreach (ActionSpec action in app.Catalog.Network.AllActions())
+                    {
+                        DarkButton card=Descendants(form).OfType<DarkButton>().Single(b=>b.Text==action.Title);
+                        Assert(card.Glyph==Glyphs.ForAction(action) && card.Description==action.CardText && card.AccessibleDescription==action.Description,"Card incoerente: "+action.Id);
+                        Assert(action.CardText==action.Description || form.Tips.GetToolTip(card)==action.Description,"Dettaglio non disponibile: "+action.Id);
+                    }
+                    Assert(!Descendants(form).OfType<Label>().Any(l=>l.Text.StartsWith("ONLYTWEAK",StringComparison.Ordinal)),"Eyebrow nelle finestre secondarie.");
+                }
+                using (MainForm form=new MainForm(app))
+                {
+                    Assert(Descendants(form).OfType<Label>().Any(l=>l.Text.StartsWith("ONLYTWEAK",StringComparison.Ordinal)),"Eyebrow assente nella home.");
+                    Assert(Descendants(form).OfType<DarkButton>().Count(b=>b.Glyph!=null && b.GlyphColor==Theme.Accent)==7,"Tessere home senza icona.");
+                }
+                using (MenuDialog form=new MenuDialog(app,app.Catalog.Accounts))
+                {
+                    InfoIcon info=Descendants(form).OfType<InfoIcon>().Single();
+                    Assert(info.TabStop && info.AccessibleDescription==app.Catalog.Accounts.Detail && form.Tips.GetToolTip(info)==app.Catalog.Accounts.Detail,"Dettaglio Account non accessibile.");
+                }
+            });
+            Test("UI: senza font icone nessun errore e nessun glifo",delegate {
+                string family=Theme.IconFamily; Theme.IconFamily=null;
+                try
+                {
+                    Assert(Theme.IconFont(12F)==null,"Font icone non disattivato.");
+                    AppServices app=new AppServices();
+                    foreach (DarkForm form in new DarkForm[] { new MainForm(app),new MenuDialog(app,app.Catalog.Network) })
+                        using (form) using (Bitmap bitmap=new Bitmap(form.Width,form.Height))
+                        { form.CreateControl(); form.PerformLayout(); form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,form.Size)); }
+                }
+                finally { Theme.IconFamily=family; }
             });
             Test("UI: esecuzione asincrona e blocco chiusura durante il lavoro",delegate {
                 AppServices app=new AppServices();

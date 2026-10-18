@@ -25,8 +25,9 @@ namespace OnlyTweakWindows
             if (action.Confirmation!=null&&!ConfirmDialog.Ask(parent,action.Title,action.Confirmation)) return;
             using (OperationDialog form=new OperationDialog(app,action,true,true)) form.ShowDialog(parent);
         }
-        public OperationDialog(AppServices app,ActionSpec action,bool startAutomatically=false,bool confirmationGranted=false) : base(action.Title,action.Description)
+        public OperationDialog(AppServices app,ActionSpec action,bool startAutomatically=false,bool confirmationGranted=false) : base(action.Title,action.Description,Glyphs.ForAction(action),null)
         {
+            if (action.Confirmation!=null) Heading.GlyphColor=Theme.Warning;
             this.app=app; this.action=action;
             this.confirmationGranted=confirmationGranted;
             Content.Padding=new Padding(26,4,26,4);

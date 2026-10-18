@@ -9,6 +9,7 @@ namespace OnlyTweakWindows
     {
         public readonly string Id,Title,Description,Page;
         public readonly bool Direct,Restart;
+        public string Summary;
         public SecurityDefinition(string id,string title,string description,string page,bool direct,bool restart)
         { Id=id; Title=title; Description=description; Page=page; Direct=direct; Restart=restart; }
     }
@@ -62,13 +63,13 @@ namespace OnlyTweakWindows
         private readonly HashSet<string> pending=new HashSet<string>();
         private bool kernelWasVerified,hvciWasVerified;
         public readonly SecurityDefinition[] Definitions={
-            new SecurityDefinition("sac","Controllo intelligente delle app","Smart App Control può bloccare app non firmate. Modifica nella pagina Windows; la riattivazione dipende da aggiornamenti e disponibilità del dispositivo.","windowsdefender://smartapp/",false,false),
-            new SecurityDefinition("smartscreen","SmartScreen · Controlla app e file","Controlla la reputazione degli eseguibili. Il comando diretto imposta un criterio locale per il computer, distinto dai filtri del browser.","windowsdefender://smartscreenpua/",true,false),
-            new SecurityDefinition("pua","App potenzialmente indesiderate","Protezione PUA di Microsoft Defender Antivirus. Il filtro dei download del browser si gestisce separatamente in Windows.","windowsdefender://smartscreenpua/",true,false),
-            new SecurityDefinition("store","Origine delle applicazioni","Scegli se consentire app da qualsiasi origine o limitarle al Microsoft Store. In Windows: App > Impostazioni avanzate delle app > Scegli dove scaricare le app. Non modifica la modalità S.","ms-settings:appsfeatures",true,false),
-            new SecurityDefinition("hvci","Integrità della memoria","Protezione HVCI nel gruppo Isolamento core. Disattivandola possono cessare anche le protezioni che la richiedono; nessun altro interruttore viene modificato.","windowsdefender://coreisolation/",true,true),
-            new SecurityDefinition("kernel","Protezione stack kernel","Protegge lo stack in modalità kernel. Richiede hardware compatibile, VBS e integrità della memoria; riattivazione diretta solo con supporto già verificato da Windows.","windowsdefender://coreisolation/",true,true),
-            new SecurityDefinition("drivers","Blocklist driver vulnerabili","Si modifica in Isolamento core. Può essere imposta da HVCI, Smart App Control o modalità S anche se il valore locale è disattivato.","windowsdefender://coreisolation/",false,true)
+            new SecurityDefinition("sac","Controllo intelligente delle app","Smart App Control può bloccare app non firmate. Modifica nella pagina Windows; la riattivazione dipende da aggiornamenti e disponibilità del dispositivo.","windowsdefender://smartapp/",false,false) { Summary="Blocca le app non firmate; si gestisce in Windows." },
+            new SecurityDefinition("smartscreen","SmartScreen · Controlla app e file","Controlla la reputazione degli eseguibili. Il comando diretto imposta un criterio locale per il computer, distinto dai filtri del browser.","windowsdefender://smartscreenpua/",true,false) { Summary="Reputazione degli eseguibili tramite criterio locale." },
+            new SecurityDefinition("pua","App potenzialmente indesiderate","Protezione PUA di Microsoft Defender Antivirus. Il filtro dei download del browser si gestisce separatamente in Windows.","windowsdefender://smartscreenpua/",true,false) { Summary="Protezione PUA di Microsoft Defender." },
+            new SecurityDefinition("store","Origine delle applicazioni","Scegli se consentire app da qualsiasi origine o limitarle al Microsoft Store. In Windows: App > Impostazioni avanzate delle app > Scegli dove scaricare le app. Non modifica la modalità S.","ms-settings:appsfeatures",true,false) { Summary="App da qualsiasi origine o solo dal Microsoft Store." },
+            new SecurityDefinition("hvci","Integrità della memoria","Protezione HVCI nel gruppo Isolamento core. Disattivandola possono cessare anche le protezioni che la richiedono; nessun altro interruttore viene modificato.","windowsdefender://coreisolation/",true,true) { Summary="HVCI, nel gruppo Isolamento core." },
+            new SecurityDefinition("kernel","Protezione stack kernel","Protegge lo stack in modalità kernel. Richiede hardware compatibile, VBS e integrità della memoria; riattivazione diretta solo con supporto già verificato da Windows.","windowsdefender://coreisolation/",true,true) { Summary="Richiede hardware compatibile, VBS e HVCI." },
+            new SecurityDefinition("drivers","Blocklist driver vulnerabili","Si modifica in Isolamento core. Può essere imposta da HVCI, Smart App Control o modalità S anche se il valore locale è disattivato.","windowsdefender://coreisolation/",false,true) { Summary="Si gestisce in Isolamento core." }
         };
         public SecurityService(ISecurityBackend backend) { this.backend=backend; }
         public bool CanRestore(SecurityDefinition definition) { return snapshots.ContainsKey(definition.Id); }
