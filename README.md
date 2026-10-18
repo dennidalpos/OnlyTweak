@@ -136,6 +136,8 @@ La suite si compila con lo stesso compilatore di sistema ed esegue:
 - `--read-only`: lettura reale di registro, protezioni/CIM/Defender, stampanti, spooler e schede di rete. Non modifica il sistema.
 - `--render`: anteprime delle finestre a fattori di scala 100%, 150% e 200% in `artifacts\ui`. Apre brevemente le finestre del banco di prova, senza applicare tweak.
 
+La CI GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) esegue `build.cmd` e `test.cmd --artifact --read-only` su `windows-2025`, che include .NET Framework 4.8, a ogni push su `master` e pull request. `--ui` e `--render` restano locali perché richiedono una sessione desktop. Il runner è Windows Server, non sostituisce le prove su Windows 11.
+
 ### Stato verificato il 16 ottobre 2026
 
 Compilazione senza avvisi con il compilatore Windows .NET Framework **14.8.10001.0**, compatibile C# 5. Ambiente reale: **Windows 11 26H2, build 26300.9711 x64**. Lettura riuscita delle cinque stampanti installate, identificazione della predefinita, stato spooler, preflight della cartella standard e diagnostica rete.
