@@ -58,7 +58,7 @@ namespace OnlyTweakWindows
             checking=true;
             try
             {
-                string reason=action.Unavailable==null ? null : await Task.Run(action.Unavailable);
+                string reason=!action.Applicable ? "Funzione non applicabile a questo sistema." : action.Unavailable==null ? null : await Task.Run(action.Unavailable);
                 if (IsDisposed) return;
                 run.Enabled=reason==null;
                 status.Text=reason ?? "Pronto per l'esecuzione.";
@@ -79,6 +79,7 @@ namespace OnlyTweakWindows
             try
             {
                 await Task.Run(delegate {
+                    if (!action.Applicable) throw new NotSupportedException("Funzione non applicabile a questo sistema.");
                     if (action.Unavailable!=null)
                     { string reason=action.Unavailable(); if (reason!=null) throw new InvalidOperationException(reason); }
                     action.Execute(Enqueue);

@@ -13,7 +13,7 @@ namespace OnlyTweakWindows
         private static SecurityDefinition Definition(SecurityService service,string id) { return service.Definitions.Single(d=>d.Id==id); }
         private static void SecurityTests()
         {
-            Test("protezioni: stato visivo deriva dal runtime, non dal registro",delegate {
+            Test("protezioni: runtime distinto da configurazione e Audit",delegate {
                 FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend);
                 backend.Store.Set(SecurityService.Hvci,"Enabled",1,RegistryValueKind.DWord);
                 SecurityDefinition hvci=Definition(service,"hvci"),pua=Definition(service,"pua");
@@ -22,21 +22,43 @@ namespace OnlyTweakWindows
                 backend.Environment.DeviceGuardKnown=true; backend.Environment.HvciRunning=false;
                 Assert(service.Read(hvci,backend.Environment).Protection==ProtectionState.Inactive,"Runtime inattivo ignorato.");
                 backend.Environment.HvciRunning=true;
-                Assert(service.Read(hvci,backend.Environment).Protection==ProtectionState.Active,"Runtime attivo non riconosciuto.");
+                Assert(service.Read(hvci,backend.Environment).Protection==ProtectionState.Active,"Runtime attivo ignorato.");
                 backend.Environment.Pua=2;
                 Assert(service.Read(pua,backend.Environment).Protection==ProtectionState.Audit,"Audit scambiato per blocco.");
                 backend.Environment.DefenderKnown=false;
-                Assert(service.Read(pua,backend.Environment).Protection==ProtectionState.Unknown,"Lettura fallita scambiata per blocco.");
-                Assert(service.Read(Definition(service,"smartscreen"),backend.Environment).Protection==ProtectionState.Unknown,"Criterio scambiato per effetto reale.");
+                Assert(service.Read(pua,backend.Environment).Protection==ProtectionState.Unknown,"Errore scambiato per protezione attiva.");
+                Assert(service.Read(Definition(service,"smartscreen"),backend.Environment).Protection==ProtectionState.Unknown,"Criterio scambiato per effetto.");
             });
-            Test("protezioni: catalogo completo e destinazioni fisse",delegate {
-                SecurityService service=new SecurityService(new FakeSecurityBackend());
-                Assert(service.Definitions.Length==7,"Protezioni mancanti.");
-                foreach (SecurityDefinition d in service.Definitions) ProcessService.ValidateTarget(d.Page);
-                Assert(!Definition(service,"sac").Direct && !Definition(service,"drivers").Direct,"Modifiche dirette non previste.");
-                Throws(delegate { ProcessService.ValidateTarget("https://account.microsoft.com.evil.test/"); },"non consentita");
-                Throws(delegate { ProcessService.ValidateTarget("ms-settings:yourinfo & calc.exe"); },"non consentita");
-                Throws(delegate { ProcessService.ValidateTarget("shell:::arbitrary"); },"non consentita");
+            Test("protezioni: API e backend esclusivamente di lettura",delegate {
+                Assert(typeof(ISecurityBackend).GetMethods().All(m=>m.Name=="get_Registry" || m.Name=="Probe"),"API di modifica residua.");
+                Assert(typeof(MachineRegistryStore).GetInterfaces().SequenceEqual(new[] { typeof(IRegistryReader) }),"Registro macchina scrivibile.");
+                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend);
+                foreach (SecurityDefinition d in service.Definitions) { ProcessService.ValidateTarget(d.Page); service.Read(d,backend.Probe()); }
+                Assert(backend.ReadCount>0 && backend.Store.WriteCount==0,"Letture con effetti collaterali.");
+                foreach (string target in new[] { "https://account.microsoft.com/","https://support.microsoft.com/it-it/accounts-billing/manage/how-to-close-your-microsoft-account","ms-settings:yourinfo & calc.exe","shell:::arbitrary" })
+                    Throws(delegate { ProcessService.ValidateTarget(target); },"non consentita");
+            });
+            Test("protezioni: fresh install senza valori resta sconosciuta",delegate {
+                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend);
+                foreach (SecurityDefinition d in service.Definitions.Where(d=>d.Id=="smartscreen" || d.Id=="store" || d.Id=="sac")) {
+                    SecurityStatus state=service.Read(d,backend.Probe());
+                    Assert(state.Protection==ProtectionState.Unknown && state.Effective.Contains("non verificabile"),"Predefinito inventato: "+d.Id);
+                }
+                backend.Environment.DefenderActive=false;
+                Assert(service.Read(Definition(service,"pua"),backend.Probe()).Protection==ProtectionState.Inactive,"Defender inattivo ignorato.");
+            });
+            Test("protezioni: campi Defender mancanti non diventano stato inattivo",delegate {
+                foreach (string output in new[] { "Pua=1", "Active=1", "Pua=9\nActive=1", "Pua=1\nActive=Unknown" })
+                    Assert(!WindowsSecurityBackend.ParseProbe(output,new SecurityEnvironment()).DefenderKnown,"Lettura parziale considerata completa.");
+                SecurityEnvironment parsed=WindowsSecurityBackend.ParseProbe("DG=1\nHR=0\nKR=0\nPua=2\nActive=0",new SecurityEnvironment());
+                Assert(parsed.DefenderKnown && !parsed.DefenderActive && parsed.Pua==2 && parsed.DeviceGuardKnown,"Output valido perso.");
+            });
+            Test("protezioni: blocklist configurata distinta da HVCI",delegate {
+                FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Store.Set(SecurityService.CiConfig,"VulnerableDriverBlocklistEnable",0,RegistryValueKind.DWord);
+                SecurityService service=new SecurityService(backend);
+                Assert(service.Read(Definition(service,"drivers"),backend.Probe()).Effective.Contains("imposta"),"Vincolo HVCI omesso.");
+                backend.Environment.HvciRunning=false; backend.Environment.SMode=false;
+                Assert(service.Read(Definition(service,"drivers"),backend.Probe()).Effective.Contains("verifica in Windows"),"Valore locale presentato come runtime.");
             });
             Test("launcher: usa il backend interattivo per destinazioni approvate",delegate {
                 // I gestori reali dipendono dal sistema (per esempio windowsdefender: manca su Windows Server):
@@ -51,129 +73,6 @@ namespace OnlyTweakWindows
                 Assert(targets.SequenceEqual(expected),"Contesto interattivo aggirato.");
                 Throws(delegate { process.LaunchTarget("https://evil.test/",Ignore); },"non consentita");
                 Assert(targets.Count==expected.Count,"Destinazione vietata inoltrata.");
-            });
-            Test("protezioni: criterio SmartScreen applicato e ripristinato con assenze",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"smartscreen");
-                backend.Store.Ensure(SecurityService.SmartPolicy);
-                service.Change(d,false,false,Ignore);
-                Assert(Object.Equals(backend.Store.Read(SecurityService.SmartPolicy,"EnableSmartScreen").Data,0),"Disattivazione assente.");
-                service.Change(d,true,false,Ignore); service.Change(d,false,true,Ignore);
-                Assert(!backend.Store.Read(SecurityService.SmartPolicy,"EnableSmartScreen").ValueExists && backend.Store.Read(SecurityService.SmartPolicy,"").KeyExists,"Assenza/chiave iniziale perse.");
-            });
-            Test("protezioni: ripristino HVCI conserva tipo e valore personalizzato",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"hvci");
-                backend.Store.Set(SecurityService.Hvci,"Enabled",new[] { "originale","due" },RegistryValueKind.MultiString);
-                service.Change(d,false,false,Ignore); service.Change(d,false,true,Ignore);
-                RegistryValueState actual=backend.Store.Read(SecurityService.Hvci,"Enabled");
-                Assert(actual.Kind==RegistryValueKind.MultiString && ((string[])actual.Data).SequenceEqual(new[] { "originale","due" }),"Snapshot alterato.");
-                Assert(service.Read(d,backend.Probe()).RestartPending,"Riavvio pendente mancante.");
-            });
-            Test("protezioni: ripristino rimuove solo chiavi create e conserva dati estranei",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"store");
-                service.Change(d,false,false,Ignore); backend.Store.Set(SecurityService.InstallPolicy,"Estraneo",42,RegistryValueKind.DWord);
-                service.Change(d,false,true,Ignore);
-                Assert(backend.Store.Read(SecurityService.InstallPolicy,"Estraneo").ValueExists && !backend.Store.Read(SecurityService.InstallPolicy,"ConfigureAppInstallControl").ValueExists,"Dati estranei rimossi.");
-            });
-            Test("protezioni: errore seconda scrittura recupera anche la prima",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"store");
-                backend.FailWrite=2; List<string> log=new List<string>();
-                Throws(delegate { service.Change(d,false,false,log.Add); },"scrittura simulata");
-                Assert(!backend.Store.Read(SecurityService.InstallPolicy,"ConfigureAppInstallControlEnabled").ValueExists,"Prima scrittura non recuperata.");
-                Assert(!backend.Store.Read(SecurityService.InstallPolicy,"").KeyExists && log.Any(s=>s.Contains("Recuperata")),"Chiave creata non recuperata.");
-            });
-            Test("protezioni: recupero incompleto segnalato",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"store");
-                backend.FailWrite=2; backend.FailDelete=true; List<string> log=new List<string>();
-                Throws(delegate { service.Change(d,false,false,log.Add); },"scrittura simulata");
-                Assert(log.Any(s=>s.Contains("RECUPERO INCOMPLETO")),"Errore di recupero nascosto.");
-                backend.FailDelete=false; service.Change(d,false,true,Ignore);
-                Assert(!backend.Store.Read(SecurityService.InstallPolicy,"ConfigureAppInstallControlEnabled").ValueExists,"Impossibile ritentare il ripristino dopo il recupero parziale.");
-            });
-            Test("protezioni: scrittura ignorata non dichiarata riuscita",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Store.IgnoreSet=true;
-                SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"hvci");
-                Throws(delegate { service.Change(d,false,false,Ignore); },"non confermata");
-            });
-            Test("protezioni: dominio, gestione sconosciuta, template e Home bloccano prima delle scritture",delegate {
-                foreach (string scenario in new[] { "domain","unknown","template","home" })
-                {
-                    FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend);
-                    if (scenario=="domain") backend.Environment.Managed=true;
-                    if (scenario=="unknown") backend.Environment.ManagementKnown=false;
-                    if (scenario=="template") backend.Template=false;
-                    if (scenario=="home") backend.Environment.PolicyEdition=false;
-                    SecurityDefinition d=Definition(service,"smartscreen"); SecurityStatus status=service.Read(d,backend.Probe());
-                    Assert(status.DisableUnavailable!=null,"Blocco non rilevato: "+scenario);
-                    Throws(delegate { service.Change(d,false,false,Ignore); },status.DisableUnavailable);
-                    Assert(backend.WriteCount==0,"Scrittura durante blocco: "+scenario);
-                }
-            });
-            Test("protezioni: criterio preesistente e blocco UEFI rispettati",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend);
-                backend.Store.Set(SecurityService.SmartPolicy,"EnableSmartScreen",1,RegistryValueKind.DWord);
-                Throws(delegate { service.Change(Definition(service,"smartscreen"),false,false,Ignore); },"criterio esterno");
-                backend.Store.Set(SecurityService.Guard,"Locked",1,RegistryValueKind.DWord);
-                Throws(delegate { service.Change(Definition(service,"hvci"),false,false,Ignore); },"UEFI");
-                Assert(backend.WriteCount==0,"Policy o UEFI aggirati.");
-            });
-            Test("protezioni: cambiamenti esterni durante la sessione non sovrascritti",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"smartscreen");
-                service.Change(d,false,false,Ignore); int writes=backend.WriteCount;
-                backend.Store.Set(SecurityService.SmartPolicy,"EnableSmartScreen",1,RegistryValueKind.DWord);
-                Throws(delegate { service.Change(d,false,false,Ignore); },"fuori da OnlyTweak");
-                Throws(delegate { service.Change(d,false,true,Ignore); },"fuori da OnlyTweak");
-                Assert(backend.WriteCount==writes,"Configurazione esterna sovrascritta.");
-            });
-            Test("protezioni: stato sconosciuto, assenza Defender e modalità S",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend);
-                backend.Environment.DeviceGuardKnown=false;
-                Throws(delegate { service.Change(Definition(service,"hvci"),false,false,Ignore); },"non verificabile");
-                backend.Environment.DefenderKnown=false;
-                Throws(delegate { service.Change(Definition(service,"pua"),false,false,Ignore); },"non disponibile");
-                backend.Environment.SMode=true;
-                Throws(delegate { service.Change(Definition(service,"store"),false,false,Ignore); },"Modalità S");
-                Assert(backend.WriteCount==0,"Stato sconosciuto ignorato.");
-            });
-            Test("protezioni: configurare stack non prova il supporto hardware",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Environment.KernelConfigured=true; backend.Environment.KernelRunning=false;
-                SecurityService service=new SecurityService(backend);
-                Throws(delegate { service.Change(Definition(service,"kernel"),true,false,Ignore); },"supporto stack");
-            });
-            Test("protezioni: PUA ripristina Audit e rispetta antimanomissione",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Environment.Pua=2;
-                SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"pua");
-                service.Change(d,false,false,Ignore); Assert(backend.Environment.Pua==0,"PUA non disattivata.");
-                service.Change(d,false,true,Ignore); Assert(backend.Environment.Pua==2,"Audit non ripristinato.");
-                backend.Environment.TamperProtected=true;
-                Throws(delegate { service.Change(d,false,false,Ignore); },"antimanomissione");
-            });
-            Test("protezioni: PUA rifiutata da Windows rilevata e recuperata",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Environment.Pua=2; backend.IgnorePua=true;
-                SecurityService service=new SecurityService(backend);
-                Throws(delegate { service.Change(Definition(service,"pua"),false,false,Ignore); },"non confermata");
-                Assert(backend.Environment.Pua==2,"Stato PUA perso.");
-            });
-            Test("protezioni: HVCI non modifica dipendenze e distingue runtime",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"hvci");
-                service.Change(d,false,false,Ignore); SecurityStatus status=service.Read(d,backend.Probe());
-                Assert(status.Effective.Contains("in esecuzione") && status.RestartPending,"Configurazione confusa con runtime.");
-                Assert(!backend.Store.Read(SecurityService.Guard,"EnableVirtualizationBasedSecurity").ValueExists && !backend.Store.Read(SecurityService.GuardPolicy,"ConfigureKernelShadowStacksLaunch").ValueExists,"Dipendenze modificate.");
-            });
-            Test("protezioni: stack richiede supporto Windows e HVCI runtime",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Environment.KernelConfigured=false; backend.Environment.KernelRunning=false;
-                SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"kernel");
-                Throws(delegate { service.Change(d,true,false,Ignore); },"supporto stack");
-                backend.Environment.KernelRunning=true; service.Change(d,false,false,Ignore);
-                backend.Environment.KernelRunning=false; service.Change(d,true,false,Ignore);
-                backend.Environment.HvciRunning=false;
-                Throws(delegate { service.Change(d,true,false,Ignore); },"HVCI");
-            });
-            Test("protezioni: blocklist locale disattiva ma imposta da HVCI",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Store.Set(SecurityService.CiConfig,"VulnerableDriverBlocklistEnable",0,RegistryValueKind.DWord);
-                SecurityService service=new SecurityService(backend); SecurityDefinition d=Definition(service,"drivers");
-                Assert(service.Read(d,backend.Probe()).Effective.Contains("imposta"),"Vincolo HVCI omesso.");
-                Throws(delegate { service.Change(d,false,false,Ignore); },"pagina Windows");
-                Assert(backend.WriteCount==0,"Modifica blocklist non prevista.");
             });
         }
         private static void WheelTests()
@@ -242,8 +141,8 @@ namespace OnlyTweakWindows
         }
         private static void SecurityUiTests()
         {
-            Test("UI protezioni: colori aggiornati fra runtime, dubbio, riavvio ed errore",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=new AppServices(backend);
+            Test("UI protezioni: colori aggiornati fra runtime, dubbio ed errore",delegate {
+                FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=TestApp(backend);
                 using (SecurityDialog form=new SecurityDialog(app,false))
                 {
                     form.ShowInTaskbar=false; form.Show(); Application.DoEvents();
@@ -254,8 +153,6 @@ namespace OnlyTweakWindows
                     pane.SetBusy(); Assert(state.ForeColor==Theme.Muted,"Lettura conserva il colore precedente.");
                     pane.ShowState(new SecurityStatus { Configured="attivata",Effective="sconosciuto" });
                     Assert(state.ForeColor==Theme.Muted,"Stato incerto verde.");
-                    pane.ShowState(new SecurityStatus { Protection=ProtectionState.Active,RestartPending=true });
-                    Assert(state.ForeColor==Theme.Warning && state.Text.Contains("Riavvio"),"Riavvio pendente presentato come concluso.");
                     pane.ShowState(new SecurityStatus { Protection=ProtectionState.Inactive });
                     Assert(state.ForeColor==Theme.Warning,"Protezione inattiva senza avviso.");
                     pane.ShowState(new SecurityStatus { Protection=ProtectionState.Audit });
@@ -269,66 +166,38 @@ namespace OnlyTweakWindows
                     form.Close();
                 }
             });
-            Test("UI protezioni: una conferma, modifica simulata e stato riletto",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=new AppServices(backend); int confirmations=0;
-                using (SecurityDialog form=new SecurityDialog(app,false))
-                using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
-                {
-                    form.ShowInTaskbar=false; form.Show(); form.DisplayStates(backend.Environment); Application.DoEvents();
-                    timer.Tick+=delegate {
-                        ConfirmDialog confirm=Application.OpenForms.OfType<ConfirmDialog>().FirstOrDefault();
-                        if (confirm!=null) { confirmations++; Descendants(confirm).OfType<Button>().First(b=>b.Text=="&Conferma").PerformClick(); }
-                        OperationDialog operation=Application.OpenForms.OfType<OperationDialog>().FirstOrDefault();
-                        if (operation!=null && backend.WriteCount>0 && !app.Coordinator.IsBusy) { timer.Stop(); operation.Close(); }
-                    };
-                    timer.Start(); SecurityPane pane=Descendants(form).OfType<SecurityPane>().Single(p=>p.Definition.Id=="hvci");
-                    Descendants(pane).OfType<Button>().First(b=>b.Text=="Disattiva").PerformClick();
-                    PumpUntil(delegate { return !app.Coordinator.IsBusy; });
-                    Assert(confirmations==1 && backend.WriteCount==1,"Conferma/esecuzione duplicata.");
-                    Assert(Descendants(pane).OfType<Label>().Any(l=>l.Text.Contains("Riavvio manuale richiesto")),"Esito non riletto."); form.Close();
-                }
-            });
-            Test("UI protezioni: lettura simulata, stati, ultima voce e annulla",delegate {
-                FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=new AppServices(backend);
-                using (SecurityDialog form=new SecurityDialog(app,false))
-                {
-                    form.ShowInTaskbar=false; form.Show(); form.DisplayStates(backend.Environment); Application.DoEvents();
-                    Assert(Descendants(form).OfType<SecurityPane>().Count()==7,"Pannelli mancanti.");
-                    StackPanel stack=Descendants(form).OfType<StackPanel>().Single();
-                    stack.ScrollTo(Int32.MaxValue); Assert(stack.ScrollOffset>0 && stack.ScrollOffset==stack.ScrollMaximum,"Ultima voce non raggiungibile.");
-                    SecurityPane pane=Descendants(form).OfType<SecurityPane>().First(p=>p.Definition.Id=="hvci");
-                    using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
-                    {
-                        timer.Tick+=delegate {
-                            ConfirmDialog confirm=Application.OpenForms.OfType<ConfirmDialog>().FirstOrDefault();
-                            if (confirm!=null) { timer.Stop(); Assert(((Button)confirm.AcceptButton).Text=="&Annulla","Conferma predefinita pericolosa."); ((Button)confirm.AcceptButton).PerformClick(); }
-                        };
-                        timer.Start(); Descendants(pane).OfType<Button>().First(b=>b.Text=="Disattiva").PerformClick();
-                        PumpUntil(delegate { return !app.Coordinator.IsBusy; });
-                        Assert(backend.WriteCount==0,"Annulla ha modificato una protezione.");
+            Test("UI protezioni: solo pagine Windows, nessun comando di modifica",delegate {
+                foreach (int build in new[] { 17763,19044,19045,22000,22621,26100 }) {
+                    FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=TestApp(backend,build);
+                    using (SecurityDialog form=new SecurityDialog(app,false)) {
+                        form.ShowInTaskbar=false; form.Show(); form.DisplayStates(backend.Environment); Application.DoEvents();
+                        SecurityPane[] panes=Descendants(form).OfType<SecurityPane>().ToArray();
+                        Assert(panes.Length==(build>=22621 ? 7 : 5),"Filtro pannelli errato: "+build);
+                        foreach (SecurityPane pane in panes) {
+                            Button button=Descendants(pane).OfType<Button>().Single();
+                            Assert(button.Text=="Apri pagina Windows","Comandi di modifica residui.");
+                            Label state=Descendants(pane).OfType<Label>().Single(l=>l.Text.StartsWith("Configurazione:"));
+                            Assert(state.Visible && state.Bottom<=state.Parent.ClientSize.Height,"Stato tagliato nella scheda.");
+                            Assert(button.Visible && button.Parent.Top>=state.Bottom && button.Parent.Bottom<=button.Parent.Parent.ClientSize.Height && button.Bottom<=button.Parent.ClientSize.Height,"Pulsante fuori dalla scheda o sovrapposto allo stato.");
+                        }
+                        StackPanel stack=Descendants(form).OfType<StackPanel>().Single(); stack.ScrollTo(Int32.MaxValue);
+                        Assert(stack.ScrollOffset==stack.ScrollMaximum,"Ultima voce non raggiungibile.");
+                        Assert(backend.Store.WriteCount==0,"La UI ha scritto nel registro."); form.Close();
                     }
-                    form.Close();
                 }
             });
         }
     }
-    internal sealed class FakeSecurityBackend : ISecurityBackend,IRegistryStore
+    internal sealed class FakeSecurityBackend : ISecurityBackend,IRegistryReader
     {
         public readonly FakeRegistry Store=new FakeRegistry();
         public readonly SecurityEnvironment Environment=new SecurityEnvironment {
-            PolicyEdition=true,ManagementKnown=true,DeviceGuardKnown=true,VbsRunning=true,HvciConfigured=true,HvciRunning=true,
-            KernelConfigured=true,KernelRunning=true,DefenderKnown=true,DefenderActive=true,TamperKnown=true,Pua=1 };
-        public bool Template=true,FailDelete,IgnorePua,FailRead;
-        public int WriteCount,FailWrite;
-        public IRegistryStore Registry { get { return this; } }
+            DeviceGuardKnown=true,HvciRunning=true,
+            KernelRunning=true,DefenderKnown=true,DefenderActive=true,Pua=1 };
+        public bool FailRead;
+        public int ReadCount;
+        public IRegistryReader Registry { get { return this; } }
         public SecurityEnvironment Probe() { return Environment; }
-        public bool HasTemplate(string name,string value) { return Template; }
-        public void SetPua(int mode) { if (!IgnorePua) Environment.Pua=mode; WriteCount++; }
-        public RegistryValueState Read(string path,string name) { if (FailRead) throw new IOException("Errore lettura simulata."); return Store.Read(path,name); }
-        public void Set(string path,string name,object data,RegistryValueKind kind)
-        { WriteCount++; if (WriteCount==FailWrite) throw new IOException("Errore scrittura simulata."); Store.Set(path,name,data,kind); }
-        public void DeleteValue(string path,string name) { if (FailDelete) throw new IOException("Accesso negato simulato."); Store.DeleteValue(path,name); }
-        public void DeleteKeyIfEmpty(string path) { Store.DeleteKeyIfEmpty(path); }
-        public void Notify() { }
+        public RegistryValueState Read(string path,string name) { ReadCount++; if (FailRead) throw new IOException("Errore lettura simulata."); return Store.Read(path,name); }
     }
 }

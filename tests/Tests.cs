@@ -19,7 +19,7 @@ namespace OnlyTweakWindows
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            RegistryTests(); SpoolTests(); OtherTests(); SecurityTests();
+            RegistryTests(); SpoolTests(); OtherTests(); SecurityTests(); CompatibilityTests();
             if (args.Contains("--render")) Test("render UI senza esecuzione azioni",Render);
             if (args.Contains("--read-only")) Test("servizi reali: sole letture",ReadOnlySmoke);
             if (args.Contains("--artifact")) Test("EXE: architettura, manifest e dipendenze",VerifyArtifact);
@@ -44,7 +44,7 @@ namespace OnlyTweakWindows
         {
             Test("registro: ripristina tipo e valore personalizzato",delegate {
                 FakeRegistry store=new FakeRegistry();
-                RegistryTweakService service=new RegistryTweakService(store);
+                RegistryTweakService service=new RegistryTweakService(store,TestProfile());
                 TweakDefinition definition=service.Definitions[1];
                 store.Set(definition.Path,definition.ValueName,"custom",RegistryValueKind.ExpandString);
                 service.Apply(definition,true,Ignore); service.Apply(definition,false,Ignore); service.Restore(definition,Ignore);
@@ -53,70 +53,70 @@ namespace OnlyTweakWindows
             });
             Test("registro: valore assente in chiave esistente",delegate {
                 FakeRegistry store=new FakeRegistry(); store.Set(RegistryTweakService.ExplorerPath,"altro",5,RegistryValueKind.DWord);
-                RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[2];
+                RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[2];
                 service.Apply(d,true,Ignore); service.Restore(d,Ignore);
                 Assert(!store.Read(d.Path,d.ValueName).ValueExists,"Valore non rimosso.");
                 Assert(store.Read(d.Path,"altro").ValueExists,"Dati estranei rimossi.");
             });
             Test("registro: rimuove solo chiavi create dalla sessione",delegate {
                 FakeRegistry store=new FakeRegistry(); store.Ensure(@"Software\Classes\CLSID");
-                RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[0];
+                RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[0];
                 service.Apply(d,true,Ignore); service.Restore(d,Ignore);
                 Assert(!store.Read(d.Path,"").KeyExists,"Chiave creata non rimossa.");
                 Assert(store.Read(@"Software\Classes\CLSID","").KeyExists,"Chiave preesistente rimossa.");
             });
             Test("registro: conserva chiavi originariamente vuote",delegate {
                 FakeRegistry store=new FakeRegistry(); store.Ensure(RegistryTweakService.ClassicPath);
-                RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[0];
+                RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[0];
                 service.Apply(d,true,Ignore); service.Restore(d,Ignore);
                 Assert(store.Read(d.Path,"").KeyExists && !store.Read(d.Path,"").ValueExists,"Chiave originale non preservata.");
             });
             Test("registro: menu Windows 11 non cancella COM personalizzato",delegate {
                 FakeRegistry store=new FakeRegistry(); store.Set(RegistryTweakService.ClassicPath,"","custom.dll",RegistryValueKind.String);
-                RegistryTweakService service=new RegistryTweakService(store);
+                RegistryTweakService service=new RegistryTweakService(store,TestProfile());
                 Throws(delegate { service.Apply(service.Definitions[0],false,Ignore); },"personalizzato");
                 Assert((string)store.Read(RegistryTweakService.ClassicPath,"").Data=="custom.dll","Valore estraneo cancellato.");
             });
             Test("registro: attivazione e ripristino COM preesistente",delegate {
                 FakeRegistry store=new FakeRegistry(); store.Set(RegistryTweakService.ClassicPath,"","original.dll",RegistryValueKind.String);
-                RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[0];
+                RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[0];
                 service.Apply(d,true,Ignore); service.Apply(d,false,Ignore); service.Restore(d,Ignore);
                 Assert((string)store.Read(d.Path,"").Data=="original.dll","Dati originali persi.");
             });
             Test("registro: conserva dati aggiunti durante la sessione",delegate {
-                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[0];
+                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[0];
                 service.Apply(d,true,Ignore); store.Set(d.Path,"estraneo","keep",RegistryValueKind.String); service.Restore(d,Ignore);
                 Assert((string)store.Read(d.Path,"estraneo").Data=="keep","Dati estranei persi.");
             });
             Test("registro: ripristino valore binario",delegate {
-                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[1];
+                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[1];
                 store.Set(d.Path,d.ValueName,new byte[] { 0,17,255 },RegistryValueKind.Binary);
                 service.Apply(d,true,Ignore); service.Restore(d,Ignore);
                 Assert(((byte[])store.Read(d.Path,d.ValueName).Data).SequenceEqual(new byte[] { 0,17,255 }),"Binario alterato.");
             });
             Test("registro: ripristino valore MultiString",delegate {
-                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[1];
+                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[1];
                 store.Set(d.Path,d.ValueName,new string[] { "uno","due" },RegistryValueKind.MultiString);
                 service.Apply(d,true,Ignore); service.Restore(d,Ignore);
                 Assert(((string[])store.Read(d.Path,d.ValueName).Data).Length==2,"MultiString alterato.");
             });
             Test("registro: errore di scrittura mantiene il backup",delegate {
-                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[1];
+                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[1];
                 store.FailSet=true;
                 Throws(delegate { service.Apply(d,true,Ignore); },"scrittura");
                 Assert(service.CanRestore(d),"Backup non conservato dopo errore.");
             });
             Test("registro: rileva scrittura ignorata e non annuncia successo",delegate {
-                FakeRegistry store=new FakeRegistry { IgnoreSet=true }; RegistryTweakService service=new RegistryTweakService(store);
+                FakeRegistry store=new FakeRegistry { IgnoreSet=true }; RegistryTweakService service=new RegistryTweakService(store,TestProfile());
                 Throws(delegate { service.Apply(service.Definitions[1],true,Ignore); },"non corrisponde");
             });
             Test("registro: nessun ripristino senza snapshot",delegate {
-                RegistryTweakService service=new RegistryTweakService(new FakeRegistry());
+                RegistryTweakService service=new RegistryTweakService(new FakeRegistry(),TestProfile());
                 Assert(!service.CanRestore(service.Definitions[0]),"Ripristino disponibile senza backup.");
                 Throws(delegate { service.Restore(service.Definitions[0],Ignore); },"Nessun valore");
             });
             Test("registro: valori nascosti rispettano 1/2",delegate {
-                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store); TweakDefinition d=service.Definitions[2];
+                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store,TestProfile()); TweakDefinition d=service.Definitions[2];
                 service.Apply(d,true,Ignore); Assert((int)store.Read(d.Path,d.ValueName).Data==1,"Hidden enabled");
                 service.Apply(d,false,Ignore); Assert((int)store.Read(d.Path,d.ValueName).Data==2,"Hidden disabled");
             });
@@ -209,13 +209,13 @@ namespace OnlyTweakWindows
                 Throws(delegate { service.PrintUi("/p","test\" /dl",Ignore); },"non compatibile");
             });
             Test("catalogo: azioni e identificatori univoci",delegate {
-                AppServices app=new AppServices(); HashSet<string> ids=new HashSet<string>();
+                AppServices app=TestApp(); HashSet<string> ids=new HashSet<string>();
                 foreach (MenuDefinition menu in new[] { app.Catalog.Network,app.Catalog.Maintenance,app.Catalog.Tools,app.Catalog.Spool,app.Catalog.Accounts }) ValidateMenu(menu,ids);
-                Assert(ids.Count==35,"Catalogo incompleto: attese 35 azioni, trovate " + ids.Count + ".");
-                Assert(ids.Contains("tools.computer") && ids.Contains("tools.programs") && ids.Contains("accounts.close"),"Collegamenti mancanti.");
+                Assert(ids.Count==33,"Catalogo incompleto: attese 33 azioni, trovate " + ids.Count + ".");
+                Assert(ids.Contains("tools.computer") && ids.Contains("tools.programs") && !ids.Contains("accounts.close") && !ids.Contains("accounts.portal"),"Collegamenti mancanti.");
             });
             Test("catalogo: righe brevi, glifi e testo completo conservato",delegate {
-                AppServices app=new AppServices(); int brief=0,full=0;
+                AppServices app=TestApp(); int brief=0,full=0;
                 List<ActionSpec> actions=new List<ActionSpec> { app.Catalog.ExplorerRestart };
                 foreach (MenuDefinition menu in new[] { app.Catalog.Network,app.Catalog.Maintenance,app.Catalog.Tools,app.Catalog.Spool,app.Catalog.Accounts })
                 {
@@ -285,13 +285,20 @@ namespace OnlyTweakWindows
             {
                 IntPtr resource=FindResource(module,new IntPtr(1),new IntPtr(24));
                 Assert(resource!=IntPtr.Zero,"Manifest assente.");
+                Assert(FindResource(module,new IntPtr(32512),new IntPtr(14))!=IntPtr.Zero,"Gruppo icone EXE assente.");
                 int size=checked((int)SizeofResource(module,resource));
                 byte[] bytes=new byte[size]; Marshal.Copy(LockResource(LoadResource(module,resource)),bytes,0,size);
                 string manifest=Encoding.UTF8.GetString(bytes);
                 Assert(manifest.Contains("requireAdministrator") && manifest.Contains("PerMonitorV2"),"Manifest UAC/DPI incompleto.");
             }
             finally { FreeLibrary(module); }
+            using (Icon native=Icon.ExtractAssociatedIcon(path))
+            using (Bitmap bitmap=native.ToBitmap()) {
+                Color mint=bitmap.GetPixel(bitmap.Width*20/64,bitmap.Height*26/64);
+                Assert(mint.G>mint.R+40 && mint.B>mint.R+30,"Icona estraibile dalla shell diversa dall’asset.");
+            }
             System.Reflection.Assembly assembly=System.Reflection.Assembly.ReflectionOnlyLoadFrom(path);
+            Assert(System.Reflection.CustomAttributeData.GetCustomAttributes(assembly).Any(a=>a.AttributeType.FullName=="System.Runtime.Versioning.TargetFrameworkAttribute" && Convert.ToString(a.ConstructorArguments[0].Value)==".NETFramework,Version=v4.7.2"),"Versione minima Framework non dichiarata.");
             string[] allowed={ "mscorlib","System","System.Core","System.Drawing","System.Windows.Forms","System.ServiceProcess" };
             foreach (System.Reflection.AssemblyName reference in assembly.GetReferencedAssemblies())
                 Assert(allowed.Contains(reference.Name),"Dipendenza non di sistema: " + reference.Name);
@@ -319,7 +326,7 @@ namespace OnlyTweakWindows
         private static void UiTestCases()
         {
             Test("UI: apertura diretta senza finestre intermedie",delegate {
-                AppServices app=new AppServices(); int executed=0,count=Application.OpenForms.Count; string status="";
+                AppServices app=TestApp(); int executed=0,count=Application.OpenForms.Count; string status="";
                 ActionSpec action=new ActionSpec("test.launch","Proprietà simulate","Test","Simulazione",delegate(Action<string> log) { executed++; log("apertura simulata"); }) { OpensWindow=true };
                 System.Threading.Tasks.Task task=ActionDispatcher.Invoke(Form.ActiveForm,app,action,delegate(string line) { status=line; });
                 PumpUntil(delegate { return task.IsCompleted; }); task.GetAwaiter().GetResult();
@@ -327,14 +334,14 @@ namespace OnlyTweakWindows
                 Assert(status.StartsWith("Aperto:")&&!app.Coordinator.IsBusy,"Esito o gate non aggiornati.");
             });
             Test("UI: launcher indisponibile mostra errore senza aprire modali",delegate {
-                AppServices app=new AppServices(); bool executed=false; string status=""; int count=Application.OpenForms.Count;
+                AppServices app=TestApp(); bool executed=false; string status=""; int count=Application.OpenForms.Count;
                 ActionSpec action=new ActionSpec("test.launch.fail","Test","Test","Simulazione",delegate(Action<string> log) { executed=true; }) { OpensWindow=true,Unavailable=delegate { return "strumento assente"; } };
                 System.Threading.Tasks.Task task=ActionDispatcher.Launch(app,action,delegate(string line) { status=line; });
                 PumpUntil(delegate { return task.IsCompleted; }); task.GetAwaiter().GetResult();
                 Assert(!executed&&status.Contains("strumento assente")&&Application.OpenForms.Count==count,"Errore launcher non gestito inline.");
             });
             Test("UI: l'operazione parte senza un secondo clic Esegui",delegate {
-                AppServices app=new AppServices(); bool executed=false;
+                AppServices app=TestApp(); bool executed=false;
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.auto","Test automatico","Simulazione","Test",delegate(Action<string> log) { executed=true; }),true))
                 {
                     form.ShowInTaskbar=false; form.Show();
@@ -344,7 +351,7 @@ namespace OnlyTweakWindows
                 }
             });
             Test("UI: annulla conferma non avvia l'azione",delegate {
-                AppServices app=new AppServices(); bool executed=false;
+                AppServices app=TestApp(); bool executed=false;
                 ActionSpec action=new ActionSpec("test.cancel","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed=true; }) { Confirmation="Conferma di test, nessuna modifica reale." };
                 using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
                 {
@@ -362,7 +369,7 @@ namespace OnlyTweakWindows
                 Assert(!executed&&!app.Coordinator.IsBusy,"Annullamento non rispettato.");
             });
             Test("UI: una sola conferma e partenza immediata",delegate {
-                AppServices app=new AppServices(); int executed=0,confirmations=0;
+                AppServices app=TestApp(); int executed=0,confirmations=0;
                 ActionSpec action=new ActionSpec("test.confirm","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed++; }) { Confirmation="Conferma di test, nessuna modifica reale." };
                 using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
                 {
@@ -423,14 +430,14 @@ namespace OnlyTweakWindows
                 }
             });
             Test("UI: categorie piatte e launcher classificati",delegate {
-                AppServices app=new AppServices();
+                AppServices app=TestApp();
                 using (MenuDialog form=new MenuDialog(app,app.Catalog.Network))
                     Assert(Descendants(form).OfType<Button>().Count(b=>b.AccessibleDescription!=null)==7,"Rete richiede ancora sottosezioni intermedie.");
                 foreach (ActionSpec action in app.Catalog.Tools.Actions) Assert(action.OpensWindow,"Strumento non diretto: "+action.Id);
                 Assert(app.Catalog.PrinterDialog("/p","Proprietà","Test").OpensWindow&&!app.Catalog.PurgePrinter("Test").OpensWindow,"Classificazione stampanti errata.");
             });
             Test("UI: icone, testo completo nel tooltip ed eyebrow solo nella home",delegate {
-                AppServices app=new AppServices();
+                AppServices app=TestApp();
                 using (MenuDialog form=new MenuDialog(app,app.Catalog.Network))
                 {
                     foreach (ActionSpec action in app.Catalog.Network.AllActions())
@@ -453,7 +460,7 @@ namespace OnlyTweakWindows
                 }
             });
             Test("UI: dettaglio Info solo su richiesta e chiuso con finestra spostata o chiusa",delegate {
-                AppServices app=new AppServices();
+                AppServices app=TestApp();
                 MenuDialog form=new MenuDialog(app,app.Catalog.Accounts) { ShowInTaskbar=false };
                 // Il banco non può portare la finestra in primo piano: ShowAlways evita il solo controllo di attivazione.
                 form.Tips.ShowAlways=true;
@@ -475,7 +482,7 @@ namespace OnlyTweakWindows
                 try
                 {
                     Assert(Theme.IconFont(12F)==null,"Font icone non disattivato.");
-                    AppServices app=new AppServices();
+                    AppServices app=TestApp();
                     foreach (DarkForm form in new DarkForm[] { new MainForm(app),new MenuDialog(app,app.Catalog.Network) })
                         using (form) using (Bitmap bitmap=new Bitmap(form.Width,form.Height))
                         { form.CreateControl(); form.PerformLayout(); form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,form.Size)); }
@@ -483,7 +490,7 @@ namespace OnlyTweakWindows
                 finally { Theme.IconFamily=family; }
             });
             Test("UI: esecuzione asincrona e blocco chiusura durante il lavoro",delegate {
-                AppServices app=new AppServices();
+                AppServices app=TestApp();
                 using (ManualResetEvent release=new ManualResetEvent(false))
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.wait","Test simulato","Nessun intervento Windows.","Simulazione",
                     delegate(Action<string> log) { log("output simulato"); release.WaitOne(3000); })))
@@ -500,7 +507,7 @@ namespace OnlyTweakWindows
                 }
             });
             Test("UI: errore simulato riabilita controlli e libera il gate",delegate {
-                AppServices app=new AppServices();
+                AppServices app=TestApp();
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.error","Errore simulato","Nessun intervento Windows.","Simulazione",
                     delegate(Action<string> log) { throw new IOException("errore controllato"); })))
                 {
@@ -513,7 +520,7 @@ namespace OnlyTweakWindows
                 }
             });
             Test("UI: azione indisponibile non può avviarsi",delegate {
-                bool executed=false; AppServices app=new AppServices();
+                bool executed=false; AppServices app=TestApp();
                 ActionSpec action=new ActionSpec("test.unavailable","Non disponibile","Nessun intervento Windows.","Simulazione",delegate(Action<string> log) { executed=true; });
                 action.Unavailable=delegate { return "blocco simulato"; };
                 using (OperationDialog form=new OperationDialog(app,action))
@@ -535,7 +542,7 @@ namespace OnlyTweakWindows
             string folder=Path.GetFullPath(@"artifacts\ui"); Directory.CreateDirectory(folder);
             foreach (float scale in new[] { 1F,1.5F,2F })
             {
-                FakeSecurityBackend security=new FakeSecurityBackend(); AppServices app=new AppServices(security);
+                FakeSecurityBackend security=new FakeSecurityBackend(); AppServices app=TestApp(security);
                 SecurityDialog protections=new SecurityDialog(app,false); protections.DisplayStates(security.Environment);
                 List<DarkForm> forms=new List<DarkForm> {
                     new MainForm(app),new AppearanceDialog(app),new ConfirmDialog("Svuota tutte le code locali",app.Catalog.Spool.Actions[2].Confirmation),
@@ -576,10 +583,12 @@ namespace OnlyTweakWindows
                     }
                 }
             }
+            RenderProfiles(folder);
             Console.WriteLine("Rendering: " + folder);
         }
         private static void CaptureForm(Form form,string path)
         {
+            form.PerformLayout(); form.Refresh(); Application.DoEvents(); Thread.Sleep(30);
             using (Bitmap bitmap=new Bitmap(form.Width,form.Height))
             {
                 using (Graphics graphics=Graphics.FromImage(bitmap))
@@ -588,6 +597,7 @@ namespace OnlyTweakWindows
                     try { Assert(PrintWindow(form.Handle,dc,2),"Cattura della finestra di test fallita."); }
                     finally { graphics.ReleaseHdc(dc); }
                 }
+                Assert(bitmap.GetPixel(40,100).ToArgb()!=Color.Black.ToArgb(),"Cattura non dipinta: "+path);
                 bitmap.Save(path);
             }
         }
@@ -623,6 +633,7 @@ namespace OnlyTweakWindows
     {
         private readonly Dictionary<string,Dictionary<string,RegistryValueState>> keys=new Dictionary<string,Dictionary<string,RegistryValueState>>(StringComparer.OrdinalIgnoreCase);
         public bool FailSet, IgnoreSet;
+        public int WriteCount;
         public void Ensure(string path)
         {
             if (keys.ContainsKey(path)) return;
@@ -638,13 +649,15 @@ namespace OnlyTweakWindows
         }
         public void Set(string path,string name,object data,RegistryValueKind kind)
         {
+            WriteCount++;
             if (FailSet) throw new IOException("Errore scrittura simulato.");
             if (IgnoreSet) return;
             Ensure(path); keys[path][name]=new RegistryValueState { KeyExists=true,ValueExists=true,Data=data,Kind=kind };
         }
-        public void DeleteValue(string path,string name) { if (keys.ContainsKey(path)) keys[path].Remove(name); }
+        public void DeleteValue(string path,string name) { WriteCount++; if (keys.ContainsKey(path)) keys[path].Remove(name); }
         public void DeleteKeyIfEmpty(string path)
         {
+            WriteCount++;
             if (keys.ContainsKey(path) && keys[path].Count==0 && !keys.Keys.Any(k=>k.StartsWith(path+"\\",StringComparison.OrdinalIgnoreCase))) keys.Remove(path);
         }
         public void Notify() { }

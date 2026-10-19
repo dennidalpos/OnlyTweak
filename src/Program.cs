@@ -2,10 +2,11 @@ using System;
 using System.Reflection;
 using System.Security.Principal;
 using System.Windows.Forms;
-using Microsoft.Win32;
 
+
+[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.7.2",FrameworkDisplayName=".NET Framework 4.7.2")]
 [assembly: AssemblyTitle("OnlyTweakWindows")]
-[assembly: AssemblyDescription("Tweak e strumenti Windows 11, senza installazione")]
+[assembly: AssemblyDescription("Tweak e strumenti Windows 10 e 11, senza installazione")]
 [assembly: AssemblyProduct("OnlyTweakWindows")]
 [assembly: AssemblyVersion("1.2.0.0")]
 [assembly: AssemblyFileVersion("1.2.0.0")]
@@ -24,12 +25,8 @@ namespace OnlyTweakWindows
             { MessageBox.Show(e.Exception.Message, "OnlyTweakWindows", MessageBoxButtons.OK, MessageBoxIcon.Error); };
             try
             {
-                if (!Environment.Is64BitProcess || EnvironmentInfo.Build < 22000)
-                    throw new NotSupportedException("Occorre Windows 11 x64 (Intel o AMD). ARM64 non supportato nella prima versione.");
-                string architecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") ?? "";
-                string nativeArchitecture = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432") ?? architecture;
-                if (nativeArchitecture.IndexOf("ARM", StringComparison.OrdinalIgnoreCase) >= 0)
-                    throw new NotSupportedException("Questa versione supporta solo Windows 11 x64 Intel/AMD.");
+                if (!Environment.Is64BitProcess || !EnvironmentInfo.Profile.Supported)
+                    throw new NotSupportedException("Occorre Windows 10 dalla versione 1809 o Windows 11, x64 Intel/AMD. Windows Server e ARM64 non supportati.");
                 using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
                 {
                     if (!new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
@@ -44,28 +41,9 @@ namespace OnlyTweakWindows
 
     internal static class EnvironmentInfo
     {
-        public static int Build
-        {
-            get
-            {
-                using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
-                {
-                    int build;
-                    return key != null && Int32.TryParse(Convert.ToString(key.GetValue("CurrentBuildNumber")), out build) ? build : 0;
-                }
-            }
-        }
-        public static string Summary
-        {
-            get
-            {
-                using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
-                {
-                    return "Windows 11 " + (key == null ? "" : Convert.ToString(key.GetValue("DisplayVersion"))) +
-                        " · build " + Build + "." + (key == null ? "?" : Convert.ToString(key.GetValue("UBR"))) + " · x64";
-                }
-            }
-        }
+        public static readonly OsProfile Profile=OsProfile.Detect();
+        public static int Build { get { return Profile.Build; } }
+        public static string Summary { get { return Profile.Summary; } }
         public static string Account
         { get { using (WindowsIdentity identity = WindowsIdentity.GetCurrent()) return identity.Name; } }
     }

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
+  <title>OnlyTweak</title>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#121b26"/>
+  <g stroke="#68e2c3" stroke-width="4" stroke-linecap="round">
+    <path d="M20 18v28M32 18v28M44 18v28"/>
+  </g>
+  <g fill="#68e2c3" stroke="#121b26" stroke-width="2">
+    <circle cx="20" cy="26" r="5"/>
+    <circle cx="32" cy="38" r="5"/>
+    <circle cx="44" cy="23" r="5"/>
+  </g>
+</svg>

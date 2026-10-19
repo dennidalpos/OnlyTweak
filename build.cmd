@@ -9,7 +9,7 @@ if not exist "%OTW_CSC%" (
 )
 if not exist "dist" mkdir "dist"
 if errorlevel 1 exit /b 1
-"%OTW_CSC%" /nologo /langversion:5 /codepage:65001 /warn:4 /warnaserror+ /optimize+ /target:winexe /platform:x64 /out:dist\OnlyTweakWindows.exe /win32manifest:app.manifest /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.ServiceProcess.dll src\*.cs
+"%OTW_CSC%" /nologo /langversion:5 /codepage:65001 /warn:4 /warnaserror+ /optimize+ /target:winexe /platform:x64 /out:dist\OnlyTweakWindows.exe /win32icon:assets\OnlyTweak.ico /resource:assets\OnlyTweak.ico,OnlyTweak.Icon /win32manifest:app.manifest /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.ServiceProcess.dll src\*.cs
 if errorlevel 1 exit /b 1
 echo Creato: %CD%\dist\OnlyTweakWindows.exe
 exit /b 0

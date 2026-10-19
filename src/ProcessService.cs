@@ -14,7 +14,7 @@ namespace OnlyTweakWindows
         private readonly Action<string> interactive;
         internal const string ClassicPrinters="shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}";
         internal static readonly string[] AllowedTargets={ ClassicPrinters,"windowsdefender://appbrowser/","windowsdefender://coreisolation/","windowsdefender://smartapp/","windowsdefender://smartscreenpua/",
-            "https://account.microsoft.com/","https://support.microsoft.com/it-it/accounts-billing/manage/how-to-close-your-microsoft-account",
+            "ms-settings:windowsdefender",
             "ms-settings:printers","ms-settings:network-proxy","ms-settings:storagesense","ms-settings:appsfeatures","ms-settings:startupapps",
             "ms-settings:windowsupdate","ms-settings:yourinfo","ms-settings:emailandaccounts","ms-settings:workplace","ms-settings:otherusers" };
         public ProcessService() : this(ShellService.LaunchInteractiveTarget) { }

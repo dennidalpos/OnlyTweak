@@ -10,6 +10,12 @@ namespace OnlyTweakWindows
         public readonly List<ActionSpec> Actions = new List<ActionSpec>();
         public readonly List<MenuDefinition> Children = new List<MenuDefinition>();
         public MenuDefinition(string title, string description, string glyph, string detail) { Title=title; Description=description; Glyph=glyph; Detail=detail; }
+        public void Prune()
+        {
+            Actions.RemoveAll(a=>!a.Applicable);
+            foreach (MenuDefinition child in Children) child.Prune();
+            Children.RemoveAll(c=>!System.Linq.Enumerable.Any(c.AllActions()));
+        }
         public IEnumerable<ActionSpec> AllActions()
         {
             foreach (ActionSpec action in Actions) yield return action;
@@ -35,7 +41,7 @@ namespace OnlyTweakWindows
                 Unavailable=app.Spool.CleanupUnavailable });
             ExplorerRestart = new ActionSpec("explorer.restart", "Riavvia Esplora risorse", "Riavvia la shell del desktop nella sessione corrente con il suo token originale. Disponibile solo se la shell appartiene all'account dell'app.", "Desktop dell'account corrente", ShellService.Restart) {
                 Confirmation="La barra delle applicazioni scomparirà temporaneamente e le finestre della shell potranno chiudersi. Completa prima copie e spostamenti. Procedere?",
-                Unavailable=ShellService.Unavailable };
+                IsApplicable=delegate { return app.Availability.File("explorer.exe"); },Unavailable=ShellService.Unavailable };
 
             Network = new MenuDefinition("Rete", "Diagnostica, ripristino e impostazioni di rete.", Glyphs.Network, null);
             MenuDefinition networkInfo = new MenuDefinition("Informazioni di rete", "Lettura delle interfacce e della configurazione attuale.", Glyphs.Diagnostic, null);
@@ -82,7 +88,7 @@ namespace OnlyTweakWindows
             Tools.Actions.Add(ConsoleTool("tools.services", "Servizi", "Gestione dei servizi Windows.","services.msc"));
             Tools.Actions.Add(ConsoleTool("tools.events", "Visualizzatore eventi", "Registri di sistema e applicazioni.","eventvwr.msc"));
             Tools.Actions.Add(SystemTool("tools.tasks", "Gestione attività", "Processi, prestazioni e applicazioni.", "Taskmgr.exe", ""));
-            Tools.Actions.Add(Settings("tools.apps", "Applicazioni installate", "Elenco e gestione delle applicazioni.", "ms-settings:appsfeatures"));
+            Tools.Actions.Add(Settings("tools.apps", app.OS.IsWindows11 ? "Applicazioni installate" : "App e funzionalità", "Elenco e gestione delle applicazioni.", "ms-settings:appsfeatures"));
             Tools.Actions.Add(Settings("tools.startup", "Applicazioni all'avvio", "Gestione dei programmi avviati all'accesso.", "ms-settings:startupapps"));
             Tools.Actions.Add(Settings("tools.update", "Windows Update", "Stato aggiornamenti e opzioni di Windows Update.", "ms-settings:windowsupdate"));
             Tools.Actions.Add(SystemTool("tools.system", "Informazioni di sistema", "Configurazione hardware e software del PC.", "msinfo32.exe", ""));
@@ -94,11 +100,13 @@ namespace OnlyTweakWindows
             Accounts.Actions.Add(SystemTool("accounts.classic","Account utente — vista classica","Gestione classica degli utenti del computer.","netplwiz.exe",""));
             ActionSpec local=ConsoleTool("accounts.local","Utenti e gruppi locali","Proprietà e disabilitazione degli utenti locali; disponibile nelle edizioni che includono questa console.","lusrmgr.msc");
             Func<string> localCheck=local.Unavailable;
-            local.Unavailable=delegate { return WindowsSecurityBackend.PolicyEdition ? localCheck() : "Questa edizione non include Utenti e gruppi locali. Usa Altri utenti del PC."; };
+            local.Unavailable=delegate { return app.OS.LocalUsers ? localCheck() : "Questa edizione non include Utenti e gruppi locali. Usa Altri utenti del PC."; };
+            Func<bool> localApplicable=local.IsApplicable;
+            local.IsApplicable=delegate { return app.OS.LocalUsers && localApplicable(); };
             Accounts.Actions.Add(local);
-            Accounts.Actions.Add(Target("accounts.portal","Portale account Microsoft","Gestisci profilo, dispositivi e servizi. Verifica l'account connesso nel browser.","https://account.microsoft.com/"));
-            Accounts.Actions.Add(Target("accounts.close","Procedura di chiusura dell'account Microsoft","Apre la guida ufficiale alla chiusura online: riguarda anche i servizi e i dati associati. Accesso, scelta dell'account e conferma finale avvengono sul sito Microsoft.","https://support.microsoft.com/it-it/accounts-billing/manage/how-to-close-your-microsoft-account"));
+            foreach (ActionSpec action in Spool.Actions) action.IsApplicable=delegate { return app.Availability.File("spoolsv.exe"); };
             ApplySummaries();
+            foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools,Accounts }) menu.Prune();
         }
         // Righe brevi delle card; il testo completo resta in Description (tooltip, accessibilità, dettaglio operazione).
         private static readonly Dictionary<string,string> Summaries=new Dictionary<string,string> {
@@ -118,7 +126,6 @@ namespace OnlyTweakWindows
             { "accounts.info","Passa a un account locale." },{ "accounts.apps","Account di posta e app." },
             { "accounts.work","Account aziendali o scolastici." },{ "accounts.users","Aggiungi o rimuovi utenti." },
             { "accounts.classic","Gestione classica degli utenti (netplwiz)." },{ "accounts.local","Console Utenti e gruppi locali." },
-            { "accounts.portal","Profilo, dispositivi e servizi online." },{ "accounts.close","Guida ufficiale alla chiusura online." }
         };
         private void ApplySummaries()
         {
@@ -129,27 +136,28 @@ namespace OnlyTweakWindows
         public ActionSpec ConsoleTool(string id,string title,string description,string console)
         {
             ActionSpec action=SystemTool(id,title,description,"mmc.exe",ProcessService.QuoteArgument(app.Processes.SystemFile(console)));
-            action.Unavailable=delegate { return app.Processes.FileUnavailable("mmc.exe")??app.Processes.FileUnavailable(console); }; return action;
+            action.Unavailable=delegate { return app.Processes.FileUnavailable("mmc.exe")??app.Processes.FileUnavailable(console); };
+            action.IsApplicable=delegate { return app.Availability.File("mmc.exe") && app.Availability.File(console); }; return action;
         }
         public ActionSpec Target(string id,string title,string description,string target)
-        { return new ActionSpec(id,title,description,"Utente della sessione desktop",delegate(Action<string> log) { app.Processes.LaunchTarget(target,log); })
-            { OpensWindow=true,Unavailable=delegate { return app.Processes.TargetUnavailable(target); } }; }
+        { return new ActionSpec(id,title,description,"Utente della sessione desktop",delegate(Action<string> log) { app.Processes.LaunchTarget(app.Availability.ResolveTarget(target),log); })
+            { OpensWindow=true,IsApplicable=delegate { return app.Availability.Target(target); },Unavailable=delegate { return app.Processes.TargetUnavailable(app.Availability.ResolveTarget(target)); } }; }
         private ActionSpec Command(string id, string title, string description, string file, string arguments, bool unicode)
         {
             return new ActionSpec(id, title, description, "Computer locale", delegate(Action<string> log) { app.Processes.Run(file, arguments, log, unicode); })
-                { Unavailable=delegate { return app.Processes.FileUnavailable(file); } };
+                { IsApplicable=delegate { return app.Availability.File(file); },Unavailable=delegate { return app.Processes.FileUnavailable(file); } };
         }
         public ActionSpec SystemTool(string id, string title, string description, string file, string arguments)
         {
             return new ActionSpec(id, title, description, "Strumento Windows esterno", delegate(Action<string> log) { app.Processes.LaunchSystem(file, arguments, log); })
-                { OpensWindow=true, Unavailable=delegate { return app.Processes.FileUnavailable(file)??(arguments.EndsWith(".cpl",StringComparison.OrdinalIgnoreCase) ? app.Processes.FileUnavailable(arguments) : null); } };
+                { OpensWindow=true, IsApplicable=delegate { return app.Availability.File(file) && (!arguments.EndsWith(".cpl",StringComparison.OrdinalIgnoreCase) || app.Availability.File(arguments)); },Unavailable=delegate { return app.Processes.FileUnavailable(file)??(arguments.EndsWith(".cpl",StringComparison.OrdinalIgnoreCase) ? app.Processes.FileUnavailable(arguments) : null); } };
         }
         public ActionSpec Settings(string id, string title, string description, string uri)
         { return Target(id,title,description,uri); }
         public ActionSpec PrinterDialog(string mode, string title, string printer)
         {
             return new ActionSpec("printer" + mode, title, "Apre il dialogo Windows per: " + printer, "Stampante selezionata · account dell'app",
-                delegate(Action<string> log) { app.Processes.PrintUi(mode, printer, log); }) { OpensWindow=true };
+                delegate(Action<string> log) { app.Processes.PrintUi(mode, printer, log); }) { OpensWindow=true,IsApplicable=delegate { return app.Availability.File("rundll32.exe") && app.Availability.File("printui.dll"); } };
         }
         public ActionSpec PurgePrinter(string printer)
         {

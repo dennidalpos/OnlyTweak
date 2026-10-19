@@ -11,9 +11,12 @@ namespace OnlyTweakWindows
         public object Data;
         public RegistryValueKind Kind;
     }
-    internal interface IRegistryStore
+    internal interface IRegistryReader
     {
         RegistryValueState Read(string path, string name);
+    }
+    internal interface IRegistryStore : IRegistryReader
+    {
         void Set(string path, string name, object data, RegistryValueKind kind);
         void DeleteValue(string path, string name);
         void DeleteKeyIfEmpty(string path);
@@ -76,11 +79,13 @@ namespace OnlyTweakWindows
         internal const string ExplorerPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
         internal const string ClassicPath = @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32";
         private readonly IRegistryStore store;
+        private readonly OsProfile os;
         private readonly Dictionary<string, TweakSnapshot> snapshots = new Dictionary<string, TweakSnapshot>();
         public readonly List<TweakDefinition> Definitions;
-        public RegistryTweakService(IRegistryStore store)
+        public RegistryTweakService(IRegistryStore store) : this(store,EnvironmentInfo.Profile) { }
+        public RegistryTweakService(IRegistryStore store,OsProfile os)
         {
-            this.store = store;
+            this.store = store; this.os=os;
             Definitions = new List<TweakDefinition> {
                 new TweakDefinition { Id="classic", Title="Menu contestuale classico", Path=ClassicPath, ValueName="", Kind=RegistryValueKind.String,
                     EnabledData="", DeleteWhenDisabled=true, EnabledLabel="Attiva menu classico", DisabledLabel="Menu Windows 11",
@@ -91,6 +96,10 @@ namespace OnlyTweakWindows
                 Explorer("checkboxes", "Caselle di selezione", "AutoCheckSelect", 1, 0, "Attiva caselle", "Disattiva caselle", "Aggiunge caselle di selezione agli elementi in Esplora file.",null)
             };
         }
+        public IEnumerable<TweakDefinition> AvailableDefinitions
+        { get { foreach (TweakDefinition d in Definitions) if (os.SupportsTweak(d.Id)) yield return d; } }
+        private void RequireApplicable(TweakDefinition definition)
+        { if (!os.SupportsTweak(definition.Id)) throw new NotSupportedException("Tweak non applicabile a questo sistema operativo."); }
         private static TweakDefinition Explorer(string id, string title, string name, int enabled, int disabled, string on, string off, string description, string summary)
         { return new TweakDefinition { Id=id, Title=title, Path=ExplorerPath, ValueName=name, Kind=RegistryValueKind.DWord, EnabledData=enabled, DisabledData=disabled, EnabledLabel=on, DisabledLabel=off, Description=description, Summary=summary }; }
         public string Describe(TweakDefinition definition)
@@ -119,6 +128,7 @@ namespace OnlyTweakWindows
         }
         public void Apply(TweakDefinition definition, bool enabled, Action<string> log)
         {
+            RequireApplicable(definition);
             // Removing a custom COM registration could break another application.
             if (!enabled && definition.DeleteWhenDisabled)
             {
@@ -149,6 +159,7 @@ namespace OnlyTweakWindows
         }
         public void Restore(TweakDefinition definition, Action<string> log)
         {
+            RequireApplicable(definition);
             TweakSnapshot snapshot;
             if (!snapshots.TryGetValue(definition.Id, out snapshot)) throw new InvalidOperationException("Nessun valore precedente salvato in questa sessione.");
             if (snapshot.Value.ValueExists)

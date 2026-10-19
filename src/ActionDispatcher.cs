@@ -19,6 +19,7 @@ namespace OnlyTweakWindows
             try
             {
                 await Task.Run(delegate {
+                    if (!action.Applicable) throw new NotSupportedException("Funzione non applicabile a questo sistema.");
                     if (action.Unavailable!=null) { string reason=action.Unavailable(); if (reason!=null) throw new InvalidOperationException(reason); }
                     action.Execute(delegate(string line) { app.History.Add(line); });
                 });

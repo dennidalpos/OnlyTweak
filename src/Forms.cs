@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Threading.Tasks;
@@ -12,26 +13,30 @@ namespace OnlyTweakWindows
         {
             StartPosition=FormStartPosition.CenterScreen; ClientSize=new Size(960,760);
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
-            stack.Controls.Add(Theme.Label(EnvironmentInfo.Summary+"\n"+EnvironmentInfo.Account+"  ·  Amministratore",Theme.Muted));
+            stack.Controls.Add(Theme.Label(app.OS.Summary+"\n"+EnvironmentInfo.Account+"  ·  Amministratore",Theme.Muted));
             // Quattro righe da 88: le schede restano alte almeno quanto Theme.Card e la nota finale resta visibile al 100%.
             TableLayoutPanel grid=new TableLayoutPanel { Height=4*88,ColumnCount=2,RowCount=4,BackColor=Theme.Background,Margin=new Padding(0,10,0,14) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
             for (int i=0;i<4;i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,25F));
-            AddTile(grid,"Stampanti","Stampanti, code e spooler",Glyphs.Print,0,0,delegate { using (PrinterDialog form=new PrinterDialog(app)) form.ShowDialog(this); });
-            AddTile(grid,"Aspetto ed Esplora file","Menu classico, estensioni e selezione",Glyphs.Personalize,1,0,delegate { using (AppearanceDialog form=new AppearanceDialog(app)) form.ShowDialog(this); });
-            AddTile(grid,"Rete","Indirizzi, DNS e ripristino",Glyphs.Network,0,1,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Network)) form.ShowDialog(this); });
-            AddTile(grid,"Manutenzione","Integrità Windows e spazio su disco",Glyphs.Repair,1,1,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Maintenance)) form.ShowDialog(this); });
-            AddTile(grid,"Compatibilità e protezioni","Blocchi app, memoria e driver",Glyphs.Shield,0,2,delegate { using (SecurityDialog form=new SecurityDialog(app)) form.ShowDialog(this); });
-            AddTile(grid,"Account","Account e utenti del PC",Glyphs.Contact,1,2,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Accounts)) form.ShowDialog(this); });
-            Button tools=AddTile(grid,"Strumenti Windows","Gestione computer, dispositivi e servizi",Glyphs.Apps,0,3,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Tools)) form.ShowDialog(this); });
-            grid.SetColumnSpan(tools,2); tools.Margin=new Padding(0,0,0,10); stack.Controls.Add(grid);
+            if (app.Availability.File("winspool.drv")) AddTile(grid,"Stampanti","Stampanti, code e spooler",Glyphs.Print,delegate { using (PrinterDialog form=new PrinterDialog(app)) form.ShowDialog(this); });
+            if (app.Tweaks.AvailableDefinitions.Any()) AddTile(grid,"Aspetto ed Esplora file",app.OS.IsWindows11 ? "Menu classico, estensioni e selezione" : "Estensioni, nascosti e selezione",Glyphs.Personalize,delegate { using (AppearanceDialog form=new AppearanceDialog(app)) form.ShowDialog(this); });
+            if (app.Catalog.Network.AllActions().Any()) AddTile(grid,"Rete","Indirizzi, DNS e ripristino",Glyphs.Network,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Network)) form.ShowDialog(this); });
+            if (app.Catalog.Maintenance.AllActions().Any()) AddTile(grid,"Manutenzione","Integrità Windows e spazio su disco",Glyphs.Repair,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Maintenance)) form.ShowDialog(this); });
+            if (app.Security.AvailableDefinitions(app.Availability).Any()) AddTile(grid,"Compatibilità e protezioni","Blocchi app, memoria e driver",Glyphs.Shield,delegate { using (SecurityDialog form=new SecurityDialog(app)) form.ShowDialog(this); });
+            if (app.Catalog.Accounts.AllActions().Any()) AddTile(grid,"Account","Account e utenti del PC",Glyphs.Contact,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Accounts)) form.ShowDialog(this); });
+            Button tools=app.Catalog.Tools.AllActions().Any() ? AddTile(grid,"Strumenti Windows","Gestione computer, dispositivi e servizi",Glyphs.Apps,delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Tools)) form.ShowDialog(this); }) : null;
+            if (tools!=null && grid.Controls.Count%2==1) { grid.SetColumnSpan(tools,2); tools.Margin=new Padding(0,0,0,10); }
+            grid.RowCount=Math.Max(1,(grid.Controls.Count+1)/2); grid.Height=grid.RowCount*88;
+            grid.RowStyles.Clear(); for (int row=0;row<grid.RowCount;row++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,100F/grid.RowCount));
+            stack.Controls.Add(grid);
             const string persistence="Le modifiche restano attive dopo la chiusura. Cronologia e ripristino dei valori precedenti sono disponibili solo in questa sessione.";
             Label note=Theme.Label("Ripristino e cronologia valgono solo per questa sessione.",Theme.Muted);
             note.Font=new Font("Segoe UI",9F); note.Margin=Padding.Empty; note.AccessibleDescription=persistence; Tips.SetToolTip(note,persistence); stack.Controls.Add(note);
             Footer.Controls.Add(Theme.Button("Cronologia",delegate { using (TextDialog form=new TextDialog("Cronologia della sessione",app.History.Read(),Glyphs.History)) form.ShowDialog(this); }));
         }
-        private static Button AddTile(TableLayoutPanel grid,string title,string description,string glyph,int column,int row,EventHandler clicked)
+        private static Button AddTile(TableLayoutPanel grid,string title,string description,string glyph,EventHandler clicked)
         {
+            int column=grid.Controls.Count%2,row=grid.Controls.Count/2;
             DarkButton button=(DarkButton)Theme.Card(title,description,clicked,glyph); button.GlyphColor=Theme.Accent;
             button.Dock=DockStyle.Fill; button.Margin=new Padding(column==0 ? 0 : 6,0,column==0 ? 6 : 0,10);
             grid.Controls.Add(button,column,row); return button;
@@ -53,6 +58,7 @@ namespace OnlyTweakWindows
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack); AddActions(stack,app,menu);
             foreach (MenuDefinition child in menu.Children)
             {
+                if (!System.Linq.Enumerable.Any(child.AllActions())) continue;
                 Label section=Theme.Section(child.Title,child.Glyph);
                 if (!String.IsNullOrEmpty(child.Detail)) { section.AccessibleDescription=child.Detail; Tips.SetToolTip(section,child.Detail); }
                 stack.Controls.Add(section); AddActions(stack,app,child);
@@ -62,6 +68,7 @@ namespace OnlyTweakWindows
         {
             foreach (ActionSpec action in menu.Actions)
             {
+                if (!action.Applicable) continue;
                 ActionSpec selected=action;
                 stack.Controls.Add(ActionCard(action,async delegate { await ActionDispatcher.Invoke(this,app,selected,SetFeedback); }));
             }
@@ -81,9 +88,11 @@ namespace OnlyTweakWindows
             "Stato e comandi nello stesso pannello. Le modifiche riguardano l'account che esegue l'app.")
         {
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
-            foreach (TweakDefinition definition in app.Tweaks.Definitions) { TweakPane pane=new TweakPane(app,definition); pane.Describe(Tips); stack.Controls.Add(pane); }
-            stack.Controls.Add(Theme.Section("Applica alla shell",Glyphs.Settings));
-            stack.Controls.Add(MenuDialog.ActionCard(app.Catalog.ExplorerRestart,delegate { OperationDialog.Open(this,app,app.Catalog.ExplorerRestart); },Tips));
+            foreach (TweakDefinition definition in app.Tweaks.AvailableDefinitions) { TweakPane pane=new TweakPane(app,definition); pane.Describe(Tips); stack.Controls.Add(pane); }
+            if (app.Catalog.ExplorerRestart.Applicable) {
+                stack.Controls.Add(Theme.Section("Applica alla shell",Glyphs.Settings));
+                stack.Controls.Add(MenuDialog.ActionCard(app.Catalog.ExplorerRestart,delegate { OperationDialog.Open(this,app,app.Catalog.ExplorerRestart); },Tips));
+            }
             FormClosing+=delegate(object sender,FormClosingEventArgs e) { if (app.Coordinator.IsBusy) e.Cancel=true; };
         }
     }
@@ -180,13 +189,14 @@ namespace OnlyTweakWindows
             layout.SizeChanged+=delegate { selection.MaximumSize=new Size(Math.Max(100,layout.Width-60),0); status.MaximumSize=selection.MaximumSize; };
             layout.Controls.Add(status,0,0); layout.Controls.Add(list,0,1); layout.Controls.Add(selection,0,2); layout.Controls.Add(actions,0,3); Content.Controls.Add(layout);
             refresh=Theme.Button("Aggiorna",async delegate { await RefreshPrinters(); }); Footer.Controls.Add(refresh);
-            Footer.Controls.Add(Theme.Button("Spooler…",delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Spool)) form.ShowDialog(this); }));
-            Footer.Controls.Add(Theme.Button("Stampanti e scanner",async delegate { await ActionDispatcher.Invoke(this,app,app.Catalog.Settings("printers.settings","Stampanti e scanner","Impostazioni Windows","ms-settings:printers"),SetFeedback); }));
-            Footer.Controls.Add(Theme.Button("Vista classica",async delegate { await ActionDispatcher.Invoke(this,app,app.Catalog.ClassicPrinterView,SetFeedback); }));
+            if (app.Catalog.Spool.AllActions().Any()) Footer.Controls.Add(Theme.Button("Spooler…",delegate { using (MenuDialog form=new MenuDialog(app,app.Catalog.Spool)) form.ShowDialog(this); }));
+            if (app.Availability.Target("ms-settings:printers")) Footer.Controls.Add(Theme.Button("Stampanti e scanner",async delegate { await ActionDispatcher.Invoke(this,app,app.Catalog.Settings("printers.settings","Stampanti e scanner","Impostazioni Windows","ms-settings:printers"),SetFeedback); }));
+            if (app.Catalog.ClassicPrinterView.Applicable) Footer.Controls.Add(Theme.Button("Vista classica",async delegate { await ActionDispatcher.Invoke(this,app,app.Catalog.ClassicPrinterView,SetFeedback); }));
             if (loadOnShown) Shown+=async delegate { await RefreshPrinters(); };
         }
         private void AddPrinterButton(FlowLayoutPanel actions,string title,string mode)
         {
+            if (!app.Availability.File("rundll32.exe") || !app.Availability.File("printui.dll")) return;
             Button button=Theme.Button(title,async delegate { await OpenPrinter(mode,title); });
             button.Enabled=false; selectedButtons.Add(button); actions.Controls.Add(button);
         }

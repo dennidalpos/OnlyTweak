@@ -127,3 +127,14 @@ Comandi: `build.cmd`, quindi `test.cmd --artifact --ui --read-only --render`.
 47 verifiche, incluse prove UI con azioni simulate per apertura diretta, errori, avvio automatico, annullamento, unica conferma, chiusura bloccata durante l'esecuzione, scorrimento dell'output su entrambi gli assi, focus nei menu, lista lunga e selezione accessibile delle stampanti. Le letture reali non modificano registro o servizi.
 
 Anteprime realizzate con finestre di test e dati stampante simulati, catturate tramite PrintWindow in `artifacts/ui` ai fattori 100/150/200%. Ispezionati home, stampanti, tweak, conferma, output e scrollbar. Il ridimensionamento simulato non certifica cambio DPI fra monitor reali. Le prove su Windows pulito, i dialoghi effettivi dei driver e gli interventi distruttivi reali restano da effettuare in VM sacrificabile come indicato nel README.
+
+
+## Icona e profili Windows 10/11 — 19 ottobre 2026
+
+Icona propria: tre cursori verde menta #68E2C3 su #121B26, angoli trasparenti, sorgente SVG e ICO in otto taglie. Risorsa nativa dell’EXE, estrazione tramite shell e assegnazione a tutte le finestre verificate. La home usa l’eyebrow neutro WINDOWS e il riepilogo del profilo effettivo; su Windows 10 non mostra il menu classico né le protezioni esclusive di Windows 11.
+
+Le schede Protezioni contengono solo stato e accesso alla pagina Windows. La riduzione dei pulsanti ha richiesto di ricalcolare le altezze di etichette e barra azioni; i test controllano che stato e pulsante siano visibili, contenuti nella scheda e non sovrapposti. Valori assenti restano sconosciuti. Sono state ispezionate home 1809, Esplora file 1809 e protezioni Windows 10/11.
+
+Render aggiuntivi: `artifacts/ui/os-<build>-MainForm.png`, `AppearanceDialog.png`, `SecurityDialog.png`, per build 17763, 19044, 19045, 22000, 22621 e 26100. Sono simulazioni della selezione delle funzioni sul desktop Windows 11 della postazione; non provano cornice, font, DPI o disponibilità reale dei componenti Windows 10. La cattura attende il repaint e rifiuta immagini nere. Il test per i tooltip e il loop UI condiviso restano attivi.
+
+Build locale riuscita; suite completa 69/0 e comando CI locale 47/0. Nessun nuovo run remoto. Le sezioni precedenti documentano i cicli storici; le modifiche dirette alle protezioni descritte nelle versioni precedenti sono state rimosse. Rimangono necessarie le VM e le prove reali della shell/taskbar.

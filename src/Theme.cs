@@ -241,7 +241,7 @@ namespace OnlyTweakWindows
             Text=title=="OnlyTweakWindows" ? title : title+" · OnlyTweakWindows";
             BackColor=Theme.Background; ForeColor=Theme.Text; Font=new Font("Segoe UI",10F);
             AutoScaleDimensions=new SizeF(96F,96F); AutoScaleMode=AutoScaleMode.Dpi;
-            ClientSize=new Size(920,740); MinimumSize=new Size(660,540); StartPosition=FormStartPosition.CenterParent; Icon=SystemIcons.Application;
+            ClientSize=new Size(920,740); MinimumSize=new Size(660,540); StartPosition=FormStartPosition.CenterParent; Icon=AppIcon.Value;
             Root=new TableLayoutPanel { Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Margin=Padding.Empty,Padding=Padding.Empty };
             Root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.Percent,100)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -250,7 +250,7 @@ namespace OnlyTweakWindows
             // L'eyebrow identifica l'app solo nella home; nelle finestre secondarie basta il titolo della finestra.
             if (title=="OnlyTweakWindows")
             {
-                Label eyebrow=Theme.Label("ONLYTWEAK  /  WINDOWS 11",Theme.Accent); eyebrow.Font=new Font("Segoe UI",8F,FontStyle.Bold);
+                Label eyebrow=Theme.Label("ONLYTWEAK  /  WINDOWS",Theme.Accent); eyebrow.Font=new Font("Segoe UI",8F,FontStyle.Bold);
                 header.Controls.Add(eyebrow,0,0); header.SetColumnSpan(eyebrow,2);
             }
             Label heading=Theme.Heading(title,glyph); Heading=(GlyphLabel)heading;

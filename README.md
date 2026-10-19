@@ -1,12 +1,12 @@
 # OnlyTweakWindows
 
-Toolkit portatile per **Windows 11 x64 Intel/AMD**, con interfaccia italiana scura e categorie organizzate in finestre modali. Il file da distribuire è soltanto `dist\OnlyTweakWindows.exe`.
+Toolkit portatile per **Windows 10 dalla 1809 e Windows 11, x64 Intel/AMD**, con interfaccia italiana scura e categorie organizzate in finestre modali. Il file da distribuire è soltanto `dist\OnlyTweakWindows.exe`.
 
 ## Avvio
 
-Apri `OnlyTweakWindows.exe` e autorizza la richiesta amministratore di Windows. Non occorrono installazione, Visual Studio, SDK, pacchetti NuGet o download di runtime. L'app utilizza **.NET Framework 4.x già incluso in Windows 11**, distinto dal moderno .NET Desktop Runtime.
+Apri `OnlyTweakWindows.exe` e autorizza la richiesta amministratore di Windows. Non occorrono installazione, Visual Studio, SDK, pacchetti NuGet o download di runtime. L'app utilizza **.NET Framework già incluso in Windows: API compatibili con la 4.7.2 di Windows 10 1809 e versioni successive**, distinto dal moderno .NET Desktop Runtime.
 
-L'eseguibile non è firmato digitalmente. Windows o le policy aziendali possono quindi richiedere un'ulteriore verifica dell'editore o impedirne l'avvio. L'app non modifica automaticamente tali protezioni: i comandi della categoria Compatibilità e protezioni sono utilizzabili solo dopo l'avvio e richiedono conferma.
+L'eseguibile non è firmato digitalmente. Windows o le policy aziendali possono quindi richiedere un'ulteriore verifica dell'editore o impedirne l'avvio. L’app non modifica queste protezioni: la categoria Compatibilità e protezioni mostra lo stato e apre le pagine Windows.
 
 La finestra iniziale indica versione/build e account effettivo. I tweak personali e le connessioni stampante riguardano **l'account che esegue l'app**: se nell'UAC inserisci credenziali di un altro amministratore, riguardano quell'amministratore. Gli interventi su servizi, rete e sistema riguardano il computer.
 
@@ -20,16 +20,18 @@ I tweak reversibili si applicano direttamente, con esito inline. Diagnostica e m
 |---|---|
 | Stampanti | Elenco aggiornabile, stampante predefinita, proprietà, preferenze, coda, annullamento dei lavori della selezionata, impostazioni Stampanti e scanner. |
 | Spooler | Lettura stato, riavvio senza cancellazione dei file, pulizia globale dei file di coda locali. |
-| Aspetto ed Esplora file | Menu contestuale classico/Windows 11, estensioni, file nascosti, caselle di selezione, riavvio esplicito della shell. |
+| Aspetto ed Esplora file | Menu contestuale classico solo su Windows 11, estensioni, file nascosti, caselle di selezione, riavvio esplicito della shell. |
 | Rete | Schede, IP, gateway e DNS, `ipconfig /all`, pulizia cache DNS, reset Winsock, reset TCP/IP, connessioni di rete e proxy. |
 | Manutenzione | `sfc /verifyonly`, `sfc /scannow`, `DISM /Online /Cleanup-Image /ScanHealth /NoRestart`, `DISM /Online /Cleanup-Image /RestoreHealth /NoRestart`, Pulizia disco e Archiviazione. |
 | Strumenti Windows | Gestione dispositivi, Servizi, Visualizzatore eventi, Gestione attività, applicazioni installate, applicazioni all'avvio, Windows Update e Informazioni di sistema. |
-| Compatibilità e protezioni | Stato e gestione separata di Smart App Control, SmartScreen, PUA, origine delle app, integrità della memoria, protezione stack kernel e blocklist driver vulnerabili. |
-| Account | Passaggio ad account locale, account delle app, lavoro/scuola, altri utenti, netplwiz, Utenti e gruppi locali dove disponibile, portale Microsoft e guida alla chiusura online. |
+| Compatibilità e protezioni | Stato e pagine Windows, senza modifiche dirette, per Smart App Control, SmartScreen, PUA, origine delle app, integrità della memoria, protezione stack kernel e blocklist driver vulnerabili. |
+| Account | Passaggio ad account locale, account delle app, lavoro/scuola, altri utenti, netplwiz, Utenti e gruppi locali dove disponibile. |
 
 Stampanti offre **Vista classica** (Dispositivi e stampanti) e, separatamente, **Stampanti e scanner** nelle Impostazioni moderne. Strumenti Windows include **Gestione computer**, **Pannello di controllo** e **Programmi e funzionalità** prima dell'alternativa moderna Applicazioni installate. Componenti, console e destinazioni Shell sono controllati prima dell'avvio; Windows può comunque reindirizzare una vista su build differenti. La sola richiesta di apertura non certifica la finestra effettivamente mostrata.
 
-Ogni area ha un'icona del font di sistema Segoe Fluent Icons, incluso in Windows 11. Le card mostrano una riga breve; avvertenze e dettagli sono nel tooltip, anche tramite l'icona Info (clic, oppure Invio, Spazio o F1 da tastiera). I tooltip si chiudono da soli dopo 10 secondi e quando la finestra si sposta, perde il primo piano o si chiude. I testi completi restano nelle conferme e per i lettori di schermo.
+L’eseguibile e tutte le finestre incorporano l’icona OnlyTweak con tre cursori verde menta. Il sorgente è `assets/OnlyTweak.svg`; anteprima PNG e ICO 16/20/24/32/48/64/128/256 px sono nello stesso percorso. `powershell -NoProfile -File scripts/create-icon.ps1` rigenera i raster con System.Drawing di Windows, senza pacchetti.
+
+Le icone delle aree usano Segoe Fluent Icons, con Segoe MDL2 Assets come alternativa su Windows 10. Le card mostrano una riga breve; avvertenze e dettagli sono nel tooltip, anche tramite l'icona Info (clic, oppure Invio, Spazio o F1 da tastiera). I tooltip si chiudono da soli dopo 10 secondi e quando la finestra si sposta, perde il primo piano o si chiude. I testi completi restano nelle conferme e per i lettori di schermo.
 
 Titolo e contorni della finestra, pulsanti, conferme, riquadri, selezioni, avanzamento e scrollbar dell'app condividono una palette scura con accento verde acqua. Le scrollbar verticali dei menu e della lista stampanti e quelle verticali/orizzontali dell'output sono disegnate dall'app. I dialoghi esterni Windows e dei driver mantengono il proprio tema di sistema.
 
@@ -37,39 +39,38 @@ Tab e Maiusc+Tab spostano il focus e mantengono visibili i comandi nei gruppi sc
 
 La rotella agisce sul contenitore sotto il puntatore nella finestra attiva, anche sopra pulsanti, etichette e pannelli annidati, senza spostare il focus o scorrere due volte. Rispetta il numero di righe/pagine impostato in Windows e accumula i piccoli delta. Nell'output, Maiusc+rotella e la rotella orizzontale scorrono sul secondo asse.
 
+### Compatibilità Windows 10/11
+
+Il perimetro previsto comprende Windows 10 Home/Pro/Enterprise/Education dalla 1809 (build 17763), Enterprise e IoT Enterprise LTSC 2019/2021 e Windows 11 x64. Windows Server, ARM64 e processi a 32 bit vengono rifiutati all’avvio. La compatibilità su installazioni pulite è ancora da convalidare in VM.
+
+Il profilo rileva versione nativa, tipo client/server, architettura nativa, build, revisione, edizione e DisplayVersion (alternativa ReleaseId). Non deduce Windows 11 dal solo ProductName. Comandi SFC, DISM, rete e spooler restano condivisi; file, console e destinazioni vengono verificati prima dell’avvio. Componenti non disponibili, funzioni di altre edizioni e sezioni vuote vengono nascosti.
+
+| Funzione | Applicabilità |
+|---|---|
+| Estensioni, nascosti, caselle | Windows 10/11; account che esegue l’app. |
+| Tweak menu classico | Solo Windows 11; non ufficiale e dipendente dalla build. |
+| Smart App Control e stack kernel | Windows 11 dalla 22H2; disponibilità effettiva e prerequisiti si verificano nella pagina Windows. |
+| Integrità memoria, SmartScreen, PUA, origine app | Stato su Windows 10/11; nessun comando di modifica nell’app. |
+| Blocklist driver | Stato distinto dall’interruttore dedicato, disponibile nelle versioni Windows pertinenti; HVCI/modalità S possono imporla. |
+| Utenti e gruppi locali | Solo edizioni Professional/Enterprise/Education e derivate, con console installata; nascosto su Home. |
+
+Su Windows 10 i collegamenti più recenti al filtro app usano la pagina padre Controllo app/browser. Senza gestore Sicurezza Windows viene proposta la pagina generale `ms-settings:windowsdefender`, se disponibile. Il gestore di un protocollo non certifica la pagina visualizzata: la matrice delle destinazioni è basata sugli URI documentati; reindirizzamenti e policy richiedono verifica reale. Non si installano componenti mancanti.
+
 ### Compatibilità e protezioni
 
-I colori distinguono le evidenze: verde per PUA in modalità blocco con Defender attivo e per HVCI/stack kernel osservati in esecuzione; neutro per Audit, stato sconosciuto e sola configurazione; avviso per protezione inattiva, errore o riavvio pendente. Il testo specifica sempre lo stato. Anche i tweak di Esplora file mostrano la configurazione in colore neutro.
+Questa categoria è **esclusivamente di lettura**: servizio e backend non espongono più scritture HKLM, cmdlet di modifica, snapshot o ripristini. Il pulsante Apri pagina Windows affida le modifiche agli strumenti di sistema; Aggiorna stato rilegge il computer.
 
-Il pulsante Conferma usa testo e bordo di avviso su superficie scura. Annulla resta predefinito per Invio ed Esc. Bordi e cursori delle scrollbar hanno maggiore contrasto; misure, anteprime e limiti di verifica sono descritti in [docs/UI-UX.md](docs/UI-UX.md).
+I colori distinguono le evidenze: verde per PUA in blocco con Defender attivo e per HVCI/stack osservati in esecuzione; neutro per Audit, stato sconosciuto e sola configurazione; avviso per protezione inattiva o errore. Valori mancanti e letture incomplete non diventano protezioni attive sulla base di presunti predefiniti di una fresh install. Configurazione ed effetto restano separati.
 
-Tutti i comandi diretti di questa categoria riguardano **il computer e tutti gli utenti**. Ogni modifica ha una conferma con Annulla predefinito, viene eseguita in background e viene riletta. Configurazione ed esecuzione effettiva sono distinte: il pannello non presenta un valore di registro come prova che una protezione sia già attiva o disattiva.
+La diagnostica usa esclusivamente **Windows PowerShell incluso nel sistema**, senza PowerShell 7, script scaricati o modifiche a ExecutionPolicy. Se una lettura non riesce, la relativa scheda resta visibile con stato sconosciuto.
 
-| Voce | Gestione |
-|---|---|
-| Smart App Control | Stato configurato e pagina ufficiale Windows; nessuna modifica diretta al registro. La riattivazione dipende da aggiornamenti e disponibilità del dispositivo. |
-| SmartScreen «Controlla app e file» | Criterio locale: `HKLM\SOFTWARE\Policies\Microsoft\Windows\System`, `EnableSmartScreen` 0/1 e `ShellSmartScreenLevel` `Warn`. L'attivazione consente quindi l'avviso superabile, non imposta il blocco senza esclusione. |
-| PUA | Cmdlet Windows Defender `Get-MpPreference` / `Set-MpPreference -PUAProtection`; preserva anche il valore Audit nel ripristino. Il filtro dei download del browser resta separato. |
-| Origine delle app | Criterio locale in `HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\SmartScreen`: `ConfigureAppInstallControlEnabled` 1 e `ConfigureAppInstallControl` `Anywhere`/`StoreOnly`. Non modifica la modalità S. |
-| Integrità della memoria | `HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity`, `Enabled` 0/1. Non modifica automaticamente VBS o altre protezioni. |
-| Stack kernel | Criterio locale `HKLM\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard`, `ConfigureKernelShadowStacksLaunch` 3/1 (disattivato/attivato). La riattivazione diretta richiede VBS/HVCI in esecuzione e supporto stack già osservato in esecuzione da Windows nella sessione. |
-| Driver vulnerabili | Stato configurato e pagina Isolamento core; segnala che HVCI, SAC o modalità S possono imporre la blocklist anche quando il valore locale è disattivato. |
-
-I criteri diretti richiedono un'edizione supportata e il relativo modello ADMX presente. In assenza dei requisiti resta disponibile la pagina Windows. Dispositivi rilevati come gestiti da dominio/organizzazione, verifica di gestione non riuscita, criteri preesistenti esterni alla sessione, blocchi UEFI e antimanomissione impediscono le modifiche pertinenti: l'app non li rimuove. Se una configurazione di criterio cambia fuori dall'app dopo un intervento, non viene sovrascritta dal successivo comando o ripristino.
-
-Il servizio usa esplicitamente **HKLM, vista x64**, separato dai tweak personali HKCU. Prima del primo intervento conserva in memoria lo stato originale, tipi, valori e assenze; il ripristino conserva chiavi preesistenti e dati estranei. In caso di errore tenta il recupero della configurazione precedente al tentativo e riporta separatamente un eventuale recupero incompleto. Per PUA conserva il valore effettivamente restituito dal cmdlet. Non produce backup persistenti delle impostazioni.
-
-HVCI e stack indicano un riavvio manuale pendente dopo i comandi; la riattivazione HVCI senza una precedente esecuzione verificata o configurazione VBS disponibile viene rimandata a Windows. Nessun riavvio è automatico. **Chiudendo l'app si perdono gli snapshot**: i criteri persistenti creati diventano esterni alla nuova sessione e vanno gestiti con gli strumenti Windows. Non è promesso il ripristino di ogni protezione con un singolo pulsante fra riavvii.
-
-La diagnostica e i comandi PUA usano esclusivamente **Windows PowerShell incluso nel sistema**, senza PowerShell 7, script scaricati o modifiche a ExecutionPolicy. Se il componente non è disponibile, l'azione resta non disponibile.
+Il pulsante Conferma delle altre operazioni usa testo e bordo di avviso; Annulla resta predefinito. Misure del contrasto e limiti delle anteprime sono in [docs/UI-UX.md](docs/UI-UX.md).
 
 ### Account e contesto della sessione
 
-Le pagine personali, Sicurezza Windows, le destinazioni Shell e i link Microsoft vengono richiesti con il token e l'ambiente dell'utente della shell desktop della stessa sessione, senza elevare il browser. Se il contesto non è accessibile, l'app mostra l'errore. Questo comportamento non cambia l'attribuzione dei tweak HKCU già descritta sopra.
+Le pagine personali, Sicurezza Windows e le destinazioni Shell vengono aperte con il token e l'ambiente dell'utente della shell desktop della stessa sessione. Se il contesto non è accessibile, l'app mostra l'errore. Questo comportamento non cambia l'attribuzione dei tweak HKCU già descritta sopra.
 
 Passaggio ad account locale, scollegamento degli account delle app/lavoro e rimozione di utenti si completano nelle interfacce Windows. La rimozione dal PC può eliminare dati locali e non chiude l'account Microsoft online. Netplwiz e Utenti e gruppi locali sono strumenti amministrativi del computer; quest'ultimo è controllato anche per edizione e presenza della console.
-
-**Procedura di chiusura dell'account Microsoft** apre la guida ufficiale nel browser dell'utente: riguarda anche servizi e dati associati. Accesso, verifica dell'account, eventuali requisiti e conferma finale restano sul sito Microsoft. L'app non raccoglie credenziali, non elimina profili automaticamente e non effettua richieste di cancellazione online.
 
 ### Registro e ripristino
 
@@ -120,7 +121,7 @@ Da questa cartella, in Prompt dei comandi o PowerShell:
 .\build.cmd
 ```
 
-Lo script usa `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe` (con fallback al percorso Framework), linguaggio **C# 5**, target Windows GUI x64 e manifest incorporato con `requireAdministrator` e dichiarazione DPI. Produce soltanto `dist\OnlyTweakWindows.exe`. Nessun file `.config`, DLL o script è necessario accanto all'EXE. Per ricompilare, chiudi eventuali copie dell'eseguibile di destinazione.
+Lo script usa `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe` (con fallback al percorso Framework), linguaggio **C# 5**, target Windows GUI x64 e manifest incorporato con `requireAdministrator`, dichiarazione DPI e icona nativa/risorsa gestita. Produce soltanto `dist\OnlyTweakWindows.exe`. Nessun file `.config`, DLL o script è necessario accanto all'EXE. Per ricompilare, chiudi eventuali copie dell'eseguibile di destinazione.
 
 Struttura: `src` contiene UI, catalogo azioni e servizi separati; `tests` contiene i fake e il banco di prova; `artifacts` e `dist` sono output generati. Le API Win32 sono richiamate tramite P/Invoke, senza wrapper esterni.
 
@@ -136,27 +137,24 @@ La suite si compila con lo stesso compilatore di sistema ed esegue:
 - Ripristino registro simulato: valori personalizzati, assenti, binari e MultiString, chiavi preesistenti, dati estranei, scritture fallite e rilettura di conferma.
 - Spooler simulato: percorsi ammessi/vietati, reindirizzamenti, file fuori percorso, errori parziali e tentativo di avvio anche dopo errore di arresto.
 - Quoting degli argomenti, catalogo, coordinamento e cronologia.
-- Protezioni simulate: criteri e snapshot HKLM, tipi/assenze, PUA Audit, scritture ignorate o fallite, recupero parziale, gestione/policy/UEFI/antimanomissione, prerequisiti e stato runtime distinto. Launcher interattivo sostituito da un fake nei test.
-- `--artifact`: PE x64/Windows GUI, manifest UAC/DPI incorporato, sole dipendenze framework e singolo file nella cartella dist.
+- Profili OS simulati: build 17763/18362/18363/19041/19042/19043/19044/19045, LTSC, Windows 11, edizioni e architetture escluse; cataloghi filtrati e sezioni vuote.
+- Protezioni simulate esclusivamente di lettura: configurazione/runtime, PUA Audit, letture parziali o fallite, stato sconosciuto e pagine Windows. Launcher interattivo sostituito da un fake nei test.
+- `--artifact`: PE x64/Windows GUI, manifest UAC/DPI e icona incorporati, estrazione icona tramite shell, metadato Framework 4.7.2, sole dipendenze framework e singolo file nella cartella dist.
 - `--ui`: aperture dirette senza modali intermedi, avvio automatico, singola conferma e annullamento, scorrimento/focus, output con entrambe le scrollbar, lista lunga stampanti e accessibilità; successo/errore con azioni simulate, chiusura bloccata e controlli riabilitati.
 - `--read-only`: lettura reale di registro, protezioni/CIM/Defender, stampanti, spooler e schede di rete. Non modifica il sistema.
-- `--render`: anteprime delle finestre a fattori di scala 100%, 150% e 200% in `artifacts\ui`. Apre brevemente le finestre del banco di prova, senza applicare tweak.
+- `--render`: anteprime delle finestre a fattori di scala 100%, 150% e 200% in `artifacts\ui`. Include home, Esplora file e protezioni per sei profili OS simulati. Apre brevemente le finestre del banco di prova, senza applicare tweak.
 
-La CI GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) esegue `build.cmd` e `test.cmd --artifact --read-only` su `windows-2025`, che include .NET Framework 4.8, a ogni push su `master` e pull request. `--ui` e `--render` restano locali perché richiedono una sessione desktop. Il runner è Windows Server, non sostituisce le prove su Windows 11.
+La CI GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) esegue `build.cmd` e `test.cmd --artifact --read-only` su `windows-2025`, che include .NET Framework 4.8, a ogni push su `master` e pull request. `--ui` e `--render` restano locali perché richiedono una sessione desktop. Il runner è Windows Server, non sostituisce le prove su Windows 10/11.
 
 ### Stato verificato il 19 ottobre 2026
 
 Compilazione senza avvisi con il compilatore Windows .NET Framework **14.8.10001.0**, compatibile C# 5. Ambiente reale: **Windows 11 26H2, build 26300.9711 x64**. Lettura riuscita delle cinque stampanti installate, identificazione della predefinita, stato spooler, preflight della cartella standard e diagnostica rete.
 
-Versione **1.2.0**: rotella centralizzata, viste classiche, Gestione computer, protezioni e account; icone, tooltip con scadenza, stati distinti, conferme con richiamo di avviso e contrasto migliorato. `build.cmd` e `test.cmd --artifact --ui --read-only --render` riescono con **77 verifiche superate, 0 fallite**. Le due prove aggiunte distinguono configurazione/runtime e verificano le transizioni UI, compreso l'errore asincrono di lettura. Tutte le prove UI condividono il loop principale del banco. Le anteprime sono acquisite con PrintWindow; ispezionati home, conferma, protezioni e output al 100%. Il ridimensionamento simulato a 150/200% non equivale a una prova con DPI reali. Dettagli in [docs/UI-UX.md](docs/UI-UX.md).
+Il codice aggiornato con icona, compatibilità Windows 10 e protezioni in sola lettura supera **69 verifiche, 0 fallite** con `test.cmd --artifact --ui --read-only --render` (`artifacts/os-compat-verification.log`). Il comando CI `test.cmd --artifact --read-only` passa localmente con **47/0** (`artifacts/os-compat-ci-command.log`). Il minor conteggio rispetto al ciclo precedente deriva dalla rimozione dei test delle scritture alle protezioni, sostituiti dalle verifiche di lettura e compatibilità. Questi sono risultati locali; gli esiti remoti del commit sono consultabili in [GitHub Actions](https://github.com/dennidalpos/OnlyTweak/actions).
 
-Il tracker operativo è nel dossier SecondBrain `02-areas/products/OnlyTweak/tracker.md`, esterno al repository. Le attività locali completate vengono rimosse dall'elenco attivo; le evidenze restano nella documentazione. Nessuna VM disponibile nel ciclo del 19 ottobre: le prove seguenti restano aperte.
+Ispezionati icona, home, Esplora file e protezioni nei render dei profili simulati. Risorsa nativa estraibile dalla shell e icona delle finestre verificate; l’aspetto reale di Esplora file e barra delle applicazioni sulle versioni target resta da provare. Le anteprime 150/200% scalano i controlli e non certificano DPI reali. Targeting pack 4.7.2 assente sulla postazione: la build usa il Framework installato; l’esecuzione con la 4.7.2 inclusa nella 1809 resta da convalidare.
 
-Anche il comando usato dalla CI, `test.cmd --artifact --read-only`, passa localmente con **54 verifiche superate, 0 fallite** (`artifacts/ot-04-ci-command.log`). I risultati dei run remoti sono consultabili nella pagina [GitHub Actions](https://github.com/dennidalpos/OnlyTweak/actions).
-
-Da completare in una VM Windows 11 x64 pulita e sacrificabile: avvio del solo EXE con UAC, navigazione e DPI reali 100/150/200%, apertura dei dialoghi driver, stampante di rete offline, spooler fermo/disabilitato, annullamento di lavori campione, pulizia reale, riavvio shell, reset rete, SFC/DISM e confronto visivo del menu classico prima/dopo. Nessuna di queste operazioni modificanti è stata eseguita sulla postazione di sviluppo. Compatibilità delle build stabili 24H2/25H2 non ancora verificata direttamente; ARM64 escluso.
-
-Restano da verificare nella VM le modifiche effettive alle protezioni e il confronto dopo il riavvio, i blocchi gestiti/UEFI, l'apertura e i reindirizzamenti delle viste classiche, le pagine account e il lancio interattivo con UAC tramite un altro amministratore. Non eseguire una chiusura reale di account Microsoft come test.
+Il tracker operativo esterno è `02-areas/products/OnlyTweak/tracker.md` nel dossier SecondBrain. Nessuna VM disponibile: restano aperte installazioni pulite Windows 10 1809/LTSC 2019, 22H2, LTSC 2021 e Windows 11, edizioni Home/Pro, UAC anche con altro amministratore, DPI reali, icone della shell/taskbar, destinazioni Windows e dialoghi driver. Reset rete, SFC/DISM, pulizia reale spooler e riavvio shell si provano esclusivamente in VM sacrificabili; sulla postazione sono state eseguite soltanto simulazioni e letture. Per le protezioni si verificano letture e pagine, senza reintrodurre test di scrittura rimossi dall’app.
 
 Il repository Git conserva sorgenti, test e documentazione. `dist/` e `artifacts/` sono esclusi: eseguibile, rendering, log, backup e pacchetti di consegna vengono generati localmente. Anche `AGENTS.md`, distribuito da SecondBrain con i percorsi di questa postazione, e le configurazioni personali degli editor sono esclusi.
 
@@ -164,6 +162,8 @@ Per la distribuzione basta `dist\OnlyTweakWindows.exe`; non copiare test, log o 
 
 ## Fonti primarie
 
+- [Architettura host con IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2), distinta dall'architettura emulata.
+- [Versioni Framework incluse e requisito 4.7.2](https://learn.microsoft.com/en-us/dotnet/framework/install/versions-and-dependencies)
 - [Framework incluso nelle versioni di Windows](https://learn.microsoft.com/en-us/dotnet/framework/install/on-windows-and-server)
 - [Compilatore C# e opzioni](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/compiler-options/)
 - [PrintUIEntry: proprietà, preferenze e coda](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/rundll32-printui)
@@ -182,8 +182,8 @@ Per la distribuzione basta `dist\OnlyTweakWindows.exe`; non copiare test, log o 
 - [Criteri SmartScreen e origine delle app](https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-smartscreen)
 - [PUA e cmdlet Defender](https://learn.microsoft.com/en-us/defender-endpoint/detect-block-potentially-unwanted-apps-microsoft-defender-antivirus)
 - [Integrità della memoria e Win32_DeviceGuard](https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity)
-- [Protezione stack kernel](https://learn.microsoft.com/en-us/windows-server/security/kernel-mode-hardware-stack-protection) e modello `DeviceGuard.admx` presente nel sistema; i requisiti citano Windows 11 2022 Update o successivo.
+- [Protezione stack kernel](https://learn.microsoft.com/en-us/windows-server/security/kernel-mode-hardware-stack-protection), disponibile da Windows 11 2022 Update.
 - [Smart App Control: disponibilità e riattivazione](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions)
 - [Blocklist driver e dipendenze](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/design/microsoft-recommended-driver-block-rules)
 - [Pagine ufficiali Controllo app/browser](https://support.microsoft.com/en-gb/windows/security/windows-security/app-browser-control-in-the-windows-security-app?nochrome=true) e [Sicurezza dispositivi](https://support.microsoft.com/en-us/windows/security/windows-security/device-security-in-the-windows-security-app), fonte dei collegamenti `windowsdefender:`.
-- [Gestione account Windows](https://support.microsoft.com/en-us/windows/security/identity-signin/manage-user-accounts-in-windows) e [chiusura account Microsoft](https://support.microsoft.com/en-us/accounts-billing/manage/how-to-close-your-microsoft-account)
+- [Gestione account Windows](https://support.microsoft.com/en-us/windows/security/identity-signin/manage-user-accounts-in-windows)

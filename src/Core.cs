@@ -13,6 +13,8 @@ namespace OnlyTweakWindows
         public Action<Action<string>> Execute;
         public Func<string> Unavailable;
         public bool OpensWindow;
+        public Func<bool> IsApplicable;
+        public bool Applicable { get { return IsApplicable==null || IsApplicable(); } }
         public ActionSpec(string id, string title, string description, string scope, Action<Action<string>> execute)
         { Id = id; Title = title; Description = description; Scope = scope; Execute = execute; }
     }
@@ -42,11 +44,16 @@ namespace OnlyTweakWindows
         public readonly SpoolService Spool;
         public readonly ActionCatalog Catalog;
         public readonly SecurityService Security;
+        public readonly OsProfile OS;
+        public readonly FeatureAvailability Availability;
         public AppServices() : this(new WindowsSecurityBackend()) { }
-        internal AppServices(ISecurityBackend security)
+        internal AppServices(ISecurityBackend security) : this(security,EnvironmentInfo.Profile,null) { }
+        internal AppServices(ISecurityBackend security,OsProfile os,FeatureAvailability availability)
         {
+            OS=os;
+            Availability=availability??new FeatureAvailability(os,name=>Processes.FileUnavailable(name)==null,target=>Processes.TargetUnavailable(target)==null);
             Security=new SecurityService(security);
-            Tweaks = new RegistryTweakService(new WindowsRegistryStore());
+            Tweaks = new RegistryTweakService(new WindowsRegistryStore(),os);
             Spool = new SpoolService(new WindowsSpoolBackend());
             Catalog = new ActionCatalog(this);
         }
