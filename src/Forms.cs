@@ -106,7 +106,7 @@ namespace OnlyTweakWindows
             title=Theme.Label(definition.Title,Theme.Text); title.Font=new Font("Segoe UI",11F,FontStyle.Bold); title.Margin=new Padding(0,0,0,5);
             detail=Theme.Label(definition.Summary??definition.Description,Theme.Muted); detail.Font=new Font("Segoe UI",9F); detail.Margin=new Padding(0,0,0,5);
             AccessibleName=definition.Title; AccessibleDescription=definition.Description;
-            state=Theme.Label("",Theme.Accent); state.Font=new Font("Segoe UI",9F); state.Margin=Padding.Empty;
+            state=Theme.Label("",Theme.Muted); state.Font=new Font("Segoe UI",9F); state.Margin=Padding.Empty;
             buttons=new FlowLayoutPanel { Dock=DockStyle.Fill,AutoSize=true,WrapContents=true,Margin=Padding.Empty,Padding=Padding.Empty };
             on=Theme.Button(definition.EnabledLabel,async delegate { await Change(true,false); });
             off=Theme.Button(definition.DisabledLabel,async delegate { await Change(false,false); });
@@ -142,7 +142,7 @@ namespace OnlyTweakWindows
         }
         private void RefreshState()
         {
-            try { state.Text=app.Tweaks.Describe(definition); state.ForeColor=Theme.Accent; }
+            try { state.Text=app.Tweaks.Describe(definition); state.ForeColor=Theme.Muted; }
             catch (Exception ex) { state.Text=ex.Message; state.ForeColor=Theme.Warning; }
             restore.Enabled=app.Tweaks.CanRestore(definition);
         }

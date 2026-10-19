@@ -23,7 +23,7 @@ namespace OnlyTweakWindows
             if (args.Contains("--render")) Test("render UI senza esecuzione azioni",Render);
             if (args.Contains("--read-only")) Test("servizi reali: sole letture",ReadOnlySmoke);
             if (args.Contains("--artifact")) Test("EXE: architettura, manifest e dipendenze",VerifyArtifact);
-            if (args.Contains("--ui")) { UiTests(); WheelTests(); SecurityUiTests(); }
+            if (args.Contains("--ui")) UiTests();
             Console.WriteLine("RISULTATO: " + passed + " superati, " + failed + " falliti.");
             return failed==0 ? 0 : 1;
         }
@@ -312,7 +312,7 @@ namespace OnlyTweakWindows
             // Keep a real application message loop and a root form alive for async continuations.
             using (Form host=new Form { ShowInTaskbar=false, Opacity=0, Size=new Size(1,1) })
             {
-                host.Shown+=delegate { host.BeginInvoke((Action)delegate { try { UiTestCases(); } finally { host.Close(); } }); };
+                host.Shown+=delegate { host.BeginInvoke((Action)delegate { try { UiTestCases(); WheelTests(); SecurityUiTests(); } finally { host.Close(); } }); };
                 Application.Run(host);
             }
         }
@@ -350,7 +350,12 @@ namespace OnlyTweakWindows
                 {
                     timer.Tick+=delegate {
                         ConfirmDialog confirm=Application.OpenForms.OfType<ConfirmDialog>().FirstOrDefault();
-                        if (confirm!=null) { timer.Stop(); Descendants(confirm).OfType<Button>().First(b=>b.Text=="&Annulla").PerformClick(); }
+                        if (confirm!=null)
+                        {
+                            timer.Stop(); Button cancel=Descendants(confirm).OfType<Button>().First(b=>b.Text=="&Annulla");
+                            Assert(confirm.AcceptButton==cancel && confirm.CancelButton==cancel,"Invio/Esc non annullano la conferma.");
+                            ((Button)confirm.AcceptButton).PerformClick();
+                        }
                     };
                     timer.Start(); OperationDialog.Open(Form.ActiveForm,app,action);
                 }

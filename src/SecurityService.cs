@@ -19,10 +19,13 @@ namespace OnlyTweakWindows
             DefenderKnown,DefenderActive,TamperKnown,TamperProtected,SMode;
         public int Pua;
     }
+    internal enum ProtectionState { Unknown,Active,Inactive,Audit }
     internal sealed class SecurityStatus
     {
         public string Configured,Effective,EnableUnavailable,DisableUnavailable,RestoreUnavailable;
-        public bool RestartPending;
+        public bool RestartPending,ReadFailed;
+        // Solo evidenze runtime: una configurazione di registro non certifica l'effetto.
+        public ProtectionState Protection;
         public override string ToString()
         { return "Configurazione: "+Configured+"\nEffettivo: "+Effective+(RestartPending ? "\nRiavvio manuale richiesto; verifica lo stato dopo il riavvio." : ""); }
     }
@@ -167,9 +170,13 @@ namespace OnlyTweakWindows
                 case "smartscreen": state.Configured=Config(SmartPolicy,"EnableSmartScreen")+"; livello: "+Config(SmartPolicy,"ShellSmartScreenLevel"); break;
                 case "store": state.Configured=Config(InstallPolicy,"ConfigureAppInstallControlEnabled")+"; origine: "+Config(InstallPolicy,"ConfigureAppInstallControl"); break;
                 case "pua": state.Configured=e.DefenderKnown ? e.Pua==0 ? "disattivata" : e.Pua==1 ? "blocco attivo" : e.Pua==2 ? "Audit" : "sconosciuta" : "sconosciuta";
-                    state.Effective=!e.DefenderKnown ? "non leggibile" : !e.DefenderActive ? "Defender non attivo" : state.Configured; break;
-                case "hvci": state.Configured=Config(Hvci,"Enabled"); state.Effective=!e.DeviceGuardKnown ? "sconosciuto" : e.HvciRunning ? "HVCI in esecuzione" : "HVCI non in esecuzione"; break;
-                case "kernel": state.Configured=Config(GuardPolicy,"ConfigureKernelShadowStacksLaunch"); state.Effective=!e.DeviceGuardKnown ? "sconosciuto" : e.KernelRunning ? "stack kernel in esecuzione" : "stack kernel non in esecuzione"; break;
+                    state.Effective=!e.DefenderKnown ? "non leggibile" : !e.DefenderActive ? "Defender non attivo" : state.Configured;
+                    state.Protection=!e.DefenderKnown ? ProtectionState.Unknown : !e.DefenderActive ? ProtectionState.Inactive :
+                        e.Pua==1 ? ProtectionState.Active : e.Pua==0 ? ProtectionState.Inactive : e.Pua==2 ? ProtectionState.Audit : ProtectionState.Unknown; break;
+                case "hvci": state.Configured=Config(Hvci,"Enabled"); state.Effective=!e.DeviceGuardKnown ? "sconosciuto" : e.HvciRunning ? "HVCI in esecuzione" : "HVCI non in esecuzione";
+                    state.Protection=!e.DeviceGuardKnown ? ProtectionState.Unknown : e.HvciRunning ? ProtectionState.Active : ProtectionState.Inactive; break;
+                case "kernel": state.Configured=Config(GuardPolicy,"ConfigureKernelShadowStacksLaunch"); state.Effective=!e.DeviceGuardKnown ? "sconosciuto" : e.KernelRunning ? "stack kernel in esecuzione" : "stack kernel non in esecuzione";
+                    state.Protection=!e.DeviceGuardKnown ? ProtectionState.Unknown : e.KernelRunning ? ProtectionState.Active : ProtectionState.Inactive; break;
                 default: state.Configured=Config(CiConfig,"VulnerableDriverBlocklistEnable");
                     state.Effective=e.HvciRunning || e.SMode ? "blocklist imposta da HVCI/modalità S" : "verifica in Windows; può essere imposta anche da Smart App Control"; break;
             }

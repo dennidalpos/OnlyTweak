@@ -29,8 +29,8 @@ namespace OnlyTweakWindows
         public static Font IconFont(float size) { return IconFamily==null ? null : new Font(IconFamily,size); }
         public static readonly Color Background=Color.FromArgb(16,22,31), Surface=Color.FromArgb(25,34,47),
             Raised=Color.FromArgb(33,46,61), Text=Color.FromArgb(235,241,247), Muted=Color.FromArgb(158,175,195),
-            Accent=Color.FromArgb(104,226,195), Border=Color.FromArgb(46,62,80), Warning=Color.FromArgb(255,198,119),
-            Track=Color.FromArgb(18,27,38), Thumb=Color.FromArgb(71,93,116), Selection=Color.FromArgb(28,65,67);
+            Accent=Color.FromArgb(104,226,195), Border=Color.FromArgb(117,138,163), Warning=Color.FromArgb(255,198,119),
+            Track=Color.FromArgb(18,27,38), Thumb=Color.FromArgb(111,132,157), Selection=Color.FromArgb(28,65,67);
         public static Button Button(string text,EventHandler clicked)
         {
             Button button=new DarkButton { Text=text,BackColor=Surface,ForeColor=Text,Font=new Font("Segoe UI",10F),
@@ -158,6 +158,7 @@ namespace OnlyTweakWindows
     internal sealed class DarkButton : Button
     {
         public string Description,Glyph;
+        public bool Caution;
         public Color GlyphColor=Theme.Muted;
         private bool hovered,pressed;
         public DarkButton() { SetStyle(ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.AllPaintingInWmPaint|ControlStyles.ResizeRedraw,true); }
@@ -175,11 +176,12 @@ namespace OnlyTweakWindows
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(Parent==null ? Theme.Background : Parent.BackColor); e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+            Color emphasis=Caution ? Theme.Warning : Theme.Accent;
             Color background=BackColor;
             if (Enabled&&(hovered||pressed)) background=BackColor==Theme.Accent ? Color.FromArgb(132,237,210) : Theme.Raised;
             using (GraphicsPath shape=Theme.Round(new Rectangle(1,1,Width-3,Height-3),8))
             using (SolidBrush fill=new SolidBrush(background))
-            using (Pen border=new Pen(Enabled&&(Focused||hovered) ? Theme.Accent : Theme.Border))
+            using (Pen border=new Pen(Enabled&&(Caution||Focused||hovered) ? emphasis : Theme.Border))
             { e.Graphics.FillPath(fill,shape); e.Graphics.DrawPath(border,shape); }
             Rectangle text=new Rectangle(Padding.Left+10,Padding.Top+3,Math.Max(1,Width-Padding.Horizontal-20),Math.Max(1,Height-Padding.Vertical-6));
             Color color=Enabled ? ForeColor : Theme.Muted;
@@ -208,7 +210,7 @@ namespace OnlyTweakWindows
                         TextFormatFlags.Left|TextFormatFlags.WordBreak|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPrefix);
                 }
             }
-            if (Focused&&ShowFocusCues&&Enabled) ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(6,6,Width-13,Height-13),Theme.Accent,background);
+            if (Focused&&ShowFocusCues&&Enabled) ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(6,6,Width-13,Height-13),BackColor==Theme.Accent ? Theme.Background : emphasis,background);
         }
     }
     internal class DarkForm : Form
@@ -300,7 +302,7 @@ namespace OnlyTweakWindows
             ClientSize=new Size(700,440); MinimumSize=new Size(560,360); MaximizeBox=false; MinimizeBox=false;
             StackPanel stack=new StackPanel(); stack.Controls.Add(Theme.Label(message,Theme.Warning)); Content.Controls.Add(stack);
             CloseAction.Text="&Annulla";
-            Button confirm=Theme.Button("&Conferma",delegate { DialogResult=DialogResult.Yes; Close(); }); confirm.BackColor=Theme.Accent; confirm.ForeColor=Theme.Background; Footer.Controls.Add(confirm);
+            DarkButton confirm=(DarkButton)Theme.Button("&Conferma",delegate { DialogResult=DialogResult.Yes; Close(); }); confirm.Caution=true; confirm.ForeColor=Theme.Warning; Footer.Controls.Add(confirm);
             AcceptButton=CloseAction; Shown+=delegate { CloseAction.Focus(); };
         }
         public static bool Ask(IWin32Window owner,string title,string message)

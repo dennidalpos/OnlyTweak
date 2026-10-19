@@ -39,6 +39,10 @@ La rotella agisce sul contenitore sotto il puntatore nella finestra attiva, anch
 
 ### Compatibilità e protezioni
 
+I colori distinguono le evidenze: verde per PUA in modalità blocco con Defender attivo e per HVCI/stack kernel osservati in esecuzione; neutro per Audit, stato sconosciuto e sola configurazione; avviso per protezione inattiva, errore o riavvio pendente. Il testo specifica sempre lo stato. Anche i tweak di Esplora file mostrano la configurazione in colore neutro.
+
+Il pulsante Conferma usa testo e bordo di avviso su superficie scura. Annulla resta predefinito per Invio ed Esc. Bordi e cursori delle scrollbar hanno maggiore contrasto; misure, anteprime e limiti di verifica sono descritti in [docs/UI-UX.md](docs/UI-UX.md).
+
 Tutti i comandi diretti di questa categoria riguardano **il computer e tutti gli utenti**. Ogni modifica ha una conferma con Annulla predefinito, viene eseguita in background e viene riletta. Configurazione ed esecuzione effettiva sono distinte: il pannello non presenta un valore di registro come prova che una protezione sia già attiva o disattiva.
 
 | Voce | Gestione |
@@ -140,11 +144,15 @@ La suite si compila con lo stesso compilatore di sistema ed esegue:
 
 La CI GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) esegue `build.cmd` e `test.cmd --artifact --read-only` su `windows-2025`, che include .NET Framework 4.8, a ogni push su `master` e pull request. `--ui` e `--render` restano locali perché richiedono una sessione desktop. Il runner è Windows Server, non sostituisce le prove su Windows 11.
 
-### Stato verificato il 16 ottobre 2026
+### Stato verificato il 19 ottobre 2026
 
 Compilazione senza avvisi con il compilatore Windows .NET Framework **14.8.10001.0**, compatibile C# 5. Ambiente reale: **Windows 11 26H2, build 26300.9711 x64**. Lettura riuscita delle cinque stampanti installate, identificazione della predefinita, stato spooler, preflight della cartella standard e diagnostica rete.
 
-Versione **1.2.0**: rotella centralizzata, viste classiche, Gestione computer, protezioni e account. La suite completa ha **71 verifiche superate**. Le anteprime delle finestre reali, incluse le nuove categorie, sono acquisite con PrintWindow e ispezionate; il ridimensionamento a scala simulata non equivale a una prova su tre monitor con DPI reali differenti. Dettagli in [docs/UI-UX.md](docs/UI-UX.md).
+Versione **1.2.0**: rotella centralizzata, viste classiche, Gestione computer, protezioni e account; icone, tooltip con scadenza, stati distinti, conferme con richiamo di avviso e contrasto migliorato. `build.cmd` e `test.cmd --artifact --ui --read-only --render` riescono con **77 verifiche superate, 0 fallite**. Le due prove aggiunte distinguono configurazione/runtime e verificano le transizioni UI, compreso l'errore asincrono di lettura. Tutte le prove UI condividono il loop principale del banco. Le anteprime sono acquisite con PrintWindow; ispezionati home, conferma, protezioni e output al 100%. Il ridimensionamento simulato a 150/200% non equivale a una prova con DPI reali. Dettagli in [docs/UI-UX.md](docs/UI-UX.md).
+
+Il tracker operativo è nel dossier SecondBrain `02-areas/products/OnlyTweak/tracker.md`, esterno al repository. Le attività locali completate vengono rimosse dall'elenco attivo; le evidenze restano nella documentazione. Nessuna VM disponibile nel ciclo del 19 ottobre: le prove seguenti restano aperte.
+
+Anche il comando usato dalla CI, `test.cmd --artifact --read-only`, passa localmente con **54 verifiche superate, 0 fallite** (`artifacts/ot-04-ci-command.log`). I risultati dei run remoti sono consultabili nella pagina [GitHub Actions](https://github.com/dennidalpos/OnlyTweak/actions).
 
 Da completare in una VM Windows 11 x64 pulita e sacrificabile: avvio del solo EXE con UAC, navigazione e DPI reali 100/150/200%, apertura dei dialoghi driver, stampante di rete offline, spooler fermo/disabilitato, annullamento di lavori campione, pulizia reale, riavvio shell, reset rete, SFC/DISM e confronto visivo del menu classico prima/dopo. Nessuna di queste operazioni modificanti è stata eseguita sulla postazione di sviluppo. Compatibilità delle build stabili 24H2/25H2 non ancora verificata direttamente; ARM64 escluso.
 

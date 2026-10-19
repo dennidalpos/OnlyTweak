@@ -1,5 +1,35 @@
 # Revisione UI/UX — 1.2.0
 
+## Contrasto e banco UI — 19 ottobre 2026
+
+- Bordi `#758AA3` (prima `#2E3E50`); cursori scrollbar `#6F849D` (prima `#475D74`). Sfondi, testo e accento restano invariati. Il focus interno dei pulsanti pieni verdi usa il colore scuro dello sfondo per restare distinguibile dal riempimento.
+- Rapporti sui token sRGB (tabella arrotondata; soglia verificata sui valori completi):
+
+| Coppia | Prima | Dopo |
+|---|---:|---:|
+| Bordo / superficie | 1,47:1 | 4,51:1 |
+| Bordo / hover | — | 3,89:1 |
+| Bordo / selezione | — | 3,14:1 |
+| Cursore / binario scrollbar | 2,55:1 | 4,51:1 |
+| Focus scuro / pulsante verde | — | 11,46:1 |
+
+- Riferimento di progetto: almeno 3:1 per gli indicatori controllati, secondo [W3C, contrasto non testuale](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html). Queste misure non costituiscono una certificazione complessiva di accessibilità; linee sottili e antialiasing richiedono anche ispezione visiva.
+- Individuato e corretto nel banco un problema di ciclo di vita: le prove rotella/protezioni partivano dopo la chiusura del loop principale. Tutte le prove UI girano ora nello stesso `Application.Run`, con finestra host viva fino alla fine. Il nuovo percorso asincrono di errore per singola scheda riproduceva timeout ed errori `Dispose durante CreateHandle` con il vecchio banco e passa con il nuovo. Riferimenti .NET Framework: [Application.Run](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.application.run?view=netframework-4.8.1) e [WindowsFormsSynchronizationContext.AutoInstall](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.windowsformssynchronizationcontext.autoinstall?view=netframework-4.8.1).
+- Verifica OT-03: build e suite completa **77/0**, inclusi errore asincrono per singola scheda e controlli esistenti di focus/scorrimento (`artifacts/ot-03-verification.log`). Misure in `artifacts/ot-03-contrast.log`; ispezionati home, protezioni e output al 100%. I render a 150/200% restano simulati; validazione DPI reali e tooltip interattivi in attesa di VM.
+
+## Conferme con richiamo di avviso — 19 ottobre 2026
+
+- Conferma ha testo, bordo e indicatore di focus nel colore di avviso su superficie scura; non usa più il riempimento verde. Hover e pressione mantengono il testo leggibile.
+- Annulla resta selezionato all'apertura e predefinito sia per Invio sia per Esc. Una sola conferma precede l'avvio automatico dell'operazione.
+- Verifica OT-02: build e suite completa **77/0** (`artifacts/ot-02-verification.log`); test di annullamento tramite pulsante predefinito, esecuzione singola simulata e ispezione del render della conferma al 100%.
+
+## Stati verificabili — 19 ottobre 2026
+
+- I tweak di Esplora file mostrano la configurazione in colore neutro: il registro non certifica l'effetto visivo del menu classico.
+- Nelle protezioni, il verde indica PUA in modalità blocco con Defender attivo oppure HVCI/stack kernel osservati in esecuzione. PUA Audit, stati sconosciuti e sola configurazione restano neutri; protezione inattiva, errore e riavvio pendente usano il colore di avviso. Le descrizioni testuali continuano a distinguere ogni caso.
+- Durante una nuova lettura il risultato precedente diventa neutro; gli errori sostituiscono anche il colore precedente, compreso il fallimento asincrono della lettura di una singola scheda.
+- Verifica OT-01: build e suite completa, **77 superati, 0 falliti**, con due nuove prove su runtime e transizioni UI; rapporto locale `artifacts/ot-01-verification.log`. Restano necessarie le prove interattive in VM.
+
 ## Meno testo e icone delle aree — 18 ottobre 2026
 
 - Icone dal font di sistema [Segoe Fluent Icons](https://learn.microsoft.com/en-us/windows/apps/design/style/segoe-fluent-icons-font), incluso in Windows 11, con Segoe MDL2 Assets come alternativa. Nessun file aggiunto all'EXE; se nessuno dei due font è presente le icone vengono omesse.

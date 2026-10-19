@@ -47,7 +47,7 @@ namespace OnlyTweakWindows
                     foreach (SecurityPane pane in panes)
                     {
                         try { results.Add(app.Security.Read(pane.Definition,environment)); }
-                        catch (Exception ex) { results.Add(new SecurityStatus { Configured="lettura non riuscita: "+ex.Message,Effective="sconosciuto",
+                        catch (Exception ex) { results.Add(new SecurityStatus { ReadFailed=true,Configured="lettura non riuscita: "+ex.Message,Effective="sconosciuto",
                             EnableUnavailable="Stato non verificato.",DisableUnavailable="Stato non verificato.",RestoreUnavailable="Stato non verificato." }); }
                     }
                     return results;
@@ -91,7 +91,7 @@ namespace OnlyTweakWindows
             title=Theme.Label(definition.Title,Theme.Text); title.Font=new Font("Segoe UI",11F,FontStyle.Bold);
             detail=Theme.Label(definition.Summary??definition.Description,Theme.Muted); detail.Font=new Font("Segoe UI",9F);
             AccessibleName=definition.Title; AccessibleDescription=definition.Description;
-            state=Theme.Label("Stato non ancora letto.",Theme.Accent); state.Font=new Font("Segoe UI",9F);
+            state=Theme.Label("Stato non ancora letto.",Theme.Muted); state.Font=new Font("Segoe UI",9F);
             reason=Theme.Label("",Theme.Warning); reason.Font=new Font("Segoe UI",9F);
             buttons=new FlowLayoutPanel { AutoSize=true,Dock=DockStyle.Fill,WrapContents=true,Margin=Padding.Empty };
             if (definition.Direct)
@@ -122,11 +122,17 @@ namespace OnlyTweakWindows
         }
         internal void Describe(ToolTip tips)
         { if (Definition.Summary!=null) { tips.SetToolTip(title,Definition.Description); tips.SetToolTip(detail,Definition.Description); } }
-        internal void SetBusy() { if (on!=null) { on.Enabled=false; off.Enabled=false; restore.Enabled=false; } }
-        internal void ShowFailure(string message) { SetBusy(); state.Text="Stato sconosciuto."; reason.Text=message; Arrange(); }
+        internal void SetBusy()
+        {
+            if (on!=null) { on.Enabled=false; off.Enabled=false; restore.Enabled=false; }
+            state.ForeColor=Theme.Muted;
+        }
+        internal void ShowFailure(string message) { SetBusy(); state.Text="Stato sconosciuto."; state.ForeColor=Theme.Warning; reason.Text=message; Arrange(); }
         internal void ShowState(SecurityStatus status)
         {
             state.Text=status.ToString();
+            state.ForeColor=status.ReadFailed || status.RestartPending || status.Protection==ProtectionState.Inactive ? Theme.Warning :
+                status.Protection==ProtectionState.Active ? Theme.Accent : Theme.Muted;
             if (on!=null)
             {
                 on.Enabled=status.EnableUnavailable==null; off.Enabled=status.DisableUnavailable==null; restore.Enabled=status.RestoreUnavailable==null;

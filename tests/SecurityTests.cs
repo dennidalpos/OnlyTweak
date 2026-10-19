@@ -13,6 +13,22 @@ namespace OnlyTweakWindows
         private static SecurityDefinition Definition(SecurityService service,string id) { return service.Definitions.Single(d=>d.Id==id); }
         private static void SecurityTests()
         {
+            Test("protezioni: stato visivo deriva dal runtime, non dal registro",delegate {
+                FakeSecurityBackend backend=new FakeSecurityBackend(); SecurityService service=new SecurityService(backend);
+                backend.Store.Set(SecurityService.Hvci,"Enabled",1,RegistryValueKind.DWord);
+                SecurityDefinition hvci=Definition(service,"hvci"),pua=Definition(service,"pua");
+                backend.Environment.DeviceGuardKnown=false;
+                Assert(service.Read(hvci,backend.Environment).Protection==ProtectionState.Unknown,"Registro scambiato per runtime.");
+                backend.Environment.DeviceGuardKnown=true; backend.Environment.HvciRunning=false;
+                Assert(service.Read(hvci,backend.Environment).Protection==ProtectionState.Inactive,"Runtime inattivo ignorato.");
+                backend.Environment.HvciRunning=true;
+                Assert(service.Read(hvci,backend.Environment).Protection==ProtectionState.Active,"Runtime attivo non riconosciuto.");
+                backend.Environment.Pua=2;
+                Assert(service.Read(pua,backend.Environment).Protection==ProtectionState.Audit,"Audit scambiato per blocco.");
+                backend.Environment.DefenderKnown=false;
+                Assert(service.Read(pua,backend.Environment).Protection==ProtectionState.Unknown,"Lettura fallita scambiata per blocco.");
+                Assert(service.Read(Definition(service,"smartscreen"),backend.Environment).Protection==ProtectionState.Unknown,"Criterio scambiato per effetto reale.");
+            });
             Test("protezioni: catalogo completo e destinazioni fisse",delegate {
                 SecurityService service=new SecurityService(new FakeSecurityBackend());
                 Assert(service.Definitions.Length==7,"Protezioni mancanti.");
@@ -226,6 +242,33 @@ namespace OnlyTweakWindows
         }
         private static void SecurityUiTests()
         {
+            Test("UI protezioni: colori aggiornati fra runtime, dubbio, riavvio ed errore",delegate {
+                FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=new AppServices(backend);
+                using (SecurityDialog form=new SecurityDialog(app,false))
+                {
+                    form.ShowInTaskbar=false; form.Show(); Application.DoEvents();
+                    SecurityPane pane=Descendants(form).OfType<SecurityPane>().Single(p=>p.Definition.Id=="hvci");
+                    pane.ShowState(new SecurityStatus { Configured="attivata",Effective="HVCI in esecuzione",Protection=ProtectionState.Active });
+                    Label state=Descendants(pane).OfType<Label>().Single(l=>l.Text.StartsWith("Configurazione:"));
+                    Assert(state.ForeColor==Theme.Accent,"Runtime attivo senza accento.");
+                    pane.SetBusy(); Assert(state.ForeColor==Theme.Muted,"Lettura conserva il colore precedente.");
+                    pane.ShowState(new SecurityStatus { Configured="attivata",Effective="sconosciuto" });
+                    Assert(state.ForeColor==Theme.Muted,"Stato incerto verde.");
+                    pane.ShowState(new SecurityStatus { Protection=ProtectionState.Active,RestartPending=true });
+                    Assert(state.ForeColor==Theme.Warning && state.Text.Contains("Riavvio"),"Riavvio pendente presentato come concluso.");
+                    pane.ShowState(new SecurityStatus { Protection=ProtectionState.Inactive });
+                    Assert(state.ForeColor==Theme.Warning,"Protezione inattiva senza avviso.");
+                    pane.ShowState(new SecurityStatus { Protection=ProtectionState.Audit });
+                    Assert(state.ForeColor==Theme.Muted,"Audit presentato come blocco.");
+                    backend.FailRead=true;
+                    Descendants(form).OfType<Button>().Single(b=>b.Text=="Aggiorna stato").PerformClick();
+                    PumpUntil(delegate { return !app.Coordinator.IsBusy; });
+                    Assert(state.ForeColor==Theme.Warning && state.Text.Contains("lettura non riuscita"),"Errore asincrono della singola scheda senza avviso.");
+                    pane.ShowFailure("Errore simulato");
+                    Assert(state.ForeColor==Theme.Warning && state.Text.Contains("sconosciuto"),"Errore conserva il colore precedente.");
+                    form.Close();
+                }
+            });
             Test("UI protezioni: una conferma, modifica simulata e stato riletto",delegate {
                 FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=new AppServices(backend); int confirmations=0;
                 using (SecurityDialog form=new SecurityDialog(app,false))
@@ -275,13 +318,13 @@ namespace OnlyTweakWindows
         public readonly SecurityEnvironment Environment=new SecurityEnvironment {
             PolicyEdition=true,ManagementKnown=true,DeviceGuardKnown=true,VbsRunning=true,HvciConfigured=true,HvciRunning=true,
             KernelConfigured=true,KernelRunning=true,DefenderKnown=true,DefenderActive=true,TamperKnown=true,Pua=1 };
-        public bool Template=true,FailDelete,IgnorePua;
+        public bool Template=true,FailDelete,IgnorePua,FailRead;
         public int WriteCount,FailWrite;
         public IRegistryStore Registry { get { return this; } }
         public SecurityEnvironment Probe() { return Environment; }
         public bool HasTemplate(string name,string value) { return Template; }
         public void SetPua(int mode) { if (!IgnorePua) Environment.Pua=mode; WriteCount++; }
-        public RegistryValueState Read(string path,string name) { return Store.Read(path,name); }
+        public RegistryValueState Read(string path,string name) { if (FailRead) throw new IOException("Errore lettura simulata."); return Store.Read(path,name); }
         public void Set(string path,string name,object data,RegistryValueKind kind)
         { WriteCount++; if (WriteCount==FailWrite) throw new IOException("Errore scrittura simulata."); Store.Set(path,name,data,kind); }
         public void DeleteValue(string path,string name) { if (FailDelete) throw new IOException("Accesso negato simulato."); Store.DeleteValue(path,name); }
