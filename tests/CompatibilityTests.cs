@@ -71,7 +71,7 @@ namespace OnlyTweakWindows
                         uint length=reader.ReadUInt32(),offset=reader.ReadUInt32(); Assert(length>0 && offset+length<=reader.BaseStream.Length,"Immagine ICO fuori file.");
                     }
                 }
-                Assert(AppIcon.Value!=null && AppIcon.Value.Width==32,"Risorsa finestra assente.");
+                Assert(AppIcon.Value!=null && AppIcon.Value.Width==32 && AppIcon.Small!=null && AppIcon.Small.Width==16,"Risorsa finestra assente.");
                 using (MainForm home=new MainForm(TestApp())) Assert(home.ShowInTaskbar && Object.ReferenceEquals(home.Icon,AppIcon.Value),"Icona titolo/taskbar non assegnata.");
                 using (Bitmap preview=new Bitmap("assets/OnlyTweak.png")) Assert(preview.Width==512 && preview.GetPixel(0,0).A==0,"Anteprima o trasparenza errata.");
             });

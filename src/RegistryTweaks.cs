@@ -82,7 +82,6 @@ namespace OnlyTweakWindows
         private readonly OsProfile os;
         private readonly Dictionary<string, TweakSnapshot> snapshots = new Dictionary<string, TweakSnapshot>();
         public readonly List<TweakDefinition> Definitions;
-        public RegistryTweakService(IRegistryStore store) : this(store,EnvironmentInfo.Profile) { }
         public RegistryTweakService(IRegistryStore store,OsProfile os)
         {
             this.store = store; this.os=os;

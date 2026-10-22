@@ -48,7 +48,7 @@ namespace OnlyTweakWindows
             run.BackColor=Theme.Accent; run.ForeColor=Theme.Background; run.Enabled=false;
             run.Visible=!startAutomatically;
             Footer.Controls.Add(run); AcceptButton=startAutomatically ? CloseAction : run;
-            Footer.Controls.Add(Theme.Button("Copia output",delegate { if (output.TextLength>0) Clipboard.SetText(output.Text); }));
+            Footer.Controls.Add(Theme.Button("Copia output",delegate { if (output.TextLength>0 && !Theme.TryCopy(output.Text)) { status.Text="Appunti occupati: impossibile copiare."; status.ForeColor=Theme.Warning; } }));
             outputTimer=new Timer { Interval=100 };
             outputTimer.Tick+=delegate { FlushOutput(); progress.Invalidate(); };
             Shown+=async delegate { await CheckAvailability(); if (startAutomatically&&run.Enabled) await Execute(); };

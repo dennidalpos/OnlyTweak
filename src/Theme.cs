@@ -39,8 +39,7 @@ namespace OnlyTweakWindows
             if (clicked!=null) button.Click+=clicked;
             return button;
         }
-        public static Button Card(string title,string description,EventHandler clicked) { return Card(title,description,clicked,null); }
-        public static Button Card(string title,string description,EventHandler clicked,string glyph)
+        public static Button Card(string title,string description,EventHandler clicked,string glyph=null)
         {
             DarkButton button=(DarkButton)Button(title,clicked);
             button.Description=description; button.AccessibleDescription=description; button.Glyph=glyph;
@@ -55,13 +54,23 @@ namespace OnlyTweakWindows
             GlyphLabel label=new GlyphLabel { Text=text,AutoSize=true,ForeColor=Text,BackColor=Color.Transparent,Margin=new Padding(0,0,0,8),UseMnemonic=false,Glyph=glyph,GlyphColor=Accent };
             label.Font=new Font("Segoe UI",22F,FontStyle.Bold); return label;
         }
-        public static Label Section(string text) { return Section(text,null); }
         public static Label Section(string text,string glyph)
         {
             GlyphLabel label=new GlyphLabel { Text=text.ToUpperInvariant(),AutoSize=true,ForeColor=Muted,BackColor=Color.Transparent,UseMnemonic=false,Glyph=glyph,GlyphColor=Muted };
             label.Font=new Font("Segoe UI",9F,FontStyle.Bold); label.Margin=new Padding(0,14,0,10); return label;
         }
         public static DarkOutput Output() { return new DarkOutput { Dock=DockStyle.Fill }; }
+        public static bool TryCopy(string text)
+        {
+            if (String.IsNullOrEmpty(text)) return false;
+            for (int i=0; i<3; i++)
+            {
+                try { Clipboard.SetText(text); return true; }
+                catch (ExternalException) { System.Threading.Thread.Sleep(50); }
+                catch (Exception) { break; }
+            }
+            return false;
+        }
         public static GraphicsPath Round(Rectangle rectangle,int radius)
         {
             GraphicsPath path=new GraphicsPath(); int size=Math.Max(2,Math.Min(radius*2,Math.Min(rectangle.Width,rectangle.Height)));
@@ -282,7 +291,12 @@ namespace OnlyTweakWindows
         protected override void OnFormClosing(FormClosingEventArgs e) { HideTips(); base.OnFormClosing(e); }
         protected void SetFeedback(string text)
         { if (IsDisposed) return; Feedback.Text=text; Feedback.Visible=!String.IsNullOrEmpty(text); Feedback.MaximumSize=new Size(Math.Max(100,ClientSize.Width-16),0); }
-        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); ApplyFrame(); }
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            try { SendMessage(Handle,0x0080,(IntPtr)0,AppIcon.Small.Handle); } catch (EntryPointNotFoundException) { }
+            ApplyFrame();
+        }
         protected override void OnActivated(EventArgs e) { base.OnActivated(e); ApplyFrame(); }
         protected override void OnDeactivate(EventArgs e) { HideTips(); base.OnDeactivate(e); ApplyFrame(); }
         private void ApplyFrame()
@@ -293,6 +307,7 @@ namespace OnlyTweakWindows
         }
         private void SetFrame(int attribute,int value) { DwmSetWindowAttribute(Handle,attribute,ref value,4); }
         [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd,int attribute,ref int value,int size);
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr wParam,IntPtr lParam);
     }
     internal sealed class ConfirmDialog : DarkForm
     {

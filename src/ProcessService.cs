@@ -43,11 +43,11 @@ namespace OnlyTweakWindows
                 process.BeginErrorReadLine();
                 process.WaitForExit(); // Also drains both async output streams.
                 log("Codice di uscita: " + process.ExitCode + ".");
+                if (String.Equals(name, "sfc.exe", StringComparison.OrdinalIgnoreCase))
+                    log("Per l'esito dell'integrità e delle eventuali riparazioni, leggi il riepilogo SFC sopra: il solo codice di uscita non descrive tutti i casi.");
                 // Servicing may return ERROR_SUCCESS_REBOOT_REQUIRED (3010).
                 if (process.ExitCode == 3010) log("Riavvio del PC richiesto dallo strumento. Riavvia manualmente quando pronto.");
                 else if (process.ExitCode != 0) throw new InvalidOperationException("Lo strumento ha restituito un errore (" + process.ExitCode + "). Consulta l'output.");
-                if (String.Equals(name, "sfc.exe", StringComparison.OrdinalIgnoreCase))
-                    log("Per l'esito dell'integrità e delle eventuali riparazioni, leggi il riepilogo SFC sopra: il solo codice di uscita non descrive tutti i casi.");
             }
         }
         public void LaunchSystem(string name, string arguments, Action<string> log)
@@ -56,10 +56,6 @@ namespace OnlyTweakWindows
             if (!File.Exists(file)) throw new FileNotFoundException("Componente Windows non disponibile.", file);
             using (Process process = Process.Start(new ProcessStartInfo(file, arguments) { UseShellExecute=true, WorkingDirectory=Path.GetDirectoryName(file) })) { }
             log("Apertura richiesta: " + name + ". La richiesta di apertura non conferma modifiche nello strumento esterno.");
-        }
-        public void LaunchSettings(string uri, Action<string> log)
-        {
-            LaunchTarget(uri,log);
         }
         internal static void ValidateTarget(string target)
         {

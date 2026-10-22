@@ -111,15 +111,16 @@ namespace OnlyTweakWindows
         { if (Definition.Summary!=null) { tips.SetToolTip(title,Definition.Description); tips.SetToolTip(detail,Definition.Description); } }
         internal void SetBusy()
         {
-            state.ForeColor=Theme.Muted;
+            state.ForeColor=Theme.Muted; reason.ForeColor=Theme.Muted;
         }
-        internal void ShowFailure(string message) { SetBusy(); state.Text="Stato sconosciuto."; state.ForeColor=Theme.Warning; reason.Text=message; Arrange(); }
+        internal void ShowFailure(string message) { SetBusy(); state.Text="Stato sconosciuto."; state.ForeColor=Theme.Warning; reason.Text=message; reason.ForeColor=Theme.Warning; Arrange(); }
         internal void ShowState(SecurityStatus status)
         {
             state.Text=status.ToString();
             state.ForeColor=status.ReadFailed || status.Protection==ProtectionState.Inactive ? Theme.Warning :
                 status.Protection==ProtectionState.Active ? Theme.Accent : Theme.Muted;
             reason.Text=Definition.Id=="drivers" && !(applicableDriverToggle) ? "Stato blocklist; gestione tramite Isolamento core." : "Modifica nella pagina Windows dedicata.";
+            reason.ForeColor=status.ReadFailed ? Theme.Warning : Theme.Muted;
             Arrange();
         }
         protected override void OnPaint(PaintEventArgs e) { base.OnPaint(e); using (Pen pen=new Pen(Theme.Border)) e.Graphics.DrawRectangle(pen,0,0,Width-1,Height-1); }

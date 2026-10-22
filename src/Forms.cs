@@ -48,7 +48,7 @@ namespace OnlyTweakWindows
         public TextDialog(string title,string text,string glyph) : base(title,"Informazioni della sessione corrente.",glyph,null)
         {
             Content.Padding=new Padding(26,8,26,16); DarkOutput output=Theme.Output(); output.Text=text; Content.Controls.Add(output);
-            Footer.Controls.Add(Theme.Button("Copia testo",delegate { if (output.TextLength>0) Clipboard.SetText(output.Text); }));
+            Footer.Controls.Add(Theme.Button("Copia testo",delegate { if (output.TextLength>0 && !Theme.TryCopy(output.Text)) SetFeedback("Appunti occupati: impossibile copiare."); }));
         }
     }
     internal sealed class MenuDialog : DarkForm
