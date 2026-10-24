@@ -1,5 +1,7 @@
 dist/
 artifacts/
+**/obj/
+**/bin/
 
 # Direttive locali distribuite da SecondBrain su questa postazione.
 AGENTS.md

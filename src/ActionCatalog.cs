@@ -25,9 +25,8 @@ namespace OnlyTweakWindows
     internal sealed class ActionCatalog
     {
         private readonly AppServices app;
-        public readonly MenuDefinition Network, Maintenance, Tools, Spool, Accounts;
+        public readonly MenuDefinition Network, Maintenance, Tools, Spool;
         public readonly ActionSpec ClassicPrinterView;
-        public readonly ActionSpec ExplorerRestart;
         public ActionCatalog(AppServices app)
         {
             this.app=app;
@@ -35,14 +34,10 @@ namespace OnlyTweakWindows
             Spool = new MenuDefinition("Spooler di stampa", "Stato, riavvio e pulizia delle code locali.", Glyphs.Print, "Interventi sul servizio locale. La pulizia globale elimina i lavori di tutte le stampanti locali, anche di altri utenti.");
             Spool.Actions.Add(new ActionSpec("spool.status", "Leggi stato spooler", "Legge lo stato del servizio di stampa senza modificarlo.", "Computer locale", delegate(Action<string> log) { log("Spooler: " + app.Spool.Status()); }));
             Spool.Actions.Add(new ActionSpec("spool.restart", "Riavvia spooler", "Arresta e riavvia il servizio senza cancellare i file delle code. Il tipo di avvio resta quello configurato.", "Computer locale", app.Spool.Restart) {
-                Confirmation="Le stampe in corso possono interrompersi. Il servizio verrà avviato anche se inizialmente fermo. Procedere?" });
+                RequiresElevation=true, Confirmation="Le stampe in corso possono interrompersi. Il servizio verrà avviato anche se inizialmente fermo. Procedere?" });
             Spool.Actions.Add(new ActionSpec("spool.clean", "Svuota tutte le code locali", "Arresta lo spooler, elimina solo i file .SPL/.SHD dalla cartella standard e tenta sempre il riavvio. Non rimuove stampanti o driver.", "Tutte le code locali / tutti gli utenti", app.Spool.Clean) {
-                Confirmation="Tutti i lavori nelle code locali saranno eliminati definitivamente, inclusi quelli di altri utenti. Non è possibile annullare. Procedere?",
+                RequiresElevation=true, Confirmation="Tutti i lavori nelle code locali saranno eliminati definitivamente, inclusi quelli di altri utenti. Non è possibile annullare. Procedere?",
                 Unavailable=app.Spool.CleanupUnavailable });
-            ExplorerRestart = new ActionSpec("explorer.restart", "Riavvia Esplora risorse", "Riavvia la shell del desktop nella sessione corrente con il suo token originale. Disponibile solo se la shell appartiene all'account dell'app.", "Desktop dell'account corrente", ShellService.Restart) {
-                Confirmation="La barra delle applicazioni scomparirà temporaneamente e le finestre della shell potranno chiudersi. Completa prima copie e spostamenti. Procedere?",
-                IsApplicable=delegate { return app.Availability.File("explorer.exe"); },Unavailable=ShellService.Unavailable };
-
             Network = new MenuDefinition("Rete", "Diagnostica, ripristino e impostazioni di rete.", Glyphs.Network, null);
             MenuDefinition networkInfo = new MenuDefinition("Informazioni di rete", "Lettura delle interfacce e della configurazione attuale.", Glyphs.Diagnostic, null);
             networkInfo.Actions.Add(new ActionSpec("network.info", "Schede, indirizzi IP e DNS", "Elenca interfacce, stato, indirizzi IP, gateway e DNS.", "Computer locale · sola lettura", ProcessService.ReadNetwork));
@@ -50,6 +45,7 @@ namespace OnlyTweakWindows
             Network.Children.Add(networkInfo);
             MenuDefinition resets = new MenuDefinition("Ripristino rete", "Reset indipendenti della rete.", Glyphs.Repair, "Ogni intervento è indipendente. I reset possono interrompere la connessione e richiedere il riavvio manuale.");
             resets.Actions.Add(Command("network.dns", "Svuota cache DNS", "Elimina la cache locale delle risoluzioni DNS. Non cambia i server DNS configurati.", "ipconfig.exe", "/flushdns", false));
+            resets.Actions[0].Confirmation="La cache DNS del computer verrà svuotata. Procedere?";
             ActionSpec winsock = Command("network.winsock", "Ripristina Winsock", "Ripristina il catalogo Winsock tramite netsh winsock reset.", "netsh.exe", "winsock reset", false);
             winsock.Confirmation="Il reset può interrompere la rete e influire su software VPN o filtri di rete. Sarà necessario riavviare manualmente il PC. Procedere?";
             winsock.Restart="Riavvia manualmente il PC per completare il reset Winsock.";
@@ -92,26 +88,14 @@ namespace OnlyTweakWindows
             Tools.Actions.Add(Settings("tools.startup", "Applicazioni all'avvio", "Gestione dei programmi avviati all'accesso.", "ms-settings:startupapps"));
             Tools.Actions.Add(Settings("tools.update", "Windows Update", "Stato aggiornamenti e opzioni di Windows Update.", "ms-settings:windowsupdate"));
             Tools.Actions.Add(SystemTool("tools.system", "Informazioni di sistema", "Configurazione hardware e software del PC.", "msinfo32.exe", ""));
-            Accounts=new MenuDefinition("Account","Account, collegamenti e utenti del PC.",Glyphs.Contact,"Passaggio ad account locale, collegamenti e utenti del PC si gestiscono in Windows. Rimuovere un utente dal PC può eliminare i suoi dati locali; la chiusura online riguarda l'intero account Microsoft.");
-            Accounts.Actions.Add(Settings("accounts.info","Le tue informazioni / passa ad account locale","Apri Le tue informazioni e scegli Accedi con un account locale. Conserva un metodo di accesso al PC.","ms-settings:yourinfo"));
-            Accounts.Actions.Add(Settings("accounts.apps","Account usati dalle app","Gestisci o rimuovi i collegamenti usati da posta e altre applicazioni.","ms-settings:emailandaccounts"));
-            Accounts.Actions.Add(Settings("accounts.work","Accesso lavoro o scuola","Gestisci e scollega account aziendali o scolastici nella procedura Windows.","ms-settings:workplace"));
-            Accounts.Actions.Add(Settings("accounts.users","Altri utenti del PC","Aggiungi o rimuovi utenti. La rimozione dal PC non chiude l'account Microsoft online.","ms-settings:otherusers"));
-            Accounts.Actions.Add(SystemTool("accounts.classic","Account utente — vista classica","Gestione classica degli utenti del computer.","netplwiz.exe",""));
-            ActionSpec local=ConsoleTool("accounts.local","Utenti e gruppi locali","Proprietà e disabilitazione degli utenti locali; disponibile nelle edizioni che includono questa console.","lusrmgr.msc");
-            Func<string> localCheck=local.Unavailable;
-            local.Unavailable=delegate { return app.OS.LocalUsers ? localCheck() : "Questa edizione non include Utenti e gruppi locali. Usa Altri utenti del PC."; };
-            Func<bool> localApplicable=local.IsApplicable;
-            local.IsApplicable=delegate { return app.OS.LocalUsers && localApplicable(); };
-            Accounts.Actions.Add(local);
             foreach (ActionSpec action in Spool.Actions) action.IsApplicable=delegate { return app.Availability.File("spoolsv.exe"); };
             ApplySummaries();
-            foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools,Accounts }) menu.Prune();
+            foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools }) menu.Prune();
         }
         // Righe brevi delle card; il testo completo resta in Description (tooltip, accessibilità, dettaglio operazione).
         private static readonly Dictionary<string,string> Summaries=new Dictionary<string,string> {
             { "spool.status","Stato del servizio, senza modifiche." },{ "spool.restart","Riavvia il servizio senza cancellare le code." },
-            { "spool.clean","Elimina i lavori di tutte le code locali." },{ "explorer.restart","Aggiorna desktop e barra delle applicazioni." },
+            { "spool.clean","Elimina i lavori di tutte le code locali." },
             { "network.info","Interfacce, IP, gateway e DNS." },{ "network.ipconfig","Output di ipconfig /all." },
             { "network.dns","Svuota la cache locale delle risoluzioni." },{ "network.winsock","netsh winsock reset; richiede il riavvio." },
             { "network.tcpip","netsh int ip reset; richiede il riavvio." },{ "network.connections","Schede e protocolli di rete." },
@@ -123,14 +107,11 @@ namespace OnlyTweakWindows
             { "tools.devices","Dispositivi e driver." },{ "tools.services","Servizi di Windows." },{ "tools.events","Registri di sistema e app." },
             { "tools.tasks","Processi e prestazioni." },{ "tools.apps","Elenco e gestione delle app." },{ "tools.startup","Programmi avviati all'accesso." },
             { "tools.update","Aggiornamenti di Windows." },{ "tools.system","Hardware e software del PC." },
-            { "accounts.info","Passa a un account locale." },{ "accounts.apps","Account di posta e app." },
-            { "accounts.work","Account aziendali o scolastici." },{ "accounts.users","Aggiungi o rimuovi utenti." },
-            { "accounts.classic","Gestione classica degli utenti (netplwiz)." },{ "accounts.local","Console Utenti e gruppi locali." },
         };
         private void ApplySummaries()
         {
-            List<ActionSpec> actions=new List<ActionSpec> { ExplorerRestart };
-            foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools,Accounts }) actions.AddRange(menu.AllActions());
+            List<ActionSpec> actions=new List<ActionSpec>();
+            foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools }) actions.AddRange(menu.AllActions());
             foreach (ActionSpec action in actions) { string summary; if (Summaries.TryGetValue(action.Id,out summary)) action.Summary=summary; }
         }
         public ActionSpec ConsoleTool(string id,string title,string description,string console)
@@ -145,7 +126,7 @@ namespace OnlyTweakWindows
         private ActionSpec Command(string id, string title, string description, string file, string arguments, bool unicode)
         {
             return new ActionSpec(id, title, description, "Computer locale", delegate(Action<string> log) { app.Processes.Run(file, arguments, log, unicode); })
-                { IsApplicable=delegate { return app.Availability.File(file); },Unavailable=delegate { return app.Processes.FileUnavailable(file); } };
+                { RequiresElevation=true,IsApplicable=delegate { return app.Availability.File(file); },Unavailable=delegate { return app.Processes.FileUnavailable(file); } };
         }
         public ActionSpec SystemTool(string id, string title, string description, string file, string arguments)
         {

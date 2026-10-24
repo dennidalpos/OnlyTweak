@@ -87,6 +87,7 @@ namespace OnlyTweakWindows
         private string glyph;
         private Font iconFont;
         public Color GlyphColor=Theme.Accent;
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string Glyph { get { return glyph; } set { glyph=value; ResetIcon(); } }
         private Font Icon
         {

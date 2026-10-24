@@ -4,20 +4,22 @@ using System.Security.Principal;
 using System.Windows.Forms;
 
 
-[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.7.2",FrameworkDisplayName=".NET Framework 4.7.2")]
+
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows10.0.17763")]
 [assembly: AssemblyTitle("OnlyTweakWindows")]
-[assembly: AssemblyDescription("Tweak e strumenti Windows 10 e 11, senza installazione")]
+[assembly: AssemblyDescription("Diagnostica e amministrazione aziendale Windows")]
 [assembly: AssemblyProduct("OnlyTweakWindows")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.0.0.0")]
 
 namespace OnlyTweakWindows
 {
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
@@ -27,11 +29,7 @@ namespace OnlyTweakWindows
             {
                 if (!Environment.Is64BitProcess || !EnvironmentInfo.Profile.Supported)
                     throw new NotSupportedException("Occorre Windows 10 dalla versione 1809 o Windows 11, x64 Intel/AMD. Windows Server e ARM64 non supportati.");
-                using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-                {
-                    if (!new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
-                        throw new InvalidOperationException("Avvia l'app come amministratore.");
-                }
+                if (WorkerHost.TryRun(args)) return;
                 Application.Run(new MainForm(new AppServices()));
             }
             catch (Exception ex)

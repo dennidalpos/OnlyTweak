@@ -13,7 +13,6 @@ namespace OnlyTweakWindows
         { Major=major; Minor=minor; Build=build; Revision=revision; Architecture=architecture; ProductType=productType; Edition=edition??""; Release=release??""; }
         public bool IsWindows11 { get { return Major==10 && Minor==0 && ProductType==1 && Build>=22000; } }
         public bool Supported { get { return Major==10 && Minor==0 && ProductType==1 && Build>=17763 && Architecture==9; } }
-        public bool SupportsTweak(string id) { return Supported && (id!="classic" || IsWindows11); }
         public bool LocalUsers { get { return Edition.StartsWith("Professional",StringComparison.OrdinalIgnoreCase) || Edition.StartsWith("Enterprise",StringComparison.OrdinalIgnoreCase) || Edition.StartsWith("Education",StringComparison.OrdinalIgnoreCase) || Edition.StartsWith("IoTEnterprise",StringComparison.OrdinalIgnoreCase); } }
         public string Summary { get { return (ProductType==1 ? (IsWindows11 ? "Windows 11" : "Windows 10") : "Windows Server")+
             (Release.Length==0 ? "" : " "+Release)+(Edition.Length==0 ? "" : " · "+Edition)+" · build "+Build+"."+Revision+" · "+(Architecture==9 ? "x64" : Architecture==12 ? "ARM64" : "x86"); } }
@@ -61,7 +60,6 @@ namespace OnlyTweakWindows
         private readonly Func<string,bool> file,target;
         public FeatureAvailability(OsProfile os,Func<string,bool> file,Func<string,bool> target) { OS=os; this.file=file; this.target=target; }
         public bool File(string name) { return file(name); }
-        public bool Tweak(string id) { return OS.SupportsTweak(id); }
         public bool Security(string id)
         { return OS.Supported && ((id!="sac" && id!="kernel") || (OS.IsWindows11 && OS.Build>=22621)); }
         // Older security apps do not promise the newer deep links. Open the parent page instead.

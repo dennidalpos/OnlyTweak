@@ -14,7 +14,7 @@ namespace OnlyTweakWindows
     }
     internal sealed class SecurityEnvironment
     {
-        public bool DeviceGuardKnown,HvciRunning,KernelRunning,DefenderKnown,DefenderActive,SMode;
+        public bool DeviceGuardKnown,HvciRunning,KernelRunning,DefenderKnown,DefenderActive,SMode,SModeKnown;
         public int Pua=-1;
     }
     internal enum ProtectionState { Unknown,Active,Inactive,Audit }

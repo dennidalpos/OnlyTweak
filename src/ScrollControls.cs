@@ -12,9 +12,11 @@ namespace OnlyTweakWindows
         private int extent,viewport,value,dragStart,dragValue;
         private bool dragging,hovered;
         private readonly WheelSteps wheel=new WheelSteps();
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public bool Horizontal { get; set; }
         public event EventHandler ValueChanged;
         public int Maximum { get { return Math.Max(0,extent-viewport); } }
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public int Value
         {
             get { return value; }
@@ -231,6 +233,7 @@ namespace OnlyTweakWindows
         private readonly WheelSteps wheel=new WheelSteps();
         public event EventHandler SelectedIndexChanged;
         private int RowHeight { get { return Math.Max(46,Font.Height*3); } }
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public int SelectedIndex
         {
             get { return selected; }

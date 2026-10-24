@@ -92,7 +92,7 @@ namespace OnlyTweakWindows
                 // le destinazioni senza gestore devono essere rifiutate senza raggiungere il backend.
                 List<string> targets=new List<string>(); ProcessService process=new ProcessService(targets.Add);
                 List<string> expected=new List<string>();
-                foreach (string target in new[] { "ms-settings:yourinfo",ProcessService.ClassicPrinters,"windowsdefender://smartapp/" })
+                foreach (string target in new[] { "ms-settings:network-proxy",ProcessService.ClassicPrinters,"windowsdefender://smartapp/" })
                 {
                     if (process.TargetUnavailable(target)==null) { process.LaunchTarget(target,Ignore); expected.Add(target); }
                     else Throws(delegate { process.LaunchTarget(target,Ignore); },"non disponibile");

@@ -1,4 +1,4 @@
-# Build e suite read-only con il csc.exe del .NET Framework incluso nell'immagine Windows.
+# Build .NET 10 autonoma e suite read-only/simulata.
 # --ui e --render sono esclusi: aprono finestre e richiedono una sessione desktop interattiva.
 name: CI
 
@@ -19,9 +19,19 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
       - name: Build
         shell: cmd
         run: .\build.cmd
       - name: Test
         shell: cmd
         run: .\test.cmd --artifact --read-only
+      - name: Dependency audit
+        shell: pwsh
+        run: |
+          dotnet list OnlyTweakWindows.csproj package --vulnerable --include-transitive --format json > artifacts/dependency-audit.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $audit = Get-Content artifacts/dependency-audit.json -Raw | ConvertFrom-Json
+          if ($audit.errors -or @($audit.projects.frameworks.topLevelPackages | Where-Object vulnerabilities).Count -or @($audit.projects.frameworks.transitivePackages | Where-Object vulnerabilities).Count) { throw 'Dependency vulnerability or audit error' }

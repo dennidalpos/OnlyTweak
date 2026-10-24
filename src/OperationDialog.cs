@@ -16,7 +16,7 @@ namespace OnlyTweakWindows
         private readonly ActivityBar progress;
         private readonly Button run;
         private readonly Timer outputTimer;
-        private readonly Queue<string> pending=new Queue<string>();
+        private readonly BoundedText pending=new BoundedText();
         private bool running, checking;
         private readonly bool confirmationGranted;
         public static void Open(IWin32Window parent, AppServices app, ActionSpec action)
@@ -82,7 +82,10 @@ namespace OnlyTweakWindows
                     if (!action.Applicable) throw new NotSupportedException("Funzione non applicabile a questo sistema.");
                     if (action.Unavailable!=null)
                     { string reason=action.Unavailable(); if (reason!=null) throw new InvalidOperationException(reason); }
-                    action.Execute(Enqueue);
+                    if (action.RequiresElevation)
+                        LocalPrivilege.Execute(action.Id,Enqueue);
+                    else if (action.Id=="printer.purge") LocalPrivilege.ExecuteAudited(action,Enqueue);
+                    else action.Execute(Enqueue);
                 });
                 if (action.Restart!=null) Enqueue(action.Restart);
                 Enqueue("Operazione terminata. Leggi il riepilogo sopra per l'esito dello strumento.");
@@ -102,20 +105,14 @@ namespace OnlyTweakWindows
         }
         private void Enqueue(string line)
         {
-            lock (pending)
-            {
-                if (pending.Count>=4000) pending.Dequeue();
-                pending.Enqueue(line);
-            }
+            pending.Append((line??"")+Environment.NewLine);
         }
         private void FlushOutput()
         {
-            StringBuilder text=new StringBuilder();
-            lock (pending) while (pending.Count>0) text.AppendLine(pending.Dequeue());
-            if (text.Length==0) return;
-            // Bounded in-memory output; native tools retain their own full Windows logs.
-            if (output.TextLength+text.Length>200000) output.Text=output.Text.Substring(Math.Max(0,output.TextLength-100000));
-            output.AppendText(text.ToString());
+            string next=pending.Drain();
+            if (next.Length==0) return;
+            BoundedText combined=new BoundedText(); combined.Append(output.Text); combined.Append(next);
+            output.Text=combined.Read();
         }
         protected override void OnFormClosing(FormClosingEventArgs e)
         { if (running || checking) e.Cancel=true; base.OnFormClosing(e); }

@@ -16,8 +16,9 @@ namespace OnlyTweakWindows
         internal static readonly string[] AllowedTargets={ ClassicPrinters,"windowsdefender://appbrowser/","windowsdefender://coreisolation/","windowsdefender://smartapp/","windowsdefender://smartscreenpua/",
             "ms-settings:windowsdefender",
             "ms-settings:printers","ms-settings:network-proxy","ms-settings:storagesense","ms-settings:appsfeatures","ms-settings:startupapps",
-            "ms-settings:windowsupdate","ms-settings:yourinfo","ms-settings:emailandaccounts","ms-settings:workplace","ms-settings:otherusers" };
+            "ms-settings:windowsupdate" };
         public ProcessService() : this(ShellService.LaunchInteractiveTarget) { }
+        static ProcessService() { Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); }
         internal ProcessService(Action<string> launch) { interactive=launch; }
         public string SystemFile(string name)
         {

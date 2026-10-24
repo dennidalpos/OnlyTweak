@@ -23,9 +23,7 @@ namespace OnlyTweakWindows
                         OsProfile os=TestProfile(build,edition);
                         Assert(os.Supported && !os.IsWindows11 && os.Summary.StartsWith("Windows 10"),"Profilo Windows 10 errato.");
                         AppServices app=TestApp(build:build,edition:edition);
-                        Assert(app.Tweaks.AvailableDefinitions.Count()==3,"Menu classico presente su Windows 10.");
                         Assert(!app.Security.AvailableDefinitions(app.Availability).Any(d=>d.Id=="sac" || d.Id=="kernel"),"Protezioni Windows 11 presenti.");
-                        Assert(app.Catalog.Accounts.AllActions().Any(a=>a.Id=="accounts.local")==os.LocalUsers,"Edizione console utenti ignorata.");
                     }
             });
             Test("OS: Windows 11, Server, ARM64, x86 e versioni escluse",delegate {
@@ -39,17 +37,10 @@ namespace OnlyTweakWindows
                 Assert(OsProfile.ReleaseName("", "1809")=="1809" && OsProfile.ReleaseName("22H2","2009")=="22H2","Fallback DisplayVersion/ReleaseId errato.");
                 Assert(OsProfile.NativeArchitecture(0x8664)==9 && OsProfile.NativeArchitecture(0xaa64)==12 && OsProfile.NativeArchitecture(0x014c)==0 && OsProfile.NativeArchitecture(0)==-1,"Architettura host confusa con emulazione.");
             });
-            Test("OS: tweak non pertinente rifiutato prima delle scritture",delegate {
-                FakeRegistry store=new FakeRegistry(); RegistryTweakService service=new RegistryTweakService(store,TestProfile(19045));
-                Throws(delegate { service.Apply(service.Definitions[0],true,Ignore); },"non applicabile");
-                Throws(delegate { service.Restore(service.Definitions[0],Ignore); },"non applicabile");
-                Assert(store.WriteCount==0,"Tweak Windows 11 scritto su Windows 10.");
-            });
             Test("catalogo: componenti mancanti e sezioni vuote rimossi",delegate {
                 FeatureAvailability availability=new FeatureAvailability(TestProfile(19045,"Core"),name=>name!="sfc.exe" && name!="dism.exe" && name!="cleanmgr.exe" && name!="netplwiz.exe",target=>target!="ms-settings:storagesense");
                 AppServices app=TestApp(availability:availability);
                 Assert(!app.Catalog.Maintenance.AllActions().Any() && app.Catalog.Maintenance.Children.Count==0,"Sezione vuota rimasta.");
-                Assert(!app.Catalog.Accounts.AllActions().Any(a=>a.Id=="accounts.local" || a.Id=="accounts.classic" || a.Id=="accounts.close" || a.Id=="accounts.portal"),"Azione rimossa presente.");
                 Assert(app.Catalog.Tools.AllActions().Count()==11,"Strumenti richiesti rimossi.");
                 Assert(app.Catalog.Tools.Actions.Single(a=>a.Id=="tools.apps").Title=="App e funzionalità","Etichetta Windows 10 errata.");
             });
@@ -59,9 +50,7 @@ namespace OnlyTweakWindows
                 Assert(process.SystemFile("explorer.exe")==explorer,"Explorer cercato fuori dalla cartella Windows.");
                 Assert(process.SystemFile("sfc.exe")==Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"sfc.exe"),"Percorso degli strumenti di sistema alterato.");
                 AppServices app=new AppServices(new FakeSecurityBackend(),TestProfile(),null);
-                Assert(app.Catalog.ExplorerRestart.Applicable==File.Exists(explorer),"Riavvio shell nascosto malgrado Explorer disponibile.");
                 FeatureAvailability absent=new FeatureAvailability(TestProfile(),name=>name!="explorer.exe",target=>true);
-                Assert(!TestApp(availability:absent).Catalog.ExplorerRestart.Applicable,"Explorer assente presentato come disponibile.");
             });
             Test("destinazioni: pagina padre su Windows 10 e alternativa senza gestore sicurezza",delegate {
                 FeatureAvailability win10=new FeatureAvailability(TestProfile(17763),name=>true,target=>true);
@@ -91,7 +80,7 @@ namespace OnlyTweakWindows
             foreach (int build in new[] {17763,19044,19045,22000,22621,26100}) {
                 FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=TestApp(backend,build);
                 using (MainForm home=new MainForm(app))
-                using (AppearanceDialog explorer=new AppearanceDialog(app))
+                using (MenuDialog explorer=new MenuDialog(app,app.Catalog.Network))
                 using (SecurityDialog security=new SecurityDialog(app,false)) {
                     security.DisplayStates(backend.Environment);
                     foreach (DarkForm form in new DarkForm[] {home,explorer,security}) {

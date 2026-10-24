@@ -13,6 +13,7 @@ namespace OnlyTweakWindows
         public Action<Action<string>> Execute;
         public Func<string> Unavailable;
         public bool OpensWindow;
+        public bool RequiresElevation;
         public Func<bool> IsApplicable;
         public bool Applicable { get { return IsApplicable==null || IsApplicable(); } }
         public ActionSpec(string id, string title, string description, string scope, Action<Action<string>> execute)
@@ -30,7 +31,7 @@ namespace OnlyTweakWindows
     internal sealed class SessionHistory
     {
         private readonly List<string> entries = new List<string>();
-        public void Add(string text) { lock (entries) entries.Add(DateTime.Now.ToString("HH:mm:ss") + "  " + text); }
+        public void Add(string text) { lock (entries) { entries.Add(DateTime.Now.ToString("HH:mm:ss") + "  " + (text.Length>4096 ? text.Substring(0,4096) : text)); if (entries.Count>2000) entries.RemoveAt(0); } }
         public string Read() { lock (entries) return entries.Count == 0 ? "Nessuna operazione in questa sessione." : String.Join(Environment.NewLine, entries.ToArray()); }
     }
 
@@ -38,7 +39,6 @@ namespace OnlyTweakWindows
     {
         public readonly OperationCoordinator Coordinator = new OperationCoordinator();
         public readonly SessionHistory History = new SessionHistory();
-        public readonly RegistryTweakService Tweaks;
         public readonly ProcessService Processes = new ProcessService();
         public readonly PrinterService Printers = new PrinterService();
         public readonly SpoolService Spool;
@@ -53,7 +53,6 @@ namespace OnlyTweakWindows
             OS=os;
             Availability=availability??new FeatureAvailability(os,name=>Processes.FileUnavailable(name)==null,target=>Processes.TargetUnavailable(target)==null);
             Security=new SecurityService(security);
-            Tweaks = new RegistryTweakService(new WindowsRegistryStore(),os);
             Spool = new SpoolService(new WindowsSpoolBackend());
             Catalog = new ActionCatalog(this);
         }

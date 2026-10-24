@@ -4,13 +4,15 @@
       "id": "OT-AUDIT-08",
       "title": "Defender: conservare lo stato sconosciuto per AMRunningMode vuoto o non riconosciuto",
       "priority": "P2",
-      "status": "open_confirmed",
+      "status": "completed",
       "problem": "La query converte ogni AMRunningMode non nullo diverso da Normal in Active=0. Stringa vuota e valore non riconosciuto diventano una protezione PUA inattiva confermata.",
       "evidence": [
         "src/WindowsSecurityBackend.cs:29-32; src/SecurityService.cs:88-91.",
         "Riproduzione nella copia isolata con il ProbeCommand corrente e funzioni Windows PowerShell simulate: PUAProtection=1, AMRunningMode='' oppure 'UnexpectedMode' -> DefenderKnown=True, Protection=Inactive. Controllo Normal -> Active; Passive -> Inactive.",
         "tests/SecurityTests.cs copre campi assenti e parser, ma non il comando effettivo con AMRunningMode vuoto/non riconosciuto.",
-        "Fonte primaria sui modi noti Windows 10/11: https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-antivirus-windows . Non prova quali valori emetta ogni provider/versione."
+        "Fonte primaria sui modi noti Windows 10/11: https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-antivirus-windows . Non prova quali valori emetta ogni provider/versione.",
+        "2026-10-24, evoluzione 2.0: corretto e verificato con build .NET 10 e suite completa 83 superati, 0 falliti (artifacts/enterprise-full.log). Nessuna modifica reale di sistema/dominio durante le prove.",
+        "Fixture sul ProbeCommand effettivo per AMRunningMode nullo, vuoto, spazi, inatteso, Normal, Passive, EDR Block Mode e SxS Passive Mode; fallback soltanto con campo assente."
       ],
       "impact": "Falso avviso di protezione inattiva in presenza di dati incompleti o di un modo sconosciuto; nessuna modifica di sistema osservata.",
       "scope": [
@@ -28,13 +30,15 @@
       "id": "OT-AUDIT-09",
       "title": "Isolare il fallimento della lettura SMode dalle altre protezioni",
       "priority": "P2",
-      "status": "open_confirmed",
+      "status": "completed",
       "problem": "La lettura di SkuPolicyRequired avviene fuori dal blocco di gestione errori; un accesso negato interrompe Probe prima di CIM/Defender e la UI marca tutte le schede come fallite.",
       "evidence": [
         "src/WindowsSecurityBackend.cs:35-45: registry.Read(SkuPolicyRequired) precede il try.",
         "src/SecurityDialog.cs:45-58: l'eccezione di Probe salta le letture per scheda e ShowFailure viene chiamato su tutti i pannelli.",
         "Probe isolato sul codice corrente, con IRegistryReader simulato che nega soltanto SkuPolicyRequired: 'SKU-READ propagates UnauthorizedAccessException before CIM/Defender'. Iniezione via reflection nella fixture, senza toccare registro reale o sorgenti applicativi.",
-        "Il test UI FailRead esistente fa fallire tutte le letture del fake; non copre il guasto selettivo del probe SMode."
+        "Il test UI FailRead esistente fa fallire tutte le letture del fake; non copre il guasto selettivo del probe SMode.",
+        "2026-10-24, evoluzione 2.0: corretto e verificato con build .NET 10 e suite completa 83 superati, 0 falliti (artifacts/enterprise-full.log). Nessuna modifica reale di sistema/dominio durante le prove.",
+        "Lettura SMode isolata con SModeKnown esplicito; fixture IRegistryReader negato non interrompe Probe CIM/Defender."
       ],
       "impact": "Perdita di diagnostica indipendente ancora disponibile e mancato isolamento degli errori tra protezioni. Scenario confermato con errore simulato, non osservato sulle ACL della postazione.",
       "scope": [
@@ -53,13 +57,15 @@
       "id": "OT-AUDIT-10",
       "title": "Applicare il limite dell'output anche al blocco in ingresso",
       "priority": "P2",
-      "status": "open_confirmed",
+      "status": "completed",
       "problem": "FlushOutput taglia soltanto il testo già presente prima di appendere tutto il nuovo blocco; Enqueue limita il numero di righe, non i caratteri. Una singola riga o un batch lungo supera la soglia di 200000 caratteri.",
       "evidence": [
         "src/OperationDialog.cs:103-118: pending.Count>=4000 e append successivo al solo taglio dell'output preesistente.",
         "README.md, Rete e manutenzione: testo mostrato dichiarato limitato in memoria.",
         "Operazione interamente simulata con log(new string('x',300000)): DarkOutput.TextLength=300077 a operazione conclusa. Nessun processo di manutenzione lanciato.",
-        "tests/Tests.cs:399-416 verifica scrollbar/output lungo, non il limite della memoria o la dimensione del nuovo batch."
+        "tests/Tests.cs:399-416 verifica scrollbar/output lungo, non il limite della memoria o la dimensione del nuovo batch.",
+        "2026-10-24, evoluzione 2.0: corretto e verificato con build .NET 10 e suite completa 83 superati, 0 falliti (artifacts/enterprise-full.log). Nessuna modifica reale di sistema/dominio durante le prove.",
+        "BoundedText applicato a coda e risultato; regressioni singola riga 300000 caratteri, batch oltre soglia e riepilogo finale conservato. Anche output/errori PowerShell e messaggi IPC hanno limiti."
       ],
       "impact": "Consumo di memoria e costo di ridisegno superiori al limite previsto; non sono stati misurati esaurimento memoria o blocchi durante strumenti Windows reali.",
       "scope": [
@@ -77,12 +83,13 @@
       "id": "OT-AUDIT-11",
       "title": "Rimuovere le chiavi vuote create dalla sessione dopo ripristini di tweak condivisi",
       "priority": "P3",
-      "status": "open_confirmed",
+      "status": "superseded_removed",
       "problem": "MissingKeys viene registrato separatamente per tweak: il secondo tweak considera preesistente la chiave appena creata dal primo. Ripristinando prima il primo e poi il secondo, i valori sono rimossi ma la chiave creata dalla sessione rimane vuota.",
       "evidence": [
         "src/RegistryTweaks.cs:115-126 e 159-176; tre tweak condividono ExplorerPath.",
         "FakeRegistry inizialmente con la sola chiave genitore Explorer: Apply extensions, Apply hidden, Restore extensions, Restore hidden -> Advanced.KeyExists=True, HideFileExt.ValueExists=False, Hidden.ValueExists=False.",
-        "I test di rimozione chiavi esistenti esercitano un solo tweak; non coprono la condivisione delle chiavi e l'ordine dei ripristini."
+        "I test di rimozione chiavi esistenti esercitano un solo tweak; non coprono la condivisione delle chiavi e l'ordine dei ripristini.",
+        "2026-10-24: rimosse integralmente feature tweak estetici, RegistryTweakService, backend HKCU e UI di ripristino su richiesta del piano aziendale. Nessun residuo di questi tipi in src/tests; impostazioni applicate da versioni precedenti non annullate. Non dichiarata correzione del vecchio algoritmo."
       ],
       "impact": "Residuo di registro vuoto dopo un ripristino annunciato come concluso; nella riproduzione nessuna perdita di valori o dati estranei.",
       "scope": [
@@ -108,21 +115,22 @@
         "Task già aperto nel tracker SecondBrain, ID e perimetro conservati; nessuna nuova attività duplicata.",
         "build.cmd compila con il Framework installato; TargetFrameworkAttribute dichiara 4.7.2 ma non certifica le API del runtime minimo.",
         "In questo audit build in fixture riuscita, suite completa 73/0 e comando CI 51/0 sulla postazione Windows 11; test dei profili OS simulati.",
-        "Reference assembly 4.7.2 assenti già verificati nel turno precedente; nessuna VM fornita/usata in questo audit."
+        "Reference assembly 4.7.2 assenti già verificati nel turno precedente; nessuna VM fornita/usata in questo audit.",
+        "2026-10-24: migrazione autorizzata a .NET 10 autonomo, UI asInvoker e worker elevati. Il requisito Framework 4.7.2 e i tweak HKCU sono superati; evidenze precedenti conservate come storico. Build e fixture locali non sostituiscono VM pulite."
       ],
       "impact": "Portabilità minima e attribuzione delle azioni in UAC multiutente non certificabili dai test locali; gate prima di una consegna dichiarata validata su tutti i target.",
       "scope": [
-        "Solo EXE su Windows 10 1809/LTSC 2019, 22H2, LTSC 2021 e Windows 11 x64 puliti",
-        "Edizioni Home/Pro; filtri OS/edizione; icone shell/taskbar",
-        "UAC con account coincidente/altro amministratore, pagine account, viste classiche e reindirizzamenti 24H2/25H2"
+        "EXE .NET 10 autonomo su Windows 11 supportati e Windows 10 aziendali LTSC/ESU esplicitamente qualificati, x64; matrice edizioni RSAT",
+        "Avvio senza runtime separato, estrazione bundle, UAC account coincidente/altro amministratore, percorsi audit account effettivo",
+        "Rifiuto Server/ARM64/x86; compatibilità tecnica distinta dal supporto OS"
       ],
       "dependencies": [
-        "Ambienti VM x64 ripristinabili indicati dall'utente, con immagini e account campione; Framework 4.7.2 stock sulla 1809"
+        "VM x64 ripristinabili con immagini e account campione; nessuna VM fornita/usata nel task 2.0"
       ],
       "completion_criteria": [
-        "Registrare build/edizione/runtime e risultati della matrice target, con EXE autonomo senza installazioni aggiuntive.",
-        "Verificare account effettivo HKCU/stampa e token desktop per pagine personali, più i rifiuti previsti.",
-        "Salvare evidenze dei risultati e degli eventuali difetti prima di chiudere il task."
+        "Registrare OS/edizione/runtime del bundle e avvio su sistemi puliti senza runtime installato.",
+        "Verificare identità desktop, worker, elevazione con altro amministratore e audit nel profilo dell’account effettivo.",
+        "Salvare evidenze e difetti prima della chiusura."
       ]
     },
     {
@@ -134,7 +142,8 @@
       "evidence": [
         "Task preesistente conservato; OT-AUDIT-06 ha corretto il fotogramma icona, ma le prove fisiche restano aperte.",
         "tests/Tests.cs usa form.Scale per 100/150/200%, non cambio DPI reale.",
-        "Audit attuale: suite UI verde e probe delle finestre principali alla dimensione minima senza pulsanti oltre il contenitore; nessuna prova fisica multi-monitor."
+        "Audit attuale: suite UI verde e probe delle finestre principali alla dimensione minima senza pulsanti oltre il contenitore; nessuna prova fisica multi-monitor.",
+        "2026-10-24: render 2.0 sei schede aziendali, profilo e home al 100/150/200%, UI test simulati nel loop Windows Forms; resta richiesta prova DPI fisica."
       ],
       "impact": "Possibili difetti di leggibilità, clipping, focus o tooltip sui target ancora non esclusi; nessun nuovo difetto DPI affermato.",
       "scope": [
@@ -160,13 +169,14 @@
       "evidence": [
         "Task preesistente conservato: nessun reset, SFC/DISM modificante, pulizia spooler o riavvio shell reale eseguito sulla postazione.",
         "Suite corrente: fake per file SPL/SHD, percorsi vietati, reparse, stop/avvio falliti, ripristino registro e conferme; letture reali riuscite.",
-        "Il nuovo controllo disponibilità Explorer è corretto e verificato localmente; non equivale alla prova di riavvio shell."
+        "Il nuovo controllo disponibilità Explorer è corretto e verificato localmente; non equivale alla prova di riavvio shell.",
+        "2026-10-24: shell restart/tweak rimossi; conservati stampa, SFC/DISM e rete. Aggiunti worker elevati con audit e canale sicuro solo sul membro locale. Nessuna prova modificante reale."
       ],
       "impact": "Non verificati effetti, recupero e messaggi nelle condizioni reali di guasto; non è un bug applicativo già dimostrato.",
       "scope": [
-        "Driver/dialoghi, stampante offline, spooler fermo/disabilitato e lavori campione",
-        "Pulizia SPL/SHD standard, divieto percorsi personalizzati/ricorsione",
-        "Riavvio shell, reset Winsock/TCP-IP, SFC /scannow e DISM /RestoreHealth"
+        "Stampa/spooler e manutenzione locale conservate, UAC e audit preventivo/finale",
+        "Reset rete, SFC/DISM, riparazione canale sicuro sul membro locale; riavvii manuali",
+        "Percorsi spool standard, SPL/SHD al primo livello, recupero errori senza cancellare stampanti/driver/dati estranei"
       ],
       "dependencies": [
         "VM sacrificabile con snapshot e dati/coda campione; collegamento e credenziali di prova",
@@ -187,7 +197,8 @@
       "evidence": [
         "Task preesistente conservato; la presenza di un gestore URI non certifica la pagina effettiva.",
         "Suite corrente conferma API di sola lettura, filtri OS e fallback con fake; smoke test reale riuscito solo sul sistema locale.",
-        "OT-AUDIT-08/09 sono difetti confermati separati; questa voce resta una verifica ambientale, non una duplicazione delle correzioni."
+        "OT-AUDIT-08/09 sono difetti confermati separati; questa voce resta una verifica ambientale, non una duplicazione delle correzioni.",
+        "2026-10-24: OT-AUDIT-08/09 corretti localmente con fixture e suite 83/0; protezioni ancora esclusivamente di lettura. Qualificazione provider/destinazioni resta aperta."
       ],
       "impact": "Possibili letture sconosciute, differenze dei provider e reindirizzamenti ancora da caratterizzare; nessuna scrittura alle protezioni autorizzata.",
       "scope": [
@@ -203,6 +214,89 @@
         "Confrontare le letture con le evidenze native Windows e registrare build/provider/policy.",
         "Provare le destinazioni effettive e i fallback, preservando sempre lo stato sconosciuto quando manca evidenza.",
         "Nessun comando di modifica/ripristino protezioni; chiusura solo dopo matrice documentata."
+      ]
+    },
+    {
+      "id": "OT-ENT-LAB-01",
+      "title": "Qualificare toolkit aziendale su due domini e infrastruttura AD/DFS in laboratorio",
+      "priority": "P1",
+      "status": "verification_required_waiting_vm",
+      "problem": "Implementati catalogo, sessioni, RSAT, diagnostica, help desk e predisposizione, verificati localmente con fixture; funzionamento su AD reale non ancora provato.",
+      "evidence": [
+        "2026-10-24: suite completa 83/0; fixture delle procedure PowerShell effettive per AD eleggibilità/replica, DFSR, protezione DC e WhatIf; nessuna connessione o modifica a domini reali.",
+        "Codice di predisposizione blocca conflitti/GPO, limita firewall e confronta impronte prima di Undo. Apply/Undo reali non eseguiti.",
+        "2026-10-24, cambio sessione: implementazione 2.0 da salvare su master di dennidalpos/OnlyTweak (pubblico), con commit/push esplicitamente richiesti. Riprendere dalla qualificazione OT-VM-01 e dal laboratorio qui descritto; non riaprire OT-AUDIT-08/09/10 completati né OT-AUDIT-11 superato per rimozione. Build e suite locali già concluse: 83/0 completa, 61/0 comando CI. Nessun nuovo intervento modificante su sistemi o domini. Identificare la revisione salvata con git log; riferimento esatto e stato CI nel dossier SecondBrain."
+      ],
+      "impact": "Gate prima di presentare le funzioni come validate per l’uso su infrastrutture aziendali.",
+      "scope": [
+        "Due domini senza trust, due DC nello stesso dominio, server membro e coppia DFSR",
+        "RSAT/FoD online/offline e policy WSUS/UUP; alias DNS e credenziali errate",
+        "Replica AD/oggetti, GPO computer/utente, SYSVOL, namespace e backlog, deleghe e account esclusi",
+        "WinRM Kerberos/HTTPS, JEA consentito/negato, CIDR firewall, snapshot/Undo e conflitti successivi",
+        "Interruzioni durante modifiche e rilettura prima del retry; account privilegiati/servizi fuori perimetro"
+      ],
+      "dependencies": [
+        "VM sacrificabili e snapshot, reti isolate, account delegati campione, PKI di test",
+        "OT-VM-01 per qualifica host"
+      ],
+      "completion_criteria": [
+        "Confrontare risultati con strumenti Microsoft e registrare identità/target/versioni.",
+        "Provare modifiche consentite e rifiuti, audit senza segreti, errori parziali e recupero.",
+        "Provare Apply/Undo con configurazioni preesistenti, alterazioni e GPO; nessun ampliamento implicito del firewall."
+      ]
+    },
+    {
+      "id": "OT-ENT-SIGN-01",
+      "title": "Firmare e qualificare artefatti con policy App Control/AllSigned aziendali",
+      "priority": "P1",
+      "status": "waiting_user_certificate",
+      "problem": "La build locale è NotSigned; nessun certificato di code signing nel profilo utente corrente.",
+      "evidence": [
+        "2026-10-24: verificata assenza di certificati CodeSigning in Cert:/CurrentUser/My; nessuna chiave privata acquisita o esportata.",
+        "scripts/prepare-release.ps1 prepara manifest/hash, firma opzionale con SignTool e gate RequireSigned. Estrazione risorse verificata byte per byte.",
+        "2026-10-24, cambio sessione: EXE locale 2.0.0 non firmato, circa 111 MiB; sorgenti/lock/configurazione saranno inclusi nel salvataggio Git. dist, artifacts e certificati restano fuori dal commit. Firma e qualificazione policy rimangono da eseguire."
+      ],
+      "impact": "Firma, fiducia editore e compatibilità con allowlist aziendali non certificate.",
+      "scope": [
+        "Firma ps1/psm1 prima della build e firma EXE con timestamp approvato",
+        "Policy App Control/AllSigned, risorse firmate, configurazioni JEA generate",
+        "Manifest dipendenze/runtime incorporati e piano patch .NET 10"
+      ],
+      "dependencies": [
+        "Certificato aziendale o provider di firma, SignTool, timestamp HTTPS approvato",
+        "VM con policy e PKI aziendali di test"
+      ],
+      "completion_criteria": [
+        "RequireSigned supera il controllo Authenticode sul pacchetto finale.",
+        "Script incorporati/esportati mantengono firme valide e vengono eseguiti sotto policy, senza bypass.",
+        "Registrare catena, hash e risultati senza archiviare segreti."
+      ]
+    },
+    {
+      "id": "OT-ENT-PILOT-01",
+      "title": "Eseguire pilota aziendale dopo laboratorio e firma",
+      "priority": "P2",
+      "status": "waiting_lab_and_signing",
+      "problem": "Nessuna distribuzione reale o pilota autorizzato/fornito in questo task.",
+      "evidence": [
+        "2026-10-24: modifiche soltanto locali, nessun commit, push o pubblicazione. Manuale in docs/ENTERPRISE.md.",
+        "2026-10-24, cambio sessione: autorizzati commit e push dei sorgenti sul branch principale; questa autorizzazione non avvia distribuzione, release binaria o pilota. Riprendere il pilota soltanto dopo laboratorio e firma con ambiente/autorizzazione dedicati."
+      ],
+      "impact": "Usabilità operativa, deleghe e recupero su ambiente cliente ancora da qualificare.",
+      "scope": [
+        "OU pilota, gruppo tecnico dedicato, reti amministrative approvate, dati campione",
+        "Revisione OU utenti ordinari, esclusioni servizi e SID privilegiati personalizzati",
+        "Conservazione audit/report e procedura di rollback/distribuzione gestita"
+      ],
+      "dependencies": [
+        "OT-ENT-LAB-01",
+        "OT-ENT-SIGN-01",
+        "Ambiente pilota e autorizzazione esplicita alla distribuzione"
+      ],
+      "completion_criteria": [
+        "Raccogliere esiti reali e consenso del responsabile del pilota.",
+        "Verificare report, audit, privilegi minimi e recupero; aprire eventuali difetti riprodotti.",
+        "Consegna dichiarata validata soltanto per la matrice effettivamente provata."
       ]
     }
   ]

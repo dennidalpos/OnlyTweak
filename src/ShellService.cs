@@ -11,19 +11,6 @@ namespace OnlyTweakWindows
 {
     internal static class ShellService
     {
-        public static string Unavailable()
-        {
-            try
-            {
-                using (Process shell = GetShellProcess())
-                {
-                    IntPtr token = OpenShellToken(shell);
-                    try { VerifyOwner(token); } finally { CloseHandle(token); }
-                }
-                return null;
-            }
-            catch (Exception ex) { return ex.Message; }
-        }
         private static Process GetShellProcess()
         {
             IntPtr window = GetShellWindow();
@@ -44,45 +31,18 @@ namespace OnlyTweakWindows
             if (!OpenProcessToken(shell.Handle, 0x0002 | 0x0008, out token)) throw new Win32Exception(Marshal.GetLastWin32Error());
             return token;
         }
-        private static void VerifyOwner(IntPtr token)
-        {
-            using (WindowsIdentity shellIdentity = new WindowsIdentity(token))
-            using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
-                if (shellIdentity.User==null || !shellIdentity.User.Equals(currentIdentity.User))
-                    throw new InvalidOperationException("La shell appartiene a un altro account. Riavvia Esplora risorse da quell'account o disconnettiti.");
-        }
-        public static void Restart(Action<string> log)
-        {
-            using (Process shell = GetShellProcess())
-            {
-                IntPtr original = OpenShellToken(shell), duplicate = IntPtr.Zero;
-                try
-                {
-                    VerifyOwner(original);
-                    // Capture the shell's original token BEFORE stopping it: never start an elevated desktop.
-                    if (!DuplicateTokenEx(original, 0x02000000, IntPtr.Zero, 2, 1, out duplicate)) throw new Win32Exception(Marshal.GetLastWin32Error());
-                    log("Chiusura della shell dell'account corrente...");
-                    shell.Kill();
-                    if (!shell.WaitForExit(10000)) throw new InvalidOperationException("La shell non si è chiusa entro il tempo previsto.");
-                    for (int i=0; i<30; i++)
-                    {
-                        if (GetShellWindow()!=IntPtr.Zero) { log("Esplora risorse riavviato automaticamente da Windows."); return; }
-                        Thread.Sleep(100);
-                    }
-                    string explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
-                    STARTUPINFO startup = new STARTUPINFO { Size=Marshal.SizeOf(typeof(STARTUPINFO)), Desktop=@"winsta0\default" };
-                    PROCESS_INFORMATION process;
-                    if (!CreateProcessWithTokenW(duplicate, 1, explorer, new StringBuilder(ProcessService.QuoteArgument(explorer)), 0, IntPtr.Zero,
-                        Environment.GetFolderPath(Environment.SpecialFolder.Windows), ref startup, out process))
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Impossibile riaprire la shell. Usa Gestione attività > Esegui nuova attività > explorer.exe senza privilegi amministrativi, oppure disconnettiti.");
-                    CloseHandle(process.Thread); CloseHandle(process.Process);
-                    log("Avvio di Esplora risorse richiesto con il token originale del desktop.");
-                }
-                finally { if (duplicate!=IntPtr.Zero) CloseHandle(duplicate); CloseHandle(original); }
-            }
-        }
         public static void LaunchInteractiveTarget(string target)
         {
+            if (!LocalPrivilege.IsAdministrator)
+            {
+                // Same unelevated desktop context needs no impersonation privilege.
+                using (Process shell=GetShellProcess())
+                using (WindowsIdentity current=WindowsIdentity.GetCurrent())
+                using (WindowsIdentity owner=ReadShellIdentity(shell))
+                    if (!current.User.Equals(owner.User)) throw new InvalidOperationException("Il desktop appartiene a un altro account.");
+                using (Process launched=Process.Start(new ProcessStartInfo(target) {UseShellExecute=true})) { }
+                return;
+            }
             using (Process shell=GetShellProcess())
             {
                 IntPtr original=OpenShellToken(shell),duplicate=IntPtr.Zero,environment=IntPtr.Zero;
@@ -105,6 +65,12 @@ namespace OnlyTweakWindows
                     CloseHandle(original);
                 }
             }
+        }
+        private static WindowsIdentity ReadShellIdentity(Process shell)
+        {
+            IntPtr token=OpenShellToken(shell);
+            try { return new WindowsIdentity(token); }
+            finally { CloseHandle(token); }
         }
         [DllImport("userenv.dll",SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool CreateEnvironmentBlock(out IntPtr environment,IntPtr token,[MarshalAs(UnmanagedType.Bool)] bool inherit);

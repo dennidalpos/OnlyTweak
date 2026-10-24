@@ -28,15 +28,20 @@ namespace OnlyTweakWindows
             "'HR='+[int]($d.SecurityServicesRunning -contains 2); 'KR='+[int]($d.SecurityServicesRunning -contains 5) } } catch { 'DG=Unknown' };"+
             "try { $p=Get-MpPreference -ErrorAction Stop; $s=Get-MpComputerStatus -ErrorAction Stop;"+
             "if ($null -ne $p.PUAProtection) { 'Pua='+[int]$p.PUAProtection };"+
-            "if ($null -ne $s.AMRunningMode) { 'Active='+[int]($s.AMRunningMode -eq 'Normal') }"+
+            "if ($s.AMRunningMode -eq 'Normal') { 'Active=1' } elseif ($s.AMRunningMode -in @('Passive','EDR Block Mode','SxS Passive Mode')) { 'Active=0' } elseif ($null -ne $s.AMRunningMode) { 'Active=Unknown' }"+
             "elseif ($null -ne $s.AMServiceEnabled -and $null -ne $s.AntivirusEnabled) { 'Active='+[int]($s.AMServiceEnabled -and $s.AntivirusEnabled) } } catch { 'Pua=Unknown' }";
-        private readonly IRegistryReader registry=new MachineRegistryStore();
+        private readonly IRegistryReader registry;
+        public WindowsSecurityBackend() : this(new MachineRegistryStore()) { }
+        internal WindowsSecurityBackend(IRegistryReader reader) { registry=reader; }
         public IRegistryReader Registry { get { return registry; } }
         public SecurityEnvironment Probe()
         {
             SecurityEnvironment result=new SecurityEnvironment();
-            RegistryValueState sku=registry.Read(SecurityService.CiPolicy,"SkuPolicyRequired");
-            result.SMode=sku.ValueExists && sku.Kind==RegistryValueKind.DWord && Object.Equals(sku.Data,1);
+            try {
+                RegistryValueState sku=registry.Read(SecurityService.CiPolicy,"SkuPolicyRequired");
+                result.SMode=sku.ValueExists && sku.Kind==RegistryValueKind.DWord && Object.Equals(sku.Data,1);
+                result.SModeKnown=true;
+            } catch (System.Security.SecurityException) { } catch (UnauthorizedAccessException) { } catch (IOException) { }
             string output;
             try
             {

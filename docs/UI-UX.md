@@ -1,6 +1,16 @@
-# Revisione UI/UX — 1.2.0
+# UI/UX OnlyTweak 2.0
 
-## Stato attuale e audit — 24 ottobre 2026
+## Stato corrente — 24 ottobre 2026
+
+Home aziendale con accesso a profili/procedure e preparazione tecnico/RSAT; conservate stampa, rete, manutenzione, strumenti e letture sicurezza. Rimossi tweak estetici e funzioni account personali. Sessioni, identità e target espliciti; nuova navigazione a schede scura, griglia AD, editor profilo scorrevole e output limitato. UI asInvoker e DPI configurato con Application.SetHighDpiMode(PerMonitorV2) prima dei controlli.
+
+Render delle sei schede aziendali al 100/150/200%, editor profilo e home in artifacts/ui. I fattori simulati restano diversi da DPI fisici; i render di AppearanceDialog 1.x preesistenti sono storici. Banco di test dentro Application.Run con azioni simulate, nessuna modifica di dominio o di sistema. La qualificazione DPI effettiva rimane OT-VM-02.
+
+## Storico UI 1.2.0 (non descrive le funzionalità correnti)
+
+### Revisione UI/UX — 1.2.0
+
+## Stato storico e audit — 24 ottobre 2026
 
 L'app attuale offre sette aree desktop e protezioni esclusivamente di lettura, con accesso alle pagine Windows. Account riguarda gli utenti e i collegamenti del PC. Le sezioni datate sotto conservano lo storico: i riferimenti a scritture/ripristino delle protezioni, portale account o chiusura online descrivono funzionalità rimosse il 19 ottobre, non comandi disponibili.
 
