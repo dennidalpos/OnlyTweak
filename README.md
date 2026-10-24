@@ -146,7 +146,21 @@ La suite si compila con lo stesso compilatore di sistema ed esegue:
 
 La CI GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) esegue `build.cmd` e `test.cmd --artifact --read-only` su `windows-2025`, che include .NET Framework 4.8, a ogni push su `master` e pull request. `--ui` e `--render` restano locali perché richiedono una sessione desktop. Il runner è Windows Server, non sostituisce le prove su Windows 10/11.
 
-### Stato verificato il 19 ottobre 2026
+### Attività aperte per la prossima sessione
+
+La fonte unica delle attività aperte è [PROJECT_STATUS.json](PROJECT_STATUS.json): quattro difetti confermati `OT-AUDIT-08..11` (stato Defender vuoto/non riconosciuto, isolamento dell'errore SMode, limite dell'output, chiave vuota dopo ripristini condivisi) e le quattro verifiche ambientali `OT-VM-01..04`. Ogni voce contiene priorità, evidenze, ambito, dipendenze e criteri di completamento. Il salvataggio Git conserva questi residui aperti; le correzioni sotto sono già concluse. Lo storico dettagliato resta nel dossier SecondBrain della postazione.
+
+### Stato verificato il 24 ottobre 2026
+
+Audit generale e correzioni locali: il controllo di disponibilità cerca ora `explorer.exe` nella cartella Windows, rendendo visibile il riavvio shell quando il componente esiste. Restano obbligatorie conferma e verifica dell'account prima del riavvio. La lettura protezioni conserva lo stato sconosciuto per risultati CIM nulli, proprietà assenti, output incompleti e marcatori finali di errore, evitando falsi stati inattivi o evidenze residue della lettura precedente. Una lista CIM presente ma vuota indica invece nessun servizio in esecuzione.
+
+`build.cmd` riuscito senza avvisi; `test.cmd --artifact --ui --read-only --render`: **73 superati, 0 falliti**; comando CI locale `test.cmd --artifact --read-only`: **51 superati, 0 falliti**. Rapporti: `artifacts/audit-2026-10-24-full.log` e `artifacts/audit-2026-10-24-ci.log`. Le quattro nuove regressioni coprono percorso/disponibilità Explorer, letture Device Guard incomplete, errori finali/riletture e query PowerShell con CIM simulato. Tre regressioni fallivano sul codice precedente; il caso CIM verifica anche il comando effettivo con funzioni simulate in Windows PowerShell.
+
+Ispezionati render desktop di home, Esplora file e protezioni e campioni scalati al 150/200%; nessuna vista smartphone/tablet prevista. Restano aperte le prove `OT-VM-01..04`: installazioni pulite, Framework 4.7.2 effettivo, UAC multiutente, DPI reali, destinazioni Windows e manutenzione modificante. Nessuna prova modificante reale durante l'audit; gli esiti CI remoti del salvataggio sono consultabili in [GitHub Actions](https://github.com/dennidalpos/OnlyTweak/actions).
+
+Riferimenti verificati: Microsoft documenta [SecurityServicesRunning e i valori HVCI/stack kernel](https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity#use-win32_deviceguard-wmi-class), disponibili solo sulle versioni pertinenti; [SpecialFolder.Windows e System nel Framework 4.7.2](https://learn.microsoft.com/en-us/dotnet/api/system.environment.specialfolder?view=netframework-4.7.2) distinguono le directory usate dal controllo dei componenti. La documentazione non sostituisce le prove in VM sulle versioni target.
+
+### Storico verifiche del 19 ottobre 2026
 
 Compilazione senza avvisi con il compilatore Windows .NET Framework **14.8.10001.0**, compatibile C# 5. Ambiente reale: **Windows 11 26H2, build 26300.9711 x64**. Lettura riuscita delle cinque stampanti installate, identificazione della predefinita, stato spooler, preflight della cartella standard e diagnostica rete.
 

@@ -1,5 +1,13 @@
 # Revisione UI/UX — 1.2.0
 
+## Stato attuale e audit — 24 ottobre 2026
+
+L'app attuale offre sette aree desktop e protezioni esclusivamente di lettura, con accesso alle pagine Windows. Account riguarda gli utenti e i collegamenti del PC. Le sezioni datate sotto conservano lo storico: i riferimenti a scritture/ripristino delle protezioni, portale account o chiusura online descrivono funzionalità rimosse il 19 ottobre, non comandi disponibili.
+
+Corretto il filtro di disponibilità del riavvio Esplora risorse: `explorer.exe` viene cercato nella cartella Windows. Il comando resta subordinato a conferma e account della shell coincidente. Nelle protezioni le letture CIM incomplete/null e gli errori finali non diventano protezioni inattive né conservano evidenze di esecuzione precedenti; le schede restano neutre con stato sconosciuto.
+
+Build riuscita, suite completa **73/0**, comando CI locale **51/0**; rapporti `artifacts/audit-2026-10-24-full.log` e `artifacts/audit-2026-10-24-ci.log`. Ispezionati home Windows 10 1809, Esplora file Windows 11 e protezioni al 100%, home al 150% e protezioni scorse fino all'ultima scheda al 200%. Nessuna sovrapposizione rilevata nei campioni; i render scalano i controlli, non certificano caratteri o DPI reali. Smartphone e tablet non sono target del progetto; le prove fisiche/UI interattive restano `OT-VM-02`.
+
 ## Contrasto e banco UI — 19 ottobre 2026
 
 - Bordi `#758AA3` (prima `#2E3E50`); cursori scrollbar `#6F849D` (prima `#475D74`). Sfondi, testo e accento restano invariati. Il focus interno dei pulsanti pieni verdi usa il colore scuro dello sfondo per restare distinguibile dal riempimento.

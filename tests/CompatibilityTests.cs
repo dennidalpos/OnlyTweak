@@ -53,6 +53,16 @@ namespace OnlyTweakWindows
                 Assert(app.Catalog.Tools.AllActions().Count()==11,"Strumenti richiesti rimossi.");
                 Assert(app.Catalog.Tools.Actions.Single(a=>a.Id=="tools.apps").Title=="App e funzionalità","Etichetta Windows 10 errata.");
             });
+            Test("catalogo: rileva Explorer nella cartella Windows",delegate {
+                ProcessService process=new ProcessService();
+                string explorer=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),"explorer.exe");
+                Assert(process.SystemFile("explorer.exe")==explorer,"Explorer cercato fuori dalla cartella Windows.");
+                Assert(process.SystemFile("sfc.exe")==Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"sfc.exe"),"Percorso degli strumenti di sistema alterato.");
+                AppServices app=new AppServices(new FakeSecurityBackend(),TestProfile(),null);
+                Assert(app.Catalog.ExplorerRestart.Applicable==File.Exists(explorer),"Riavvio shell nascosto malgrado Explorer disponibile.");
+                FeatureAvailability absent=new FeatureAvailability(TestProfile(),name=>name!="explorer.exe",target=>true);
+                Assert(!TestApp(availability:absent).Catalog.ExplorerRestart.Applicable,"Explorer assente presentato come disponibile.");
+            });
             Test("destinazioni: pagina padre su Windows 10 e alternativa senza gestore sicurezza",delegate {
                 FeatureAvailability win10=new FeatureAvailability(TestProfile(17763),name=>true,target=>true);
                 Assert(win10.ResolveTarget("windowsdefender://smartscreenpua/")=="windowsdefender://appbrowser/","Deep link moderno usato su 1809.");

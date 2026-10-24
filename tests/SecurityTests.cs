@@ -53,6 +53,33 @@ namespace OnlyTweakWindows
                 SecurityEnvironment parsed=WindowsSecurityBackend.ParseProbe("DG=1\nHR=0\nKR=0\nPua=2\nActive=0",new SecurityEnvironment());
                 Assert(parsed.DefenderKnown && !parsed.DefenderActive && parsed.Pua==2 && parsed.DeviceGuardKnown,"Output valido perso.");
             });
+            Test("protezioni: Device Guard incompleto o fallito resta sconosciuto",delegate {
+                SecurityService service=new SecurityService(new FakeSecurityBackend());
+                foreach (string output in new[] { "DG=1", "DG=1\nHR=0", "DG=1\nKR=0", "DG=1\nHR=0\nKR=9", "DG=1\nHR=1\nKR=1\nDG=Unknown" }) {
+                    SecurityEnvironment parsed=WindowsSecurityBackend.ParseProbe(output,new SecurityEnvironment());
+                    foreach (string id in new[] { "hvci","kernel" })
+                        Assert(service.Read(Definition(service,id),parsed).Protection==ProtectionState.Unknown,"Lettura parziale presentata come runtime: "+output);
+                    Assert(!service.Read(Definition(service,"drivers"),parsed).Effective.Contains("imposta da HVCI"),"HVCI non verificato impone la blocklist.");
+                }
+                SecurityEnvironment valid=WindowsSecurityBackend.ParseProbe("DG=1\nHR=0\nKR=1",new SecurityEnvironment());
+                Assert(valid.DeviceGuardKnown && !valid.HvciRunning && valid.KernelRunning,"Lettura completa persa.");
+            });
+            Test("protezioni: errore finale e rilettura non conservano stati precedenti",delegate {
+                SecurityEnvironment parsed=WindowsSecurityBackend.ParseProbe("DG=1\nHR=1\nKR=1\nPua=1\nActive=1\nPua=Unknown",new SecurityEnvironment());
+                Assert(!parsed.DefenderKnown,"Errore finale Defender ignorato.");
+                WindowsSecurityBackend.ParseProbe("DG=Unknown\nPua=Unknown",parsed);
+                Assert(!parsed.DeviceGuardKnown && !parsed.HvciRunning && !parsed.KernelRunning && !parsed.DefenderKnown,"Stato di una lettura precedente conservato.");
+            });
+            Test("protezioni: query CIM nulla o senza proprieta non inventa runtime",delegate {
+                foreach (string value in new[] { "$null", "[pscustomobject]@{}", "[pscustomobject]@{ SecurityServicesRunning=@() }", "[pscustomobject]@{ SecurityServicesRunning=@(2,5) }" }) {
+                    string output=WindowsSecurityBackend.PowerShell("function Get-CimInstance { "+value+" }; function Get-MpPreference { throw 'Defender simulato non disponibile' }; "+WindowsSecurityBackend.ProbeCommand);
+                    SecurityEnvironment parsed=WindowsSecurityBackend.ParseProbe(output,new SecurityEnvironment());
+                    bool known=value.Contains("SecurityServicesRunning");
+                    Assert(parsed.DeviceGuardKnown==known,"Proprieta CIM assente o vuota interpretata erroneamente: "+value);
+                    Assert(parsed.HvciRunning==value.Contains("2,5") && parsed.KernelRunning==value.Contains("2,5"),"Runtime errato: "+value);
+                    Assert(!parsed.DefenderKnown,"Errore Defender ignorato.");
+                }
+            });
             Test("protezioni: blocklist configurata distinta da HVCI",delegate {
                 FakeSecurityBackend backend=new FakeSecurityBackend(); backend.Store.Set(SecurityService.CiConfig,"VulnerableDriverBlocklistEnable",0,RegistryValueKind.DWord);
                 SecurityService service=new SecurityService(backend);

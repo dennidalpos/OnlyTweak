@@ -20,7 +20,10 @@ namespace OnlyTweakWindows
         public ProcessService() : this(ShellService.LaunchInteractiveTarget) { }
         internal ProcessService(Action<string> launch) { interactive=launch; }
         public string SystemFile(string name)
-        { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), name); }
+        {
+            // Explorer lives in %WINDIR%, unlike the tools in System32.
+            return Path.Combine(Environment.GetFolderPath(name=="explorer.exe" ? Environment.SpecialFolder.Windows : Environment.SpecialFolder.System),name);
+        }
         public string FileUnavailable(string name)
         { return File.Exists(SystemFile(name)) ? null : "Componente Windows non disponibile: " + name; }
         public void Run(string name, string arguments, Action<string> log, bool unicode)

@@ -1,0 +1,209 @@
+{
+  "todo_autonomous": [
+    {
+      "id": "OT-AUDIT-08",
+      "title": "Defender: conservare lo stato sconosciuto per AMRunningMode vuoto o non riconosciuto",
+      "priority": "P2",
+      "status": "open_confirmed",
+      "problem": "La query converte ogni AMRunningMode non nullo diverso da Normal in Active=0. Stringa vuota e valore non riconosciuto diventano una protezione PUA inattiva confermata.",
+      "evidence": [
+        "src/WindowsSecurityBackend.cs:29-32; src/SecurityService.cs:88-91.",
+        "Riproduzione nella copia isolata con il ProbeCommand corrente e funzioni Windows PowerShell simulate: PUAProtection=1, AMRunningMode='' oppure 'UnexpectedMode' -> DefenderKnown=True, Protection=Inactive. Controllo Normal -> Active; Passive -> Inactive.",
+        "tests/SecurityTests.cs copre campi assenti e parser, ma non il comando effettivo con AMRunningMode vuoto/non riconosciuto.",
+        "Fonte primaria sui modi noti Windows 10/11: https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-antivirus-windows . Non prova quali valori emetta ogni provider/versione."
+      ],
+      "impact": "Falso avviso di protezione inattiva in presenza di dati incompleti o di un modo sconosciuto; nessuna modifica di sistema osservata.",
+      "scope": [
+        "src/WindowsSecurityBackend.cs",
+        "tests/SecurityTests.cs"
+      ],
+      "dependencies": [],
+      "completion_criteria": [
+        "Aggiungere regressioni sul comando effettivo con AMRunningMode null, vuoto, spazi, non riconosciuto e modi documentati.",
+        "Usare soltanto evidenze valide per distinguere attivo, non attivo e sconosciuto; preservare il fallback documentato per i provider meno recenti.",
+        "Build e suite obbligatorie superate; nessuna scrittura alle protezioni."
+      ]
+    },
+    {
+      "id": "OT-AUDIT-09",
+      "title": "Isolare il fallimento della lettura SMode dalle altre protezioni",
+      "priority": "P2",
+      "status": "open_confirmed",
+      "problem": "La lettura di SkuPolicyRequired avviene fuori dal blocco di gestione errori; un accesso negato interrompe Probe prima di CIM/Defender e la UI marca tutte le schede come fallite.",
+      "evidence": [
+        "src/WindowsSecurityBackend.cs:35-45: registry.Read(SkuPolicyRequired) precede il try.",
+        "src/SecurityDialog.cs:45-58: l'eccezione di Probe salta le letture per scheda e ShowFailure viene chiamato su tutti i pannelli.",
+        "Probe isolato sul codice corrente, con IRegistryReader simulato che nega soltanto SkuPolicyRequired: 'SKU-READ propagates UnauthorizedAccessException before CIM/Defender'. Iniezione via reflection nella fixture, senza toccare registro reale o sorgenti applicativi.",
+        "Il test UI FailRead esistente fa fallire tutte le letture del fake; non copre il guasto selettivo del probe SMode."
+      ],
+      "impact": "Perdita di diagnostica indipendente ancora disponibile e mancato isolamento degli errori tra protezioni. Scenario confermato con errore simulato, non osservato sulle ACL della postazione.",
+      "scope": [
+        "src/WindowsSecurityBackend.cs",
+        "src/SecurityDialog.cs",
+        "tests/SecurityTests.cs"
+      ],
+      "dependencies": [],
+      "completion_criteria": [
+        "Un errore selettivo SMode lascia leggibili CIM, Defender e le configurazioni indipendenti.",
+        "Lo stato SMode non letto non viene trasformato in un'affermazione positiva/negativa non provata.",
+        "Regressione selettiva backend/UI e suite obbligatorie superate."
+      ]
+    },
+    {
+      "id": "OT-AUDIT-10",
+      "title": "Applicare il limite dell'output anche al blocco in ingresso",
+      "priority": "P2",
+      "status": "open_confirmed",
+      "problem": "FlushOutput taglia soltanto il testo già presente prima di appendere tutto il nuovo blocco; Enqueue limita il numero di righe, non i caratteri. Una singola riga o un batch lungo supera la soglia di 200000 caratteri.",
+      "evidence": [
+        "src/OperationDialog.cs:103-118: pending.Count>=4000 e append successivo al solo taglio dell'output preesistente.",
+        "README.md, Rete e manutenzione: testo mostrato dichiarato limitato in memoria.",
+        "Operazione interamente simulata con log(new string('x',300000)): DarkOutput.TextLength=300077 a operazione conclusa. Nessun processo di manutenzione lanciato.",
+        "tests/Tests.cs:399-416 verifica scrollbar/output lungo, non il limite della memoria o la dimensione del nuovo batch."
+      ],
+      "impact": "Consumo di memoria e costo di ridisegno superiori al limite previsto; non sono stati misurati esaurimento memoria o blocchi durante strumenti Windows reali.",
+      "scope": [
+        "src/OperationDialog.cs",
+        "tests/Tests.cs"
+      ],
+      "dependencies": [],
+      "completion_criteria": [
+        "Applicare un budget esplicito in caratteri all'output finale e ai dati pendenti, includendo singola riga e batch oltre soglia.",
+        "Conservare un riepilogo utile e segnalare il taglio senza perdere l'esito dell'operazione.",
+        "Regressioni con righe/batch sopra 200000 caratteri, coda piena e suite obbligatorie superate."
+      ]
+    },
+    {
+      "id": "OT-AUDIT-11",
+      "title": "Rimuovere le chiavi vuote create dalla sessione dopo ripristini di tweak condivisi",
+      "priority": "P3",
+      "status": "open_confirmed",
+      "problem": "MissingKeys viene registrato separatamente per tweak: il secondo tweak considera preesistente la chiave appena creata dal primo. Ripristinando prima il primo e poi il secondo, i valori sono rimossi ma la chiave creata dalla sessione rimane vuota.",
+      "evidence": [
+        "src/RegistryTweaks.cs:115-126 e 159-176; tre tweak condividono ExplorerPath.",
+        "FakeRegistry inizialmente con la sola chiave genitore Explorer: Apply extensions, Apply hidden, Restore extensions, Restore hidden -> Advanced.KeyExists=True, HideFileExt.ValueExists=False, Hidden.ValueExists=False.",
+        "I test di rimozione chiavi esistenti esercitano un solo tweak; non coprono la condivisione delle chiavi e l'ordine dei ripristini."
+      ],
+      "impact": "Residuo di registro vuoto dopo un ripristino annunciato come concluso; nella riproduzione nessuna perdita di valori o dati estranei.",
+      "scope": [
+        "src/RegistryTweaks.cs",
+        "tests/Tests.cs"
+      ],
+      "dependencies": [],
+      "completion_criteria": [
+        "Verificare più tweak sulla stessa chiave inizialmente assente e ripristini in entrambi gli ordini.",
+        "Rimuovere solo chiavi vuote create dall'app nella sessione, preservando chiavi inizialmente vuote e dati/chiavi estranei aggiunti in seguito.",
+        "Regressioni con fake e suite obbligatorie superate; nessuna prova modificante sulla postazione."
+      ]
+    }
+  ],
+  "todo_user_required": [
+    {
+      "id": "OT-VM-01",
+      "title": "Portabilità e contesto utente sui sistemi target",
+      "priority": "P1",
+      "status": "verification_required_waiting_vm",
+      "problem": "Compatibilità dichiarata e contesto utente non ancora convalidati su installazioni pulite delle versioni supportate.",
+      "evidence": [
+        "Task già aperto nel tracker SecondBrain, ID e perimetro conservati; nessuna nuova attività duplicata.",
+        "build.cmd compila con il Framework installato; TargetFrameworkAttribute dichiara 4.7.2 ma non certifica le API del runtime minimo.",
+        "In questo audit build in fixture riuscita, suite completa 73/0 e comando CI 51/0 sulla postazione Windows 11; test dei profili OS simulati.",
+        "Reference assembly 4.7.2 assenti già verificati nel turno precedente; nessuna VM fornita/usata in questo audit."
+      ],
+      "impact": "Portabilità minima e attribuzione delle azioni in UAC multiutente non certificabili dai test locali; gate prima di una consegna dichiarata validata su tutti i target.",
+      "scope": [
+        "Solo EXE su Windows 10 1809/LTSC 2019, 22H2, LTSC 2021 e Windows 11 x64 puliti",
+        "Edizioni Home/Pro; filtri OS/edizione; icone shell/taskbar",
+        "UAC con account coincidente/altro amministratore, pagine account, viste classiche e reindirizzamenti 24H2/25H2"
+      ],
+      "dependencies": [
+        "Ambienti VM x64 ripristinabili indicati dall'utente, con immagini e account campione; Framework 4.7.2 stock sulla 1809"
+      ],
+      "completion_criteria": [
+        "Registrare build/edizione/runtime e risultati della matrice target, con EXE autonomo senza installazioni aggiuntive.",
+        "Verificare account effettivo HKCU/stampa e token desktop per pagine personali, più i rifiuti previsti.",
+        "Salvare evidenze dei risultati e degli eventuali difetti prima di chiudere il task."
+      ]
+    },
+    {
+      "id": "OT-VM-02",
+      "title": "UI interattiva e DPI reali",
+      "priority": "P2",
+      "status": "verification_required_waiting_vm",
+      "problem": "Render scalati e test di layout non provano DPI reali, cambio monitor, comportamento effettivo dei tooltip e resa delle icone.",
+      "evidence": [
+        "Task preesistente conservato; OT-AUDIT-06 ha corretto il fotogramma icona, ma le prove fisiche restano aperte.",
+        "tests/Tests.cs usa form.Scale per 100/150/200%, non cambio DPI reale.",
+        "Audit attuale: suite UI verde e probe delle finestre principali alla dimensione minima senza pulsanti oltre il contenitore; nessuna prova fisica multi-monitor."
+      ],
+      "impact": "Possibili difetti di leggibilità, clipping, focus o tooltip sui target ancora non esclusi; nessun nuovo difetto DPI affermato.",
+      "scope": [
+        "DPI 100/150/200%, cambio monitor",
+        "Icona Info, tooltip mouse/tastiera e chiusura alla perdita reale del primo piano",
+        "Focus e icone titolo/taskbar"
+      ],
+      "dependencies": [
+        "Desktop di prova e monitor/ambiente capace di cambiare realmente DPI; accesso interattivo"
+      ],
+      "completion_criteria": [
+        "Documentare la matrice DPI reale con screenshot e navigazione tastiera, distinguendo scala simulata e DPI effettivo.",
+        "Verificare visibilità e raggiungibilità dei comandi, chiusura tooltip, focus e icone.",
+        "Aprire solo difetti riprodotti e chiudere il task quando la matrice prevista è completa."
+      ]
+    },
+    {
+      "id": "OT-VM-03",
+      "title": "Stampa e manutenzione reali in ambiente sacrificabile",
+      "priority": "P2",
+      "status": "verification_required_waiting_vm",
+      "problem": "Le garanzie delle operazioni modificanti e dei dialoghi di stampa sono provate con fake, non con interventi reali sui sistemi target.",
+      "evidence": [
+        "Task preesistente conservato: nessun reset, SFC/DISM modificante, pulizia spooler o riavvio shell reale eseguito sulla postazione.",
+        "Suite corrente: fake per file SPL/SHD, percorsi vietati, reparse, stop/avvio falliti, ripristino registro e conferme; letture reali riuscite.",
+        "Il nuovo controllo disponibilità Explorer è corretto e verificato localmente; non equivale alla prova di riavvio shell."
+      ],
+      "impact": "Non verificati effetti, recupero e messaggi nelle condizioni reali di guasto; non è un bug applicativo già dimostrato.",
+      "scope": [
+        "Driver/dialoghi, stampante offline, spooler fermo/disabilitato e lavori campione",
+        "Pulizia SPL/SHD standard, divieto percorsi personalizzati/ricorsione",
+        "Riavvio shell, reset Winsock/TCP-IP, SFC /scannow e DISM /RestoreHealth"
+      ],
+      "dependencies": [
+        "VM sacrificabile con snapshot e dati/coda campione; collegamento e credenziali di prova",
+        "OT-VM-01 per avvio e attribuzione utente sulla relativa immagine"
+      ],
+      "completion_criteria": [
+        "Salvare stato prima/dopo e verificare recupero tramite snapshot.",
+        "Provare scenari di successo/errore e controllare che non siano rimossi stampanti, driver o file fuori perimetro.",
+        "Verificare conferme, account/token shell, riavvii manuali e messaggi di operazione parziale senza prove sulla postazione."
+      ]
+    },
+    {
+      "id": "OT-VM-04",
+      "title": "Letture e destinazioni delle protezioni reali",
+      "priority": "P2",
+      "status": "verification_required_waiting_vm",
+      "problem": "Disponibilità delle letture e destinazioni Windows non ancora verificata con Defender assente/passivo, policy e hardware diversi sui target.",
+      "evidence": [
+        "Task preesistente conservato; la presenza di un gestore URI non certifica la pagina effettiva.",
+        "Suite corrente conferma API di sola lettura, filtri OS e fallback con fake; smoke test reale riuscito solo sul sistema locale.",
+        "OT-AUDIT-08/09 sono difetti confermati separati; questa voce resta una verifica ambientale, non una duplicazione delle correzioni."
+      ],
+      "impact": "Possibili letture sconosciute, differenze dei provider e reindirizzamenti ancora da caratterizzare; nessuna scrittura alle protezioni autorizzata.",
+      "scope": [
+        "Windows 10/11 target, hardware compatibile/non compatibile",
+        "Defender attivo/inattivo/assente o passivo, criteri gestiti",
+        "Deep link windowsdefender e fallback ms-settings, configurazione distinta da runtime"
+      ],
+      "dependencies": [
+        "VM/ambienti di prova indicati dall'utente con gli scenari richiesti",
+        "OT-AUDIT-08 e OT-AUDIT-09 prima della validazione definitiva dei casi di errore"
+      ],
+      "completion_criteria": [
+        "Confrontare le letture con le evidenze native Windows e registrare build/provider/policy.",
+        "Provare le destinazioni effettive e i fallback, preservando sempre lo stato sconosciuto quando manca evidenza.",
+        "Nessun comando di modifica/ripristino protezioni; chiusura solo dopo matrice documentata."
+      ]
+    }
+  ]
+}

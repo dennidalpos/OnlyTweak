@@ -23,6 +23,13 @@ namespace OnlyTweakWindows
     }
     internal sealed class WindowsSecurityBackend : ISecurityBackend
     {
+        internal const string ProbeCommand="try { $d=Get-CimInstance -Namespace root\\Microsoft\\Windows\\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction Stop;"+
+            "if ($null -eq $d.SecurityServicesRunning) { 'DG=Unknown' } else { 'DG=1';"+
+            "'HR='+[int]($d.SecurityServicesRunning -contains 2); 'KR='+[int]($d.SecurityServicesRunning -contains 5) } } catch { 'DG=Unknown' };"+
+            "try { $p=Get-MpPreference -ErrorAction Stop; $s=Get-MpComputerStatus -ErrorAction Stop;"+
+            "if ($null -ne $p.PUAProtection) { 'Pua='+[int]$p.PUAProtection };"+
+            "if ($null -ne $s.AMRunningMode) { 'Active='+[int]($s.AMRunningMode -eq 'Normal') }"+
+            "elseif ($null -ne $s.AMServiceEnabled -and $null -ne $s.AntivirusEnabled) { 'Active='+[int]($s.AMServiceEnabled -and $s.AntivirusEnabled) } } catch { 'Pua=Unknown' }";
         private readonly IRegistryReader registry=new MachineRegistryStore();
         public IRegistryReader Registry { get { return registry; } }
         public SecurityEnvironment Probe()
@@ -33,36 +40,38 @@ namespace OnlyTweakWindows
             string output;
             try
             {
-                output=PowerShell("try { $d=Get-CimInstance -Namespace root\\Microsoft\\Windows\\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction Stop; 'DG=1';"+
-                    "'HR='+[int]($d.SecurityServicesRunning -contains 2); 'KR='+[int]($d.SecurityServicesRunning -contains 5) } catch { 'DG=Unknown' };"+
-                    "try { $p=Get-MpPreference -ErrorAction Stop; $s=Get-MpComputerStatus -ErrorAction Stop;"+
-                    "if ($null -ne $p.PUAProtection) { 'Pua='+[int]$p.PUAProtection };"+
-                    "if ($null -ne $s.AMRunningMode) { 'Active='+[int]($s.AMRunningMode -eq 'Normal') }"+
-                    "elseif ($null -ne $s.AMServiceEnabled -and $null -ne $s.AntivirusEnabled) { 'Active='+[int]($s.AMServiceEnabled -and $s.AntivirusEnabled) } } catch { 'Pua=Unknown' }");
+                output=PowerShell(ProbeCommand);
             }
             catch (Exception) { return result; }
             return ParseProbe(output,result);
         }
         internal static SecurityEnvironment ParseProbe(string output,SecurityEnvironment result)
         {
-            bool puaKnown=false,activeKnown=false;
+            bool dgKnown=false,hvciKnown=false,kernelKnown=false,puaKnown=false,activeKnown=false;
+            result.DeviceGuardKnown=result.HvciRunning=result.KernelRunning=result.DefenderKnown=result.DefenderActive=false;
+            result.Pua=-1;
             foreach (string line in output.Split(new[] {'\r','\n'},StringSplitOptions.RemoveEmptyEntries))
             {
-                string[] pair=line.Split('='); int number; if (pair.Length!=2 || !Int32.TryParse(pair[1],out number)) continue;
+                string[] pair=line.Split('='); int number; if (pair.Length!=2) continue;
+                bool numeric=Int32.TryParse(pair[1],out number),binary=numeric && (number==0 || number==1);
                 switch (pair[0])
                 {
-                    case "DG": result.DeviceGuardKnown=number==1; break;
-                    case "HR": result.HvciRunning=number==1; break;
-                    case "KR": result.KernelRunning=number==1; break;
-                    case "Pua": puaKnown=number>=0 && number<=2; result.Pua=number; break;
-                    case "Active": activeKnown=number==0 || number==1; result.DefenderActive=number==1; break;
+                    case "DG": dgKnown=binary && number==1; break;
+                    case "HR": hvciKnown=binary; result.HvciRunning=binary && number==1; break;
+                    case "KR": kernelKnown=binary; result.KernelRunning=binary && number==1; break;
+                    case "Pua": puaKnown=numeric && number>=0 && number<=2; result.Pua=puaKnown ? number : -1; break;
+                    case "Active": activeKnown=binary; result.DefenderActive=binary && number==1; break;
                 }
             }
+            // Both runtime flags come from the same CIM property; incomplete reads prove neither state.
+            result.DeviceGuardKnown=dgKnown && hvciKnown && kernelKnown;
+            result.HvciRunning=result.DeviceGuardKnown && result.HvciRunning;
+            result.KernelRunning=result.DeviceGuardKnown && result.KernelRunning;
             result.DefenderKnown=puaKnown && activeKnown;
             return result;
         }
         // Fixed commands only; no downloaded scripts, ExecutionPolicy changes or PowerShell 7.
-        private static string PowerShell(string command)
+        internal static string PowerShell(string command)
         {
             string file=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),@"WindowsPowerShell\v1.0\powershell.exe");
             string script="[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding; "+command;
