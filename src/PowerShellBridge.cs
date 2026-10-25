@@ -80,13 +80,13 @@ namespace OnlyTweakWindows
                     }
                     await Task.WhenAll(output,error).ConfigureAwait(false);
                     result.Truncated=stdout.Truncated || stderr.Truncated;
-                    if (stdout.Truncated) {
+                    if (result.Truncated) {
                         result.State=action.IsChange ? StepState.Unverified : StepState.Inconclusive;
                         result.Summary="Risultato oltre il budget: impossibile certificare l'esito.";
                         result.ErrorCode="OutputBudgetExceeded";
                     } else {
                         try {
-                            StepResult parsed=Wire.Read<StepResult>(stdout.Read(false).Trim());
+                            StepResult parsed=OperationResultContract.Read(stdout.Read(false).Trim(),request);
                             result.State=parsed.State; result.Summary=parsed.Summary; result.Evidence=parsed.Evidence??Array.Empty<string>();
                             result.Data=parsed.Data; result.AuthenticationVerified=parsed.AuthenticationVerified;
                             result.ErrorCode=parsed.ErrorCode;

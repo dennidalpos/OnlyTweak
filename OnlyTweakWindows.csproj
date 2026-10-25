@@ -28,4 +28,13 @@
     <EmbeddedResource Include="scripts/enterprise/*.ps*" LogicalName="OnlyTweak.%(Filename)%(Extension)" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
   </ItemGroup>
+  <Target Name="OnlyTweakBuildEvidence" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveReferences">
+    <PropertyGroup>
+      <OnlyTweakEvidencePath>$(IntermediateOutputPath)OnlyTweak.BuildEvidence.json</OnlyTweakEvidencePath>
+    </PropertyGroup>
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildProjectDirectory)/scripts/write-build-evidence.ps1&quot; -AssetsPath &quot;$(ProjectAssetsFile)&quot; -OutputPath &quot;$(OnlyTweakEvidencePath)&quot; -RuntimePackList &quot;@(RuntimePackAsset-&gt;'%(NuGetPackageId)@%(NuGetPackageVersion)'-&gt;Distinct(), ';')&quot; -TargetFramework &quot;$(TargetFramework)&quot; -RuntimeIdentifier &quot;$(RuntimeIdentifier)&quot; -SelfContained &quot;$(SelfContained)&quot;" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(OnlyTweakEvidencePath)" LogicalName="OnlyTweak.BuildEvidence.json" />
+    </ItemGroup>
+  </Target>
 </Project>

@@ -26,6 +26,10 @@ L'annullamento chiude solo il processo diagnostico e i suoi figli. Le modifiche 
 
 JSON malformato, output troncato o codici nativi ambigui non diventano successi. La localizzazione dell'output non è usata come criterio generale di parsing.
 
+Il confine PowerShell valida presenza e tipo di stato, riepilogo, evidenze, autenticazione, codice errore e dati. Uno stato assente/sconosciuto, campi duplicati o dati essenziali mancanti per l'azione non producono Success; una ricerca o cache legittimamente vuota rimane valida. Questo contratto è distinto dalla costruzione dei risultati interni e dal trasporto IPC.
+
+`endpoint.verify` usa un risultato osservativo comune a WinRM e JEA: operazione, computer, ReadComplete, NativeExitCode, Output e Data. Le letture native richiedono un codice zero e output presente; errori o codice assente mantengono Inconclusive e il blocco retry. La lettura riuscita descrive lo stato osservato, senza certificare l'effetto di SFC/DISM/reset. Il modulo JEA aggiornato espone `Get-OnlyTweakEndpointEvidence -Kind verify -Operation <voce consentita>`; un modulo precedente che non supporta il contratto viene rifiutato, senza fallback ottimistico. Aggiornarlo tramite il canale amministrativo approvato prima della qualifica, senza Apply implicite dall'app.
+
 Profili e audit locali sono sotto LOCALAPPDATA/OnlyTweak, con ACL utente/SYSTEM. Audit prima e dopo le modifiche, senza dump della richiesta o segreti. L'audit locale non è immutabile né sostituisce i log centrali. I report sono volontari, con anteprima e HTML codificato, e contengono dati aziendali da conservare secondo policy.
 
 ## AD e replica
@@ -68,6 +72,8 @@ Per App Control/AllSigned firmare ps1/psm1 prima della build/esportazione. Le co
 
 Ripubblicare il bundle con le patch di .NET 10. Il lock NuGet registra dipendenze; l'inventario identifica runtime pack, dipendenze, hash e firma. L'audit advisory NuGet copre i pacchetti enumerati, senza provare assenza di vulnerabilità in Windows, codice o runtime.
 
+Build e consegna richiedono PowerShell 7.4+; il prodotto continua a usare Windows PowerShell 5.1 per le procedure Windows/RSAT. MSBuild incorpora prima della compilazione metadati sanitizzati: hash degli input, hash assets, pacchetti NuGet risolti e runtime pack selezionati da RuntimePackAsset. La ricevuta del publish associa tali evidenze all'hash dell'EXE. prepare-release.ps1 legge la modalità non modificante --release-inspect dell'EXE registrato, confronta risorse e sorgenti, controlla Authenticode sui byte incorporati e produce il manifest v2 dalla build effettiva. Non ricostruisce l'inventario usando assets eventualmente successivi; una divergenza blocca la consegna. La ricevuta locale non è una attestazione immutabile né sostituisce firma aziendale o qualifica App Control/AllSigned.
+
 Prima della consegna aziendale: firma script/EXE, App Control/AllSigned, avvio senza runtime installato, UAC multiutente, due domini senza trust, due DC nello stesso dominio, SYSVOL/DFSR, errori rete/deleghe, confronto con strumenti Microsoft e DPI fisici. Prove modificanti solo in VM ripristinabili. Gate nel tracker, distinti dalle fixture locali.
 
 ## Fonti primarie
@@ -82,3 +88,4 @@ Consultate il 24 ottobre 2026; la documentazione corrente non certifica ogni bui
 - [DFSR backlog](https://learn.microsoft.com/en-us/powershell/module/dfsr/get-dfsrbacklog), [stato DFSR](https://learn.microsoft.com/en-us/powershell/module/dfsr/get-dfsrstate), [namespace DFS](https://learn.microsoft.com/en-us/windows-server/storage/dfs-namespaces/dfs-overview).
 - [WinRM](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/winrm-security), [JEA](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/jea/session-configurations), [secondo salto](https://learn.microsoft.com/en-us/powershell/scripting/security/remoting/ps-remoting-second-hop).
 - [Defender](https://learn.microsoft.com/en-us/defender-endpoint/microsoft-defender-antivirus-windows), [setup-dotnet per CI](https://github.com/actions/setup-dotnet).
+- Contratti e consegna, rivalidati il 25 ottobre 2026: [campi JSON obbligatori](https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json/required-properties), [ordine target MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/target-build-order), [bundle single-file](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview), [firma dei byte con PowerShell 7.4+](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/get-authenticodesignature?view=powershell-7.5).

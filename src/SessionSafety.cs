@@ -21,8 +21,8 @@ namespace OnlyTweakWindows
         {
             if (EnterpriseCatalog.Get(request.ActionId).IsChange && result.State==StepState.Unverified)
                 uncertain.Add(Key(request));
-            if ((request.ActionId=="ad.userstate" || request.ActionId=="endpoint.verify") &&
-                result.State==StepState.Success && result.AuthenticationVerified) uncertain.Remove(Key(request));
+            if ((request.ActionId=="ad.userstate" || (request.ActionId=="endpoint.verify" && OperationResultContract.EndpointReadComplete(request,result))) &&
+                result.State==StepState.Success && result.AuthenticationVerified && !result.Truncated) uncertain.Remove(Key(request));
         }
     }
 }

@@ -168,7 +168,7 @@ namespace OnlyTweakWindows
         public bool AuthenticationVerified { get; set; }
         public DateTimeOffset Started { get; set; }
         public DateTimeOffset Finished { get; set; }
-        public StepState State { get; set; }
+        public StepState State { get; set; } = StepState.Inconclusive;
         public string Summary { get; set; } = "";
         public string[] Evidence { get; set; } = Array.Empty<string>();
         public JsonElement? Data { get; set; }

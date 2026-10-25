@@ -2,8 +2,39 @@
 Set-StrictMode -Version 2
 function Get-OnlyTweakEndpointEvidence {
     [CmdletBinding()]
-    param([ValidateSet('health','auth','gpo','sysvol','dns','spooler','winsock','network','sfc','dism')][string]$Kind='health')
+    param([ValidateSet('health','auth','gpo','sysvol','dns','spooler','winsock','network','sfc','dism','verify')][string]$Kind='health',
+        [ValidateSet('gpupdate','flushdns','spooler','securechannel','winsock','tcpip','sfc','dism')][string]$Operation)
     $ErrorActionPreference='Stop'
+    if ($Kind -eq 'verify') {
+        if (-not $Operation) { throw 'VerificationOperationRequired' }
+        $operationId='endpoint.'+$Operation
+        $machine=Get-CimInstance Win32_ComputerSystem
+        if ($null -eq $machine.DomainRole -or $machine.DomainRole -notin @(0,1,2,3)) { throw 'EndpointVerificationRequiresKnownMemberRole' }
+        $observed=$null; $output=''; $code=$null; $complete=$true
+        switch ($operationId) {
+            'endpoint.gpupdate' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\gpresult.exe" /scope computer /r 2>&1 | Out-String; $code=$LASTEXITCODE }
+            'endpoint.flushdns' { $observed=@(Get-DnsClientCache | Select-Object -First 100 Entry,Data,Status) }
+            'endpoint.spooler' { $observed=Get-Service Spooler | Select-Object Name,Status,StartType }
+            'endpoint.securechannel' {
+                if (-not $machine.PartOfDomain) { throw 'DomainMemberRequired' }
+                $observed=Test-ComputerSecureChannel -ErrorAction Stop
+            }
+            'endpoint.winsock' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\netsh.exe" winsock show catalog 2>&1 | Out-String; $code=$LASTEXITCODE }
+            'endpoint.tcpip' { $observed=@(Get-NetIPConfiguration | Select-Object InterfaceAlias,IPv4Address,IPv4DefaultGateway,DNSServer) }
+            'endpoint.sfc' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\sfc.exe" /verifyonly 2>&1 | Out-String; $code=$LASTEXITCODE }
+            'endpoint.dism' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\dism.exe" /Online /Cleanup-Image /CheckHealth /NoRestart 2>&1 | Out-String; $code=$LASTEXITCODE }
+            default { throw 'VerificationNotAllowed' }
+        }
+        if ($operationId -in @('endpoint.gpupdate','endpoint.winsock','endpoint.sfc','endpoint.dism')) {
+            $complete=($null -ne $code -and $code -eq 0 -and -not [string]::IsNullOrWhiteSpace($output))
+            $observed=$output
+        } elseif ($operationId -eq 'endpoint.spooler') {
+            $complete=($null -ne $observed -and -not [string]::IsNullOrWhiteSpace("$($observed.Status)"))
+        } elseif ($operationId -eq 'endpoint.securechannel') { $complete=($observed -is [bool]) }
+        [pscustomobject]@{ Operation=$operationId; Computer=$env:COMPUTERNAME; ReadComplete=[bool]$complete;
+            NativeExitCode=$code; Output=$output; Data=$observed }
+        return
+    }
     $computer=Get-CimInstance Win32_ComputerSystem
     switch ($Kind) {
         'dns' { Get-DnsClientCache | Select-Object -First 100 Entry,Data,Status }

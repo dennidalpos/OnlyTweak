@@ -19,6 +19,7 @@ namespace OnlyTweakWindows
         [STAThread]
         private static void Main(string[] args)
         {
+            if (ReleaseInspection.TryRun(args)) return;
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);

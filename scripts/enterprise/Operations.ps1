@@ -51,14 +51,14 @@ function Endpoint([scriptblock]$command, [object[]]$arguments = @()) {
             'domain.sysvol' { { Get-OnlyTweakEndpointEvidence -Kind 'sysvol' } }
             'endpoint.verify' {
                 switch ($r.Parameters.operation) {
-                    'endpoint.gpupdate' { { Get-OnlyTweakEndpointEvidence -Kind 'gpo' } }
-                    'endpoint.flushdns' { { Get-OnlyTweakEndpointEvidence -Kind 'dns' } }
-                    'endpoint.spooler' { { Get-OnlyTweakEndpointEvidence -Kind 'spooler' } }
-                    'endpoint.securechannel' { { Get-OnlyTweakEndpointEvidence -Kind 'auth' } }
-                    'endpoint.winsock' { { Get-OnlyTweakEndpointEvidence -Kind 'winsock' } }
-                    'endpoint.tcpip' { { Get-OnlyTweakEndpointEvidence -Kind 'network' } }
-                    'endpoint.sfc' { { Get-OnlyTweakEndpointEvidence -Kind 'sfc' } }
-                    'endpoint.dism' { { Get-OnlyTweakEndpointEvidence -Kind 'dism' } }
+                    'endpoint.gpupdate' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'gpupdate' } }
+                    'endpoint.flushdns' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'flushdns' } }
+                    'endpoint.spooler' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'spooler' } }
+                    'endpoint.securechannel' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'securechannel' } }
+                    'endpoint.winsock' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'winsock' } }
+                    'endpoint.tcpip' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'tcpip' } }
+                    'endpoint.sfc' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'sfc' } }
+                    'endpoint.dism' { { Get-OnlyTweakEndpointEvidence -Kind 'verify' -Operation 'dism' } }
                 }
             }
             'endpoint.gpupdate' { { Invoke-OnlyTweakEndpointChange -Kind 'gpupdate' } }
@@ -276,19 +276,36 @@ try {
         'endpoint.verify' {
             $data=Endpoint {
                 param($operation)
-                if ((Get-CimInstance Win32_ComputerSystem).DomainRole -ge 4) { throw 'EndpointChangesForbiddenOnDomainController' }
+                $machine=Get-CimInstance Win32_ComputerSystem
+                if ($null -eq $machine.DomainRole -or $machine.DomainRole -notin @(0,1,2,3)) { throw 'EndpointVerificationRequiresKnownMemberRole' }
+                $observed=$null; $output=''; $code=$null; $complete=$true
                 switch ($operation) {
-                    'endpoint.gpupdate' { & "$env:windir\System32\gpresult.exe" /scope computer /r }
-                    'endpoint.flushdns' { Get-DnsClientCache | Select-Object -First 100 Entry,Data,Status }
-                    'endpoint.spooler' { Get-Service Spooler | Select-Object Name,Status,StartType }
-                    'endpoint.securechannel' { Test-ComputerSecureChannel }
-                    'endpoint.winsock' { & "$env:windir\System32\netsh.exe" winsock show catalog }
-                    'endpoint.tcpip' { Get-NetIPConfiguration | Select-Object InterfaceAlias,IPv4Address,IPv4DefaultGateway,DNSServer }
-                    'endpoint.sfc' { & "$env:windir\System32\sfc.exe" /verifyonly }
-                    'endpoint.dism' { & "$env:windir\System32\dism.exe" /Online /Cleanup-Image /CheckHealth /NoRestart }
+                    'endpoint.gpupdate' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\gpresult.exe" /scope computer /r 2>&1 | Out-String; $code=$LASTEXITCODE }
+                    'endpoint.flushdns' { $observed=@(Get-DnsClientCache | Select-Object -First 100 Entry,Data,Status) }
+                    'endpoint.spooler' { $observed=Get-Service Spooler | Select-Object Name,Status,StartType }
+                    'endpoint.securechannel' {
+                        if (-not $machine.PartOfDomain) { throw 'DomainMemberRequired' }
+                        $observed=Test-ComputerSecureChannel -ErrorAction Stop
+                    }
+                    'endpoint.winsock' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\netsh.exe" winsock show catalog 2>&1 | Out-String; $code=$LASTEXITCODE }
+                    'endpoint.tcpip' { $observed=@(Get-NetIPConfiguration | Select-Object InterfaceAlias,IPv4Address,IPv4DefaultGateway,DNSServer) }
+                    'endpoint.sfc' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\sfc.exe" /verifyonly 2>&1 | Out-String; $code=$LASTEXITCODE }
+                    'endpoint.dism' { $global:LASTEXITCODE=$null; $output=& "$env:windir\System32\dism.exe" /Online /Cleanup-Image /CheckHealth /NoRestart 2>&1 | Out-String; $code=$LASTEXITCODE }
                     default { throw 'VerificationNotAllowed' }
                 }
+                if ($operation -in @('endpoint.gpupdate','endpoint.winsock','endpoint.sfc','endpoint.dism')) {
+                    $complete=($null -ne $code -and $code -eq 0 -and -not [string]::IsNullOrWhiteSpace($output))
+                    $observed=$output
+                } elseif ($operation -eq 'endpoint.spooler') {
+                    $complete=($null -ne $observed -and -not [string]::IsNullOrWhiteSpace("$($observed.Status)"))
+                } elseif ($operation -eq 'endpoint.securechannel') { $complete=($observed -is [bool]) }
+                [pscustomobject]@{ Operation=$operation; Computer=$env:COMPUTERNAME; ReadComplete=[bool]$complete;
+                    NativeExitCode=$code; Output=$output; Data=$observed }
             } @($r.Parameters.operation)
+            if ($null -eq $data -or $data.ReadComplete -ne $true -or $data.Operation -ne $r.Parameters.operation) {
+                $state='Inconclusive'; $errorCode='EndpointReadIncomplete'
+                $summary='Rilettura non completata: il retry resta bloccato. Consultare codice nativo ed evidenze.'
+            }
             Note 'Rilettura osservativa prima/dopo intervento: leggere il risultato nativo, non solo il completamento del comando.'
         }
         'endpoint.gpo' {

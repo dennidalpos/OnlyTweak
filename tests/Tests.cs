@@ -219,6 +219,7 @@ namespace OnlyTweakWindows
             Assert(System.Diagnostics.FileVersionInfo.GetVersionInfo(path).FileMajorPart==2,"Versione prodotto errata.");
             Assert(new FileInfo(path).Length>10000000,"Runtime autonomo non incorporato.");
             Assert(Directory.GetFiles(Path.GetDirectoryName(path)).Length==1,"La directory dist deve contenere soltanto l'EXE.");
+            ReleaseGateTests();
         }
         private static void PumpUntil(Func<bool> condition)
         {

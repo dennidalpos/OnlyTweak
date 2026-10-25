@@ -53,26 +53,28 @@ La riparazione del canale sicuro è soltanto locale, con UAC: avviare OnlyTweak 
 
 ## Build e verifiche
 
-Sviluppo: SDK .NET 10, Windows x64, accesso NuGet per la dipendenza esplicita Microsoft System.ServiceProcess.ServiceController. Runtime/librerie inclusi nell'EXE; PowerShell 7 non è un prerequisito dell'app.
+Sviluppo: SDK .NET 10, PowerShell 7.4 o successivo (`pwsh` in PATH), Windows x64, accesso NuGet per la dipendenza esplicita Microsoft System.ServiceProcess.ServiceController. Runtime/librerie inclusi nell'EXE; PowerShell 7 serve ai comandi di build/consegna e alle relative fixture, non all'app distribuita.
 
     build.cmd
     test.cmd --artifact --ui --read-only --render
 
-La build pubblica l'EXE autonomo in dist. Il banco di test .NET 10 usa fixture per dominio e modifiche; non contatta AD reali. Il flag --read-only aggiunge letture locali; --ui e --render richiedono desktop. Render in artifacts/ui: i campioni scalati non certificano DPI fisici. Render 1.x preesistenti sono storici.
+La build pubblica l'EXE autonomo in dist e registra una ricevuta con hash in artifacts/build-evidence/publish.json. I metadati compilati nell'EXE identificano sorgenti, script, assets e runtime pack effettivamente risolti. Il banco di test .NET 10 usa fixture per dominio e modifiche; non contatta AD reali. Il flag --read-only aggiunge letture locali; --ui e --render richiedono desktop. Render in artifacts/ui: i campioni scalati non certificano DPI fisici. Render 1.x preesistenti sono storici.
 
 CI su Windows Server con SDK .NET 10 e test.cmd --artifact --read-only. I push sul branch principale avviano il workflow; lo stato remoto è consultabile in [GitHub Actions](https://github.com/dennidalpos/OnlyTweak/actions). Non sostituisce laboratorio AD o Windows client puliti.
 
-Verifica locale 24 ottobre 2026: build autonoma riuscita, **83 test superati, 0 falliti** con suite completa. Rapporto artifacts/enterprise-full.log; build artifacts/enterprise-build.log. Audit advisory NuGet in artifacts/dependency-audit.json, senza vulnerabilità segnalate per i pacchetti enumerati: non certifica il sistema o l'applicazione.
+Verifica locale 25 ottobre 2026, lotto OT-AUDIT-12/13/17: build autonoma riuscita, **91 test superati, 0 falliti** con suite completa; comando CI locale **69/0**. Rapporti in artifacts/p1-2026-10-25 (p1-build.log, p1-full.log, p1-ci.log e p1-dependency-audit.json). Audit advisory NuGet senza vulnerabilità segnalate per i pacchetti enumerati: non certifica il sistema o l'applicazione. Le prove di rifiuto/consegna usano copie isolate e firme simulate; la qualifica con certificato e policy reali resta aperta.
 
 ## Consegna
 
     pwsh -NoProfile -File scripts/prepare-release.ps1
 
-Prepara copia locale e manifest con hash, dipendenze/runtime pack e stato Authenticode. Il flag -RequireSigned blocca una consegna senza firma valida; firma opzionale con certificato aziendale e percorso esplicito SignTool. Firmare ps1/psm1 prima della build perché le risorse incorporate conservino la firma. Le policy possono bloccare script non approvati: l'app lo segnala senza aggirarle.
+Prepara copia locale e manifest v2 con hash, pacchetti risolti alla compilazione (inclusi strumenti di build), runtime pack e stato Authenticode. Verifica ricevuta, sorgenti/assets correnti e byte degli script del bundle; EXE precedente, sorgente firmato dopo la build o assets cambiati richiedono una nuova build. `-RequireSigned` controlla le firme dell'EXE e degli script effettivamente incorporati, senza ricodificarli. Firma opzionale con certificato aziendale e percorso esplicito SignTool; usare questa procedura anche per aggiornare la ricevuta dopo la firma. Una firma esterna che cambia l'EXE invalida la vecchia ricevuta.
+
+Firmare ps1/psm1 **prima** di build.cmd. La modalità di sviluppo `OnlyTweakWindows.exe --release-inspect` restituisce su stdout soltanto metadati e risorse incorporate, senza UI, profili o operazioni sul sistema; non certifica la compatibilità dell'app su quel sistema. Le policy possono bloccare script non approvati: l'app lo segnala senza aggirarle.
 
 La build attuale è **non firmata**, destinata alla qualificazione in laboratorio. Documentazione tecnica e fonti Microsoft: [docs/ENTERPRISE.md](docs/ENTERPRISE.md). Storico UI: [docs/UI-UX.md](docs/UI-UX.md). Gate residui: [PROJECT_STATUS.json](PROJECT_STATUS.json).
 
 
 ## Ripresa nella prossima sessione
 
-La fonte delle attività rimane [PROJECT_STATUS.json](PROJECT_STATUS.json), con stati e storico conservati. Le correzioni OT-AUDIT-08/09/10 sono completate; OT-AUDIT-11 è superato per rimozione dei tweak. Restano aperti OT-VM-01..04 e i gate OT-ENT-LAB-01, OT-ENT-SIGN-01, OT-ENT-PILOT-01. Ripartire da host/VM e laboratorio AD; firma e pilota richiedono i prerequisiti indicati nel tracker. Il salvataggio Git dei sorgenti non equivale a una distribuzione o a validazione in produzione.
+La fonte delle attività aperte rimane [PROJECT_STATUS.json](PROJECT_STATUS.json). Il lotto P1 OT-AUDIT-12/13/17 è completato e verificato localmente; esiti e schede originali sono conservati nello storico del tracker SecondBrain OnlyTweak. Restano nove attività autonome OT-AUDIT-14/15/16/18/19/20/21/22/23 e i sette gate OT-VM-01..04, OT-ENT-LAB-01, OT-ENT-SIGN-01 e OT-ENT-PILOT-01, con dipendenze aggiornate. OT-AUDIT-23 registra il residuo gpresult della diagnostica GPO, riprodotto ma non incluso nel lotto P1. Prima proseguire con letture/DC effettivo e predisposizione/recupero; laboratorio, firma reale e pilota seguono i rispettivi prerequisiti. Le correzioni OT-AUDIT-08/09/10 e la rimozione OT-AUDIT-11 rimangono storico. Il salvataggio dei sorgenti non equivale a distribuzione o validazione in produzione.

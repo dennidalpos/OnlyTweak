@@ -30,6 +30,8 @@ namespace OnlyTweakWindows
             new PowerShellBridge(script).ExecuteAsync(Request(id),EnterpriseCatalog.Get(id),CancellationToken.None).GetAwaiter().GetResult();
         private static void EnterpriseTests()
         {
+            ResultContractTests();
+            EndpointReadTests();
             Test("enterprise: input, wildcard, destinazioni e parametri estranei rifiutati",delegate {
                 EnterpriseProfile().Validate();
                 foreach (string host in new[] {"dc1 & whoami","*.corp.example","-server","dc1.corp.example:5985","dc1..example"})
@@ -75,7 +77,7 @@ namespace OnlyTweakWindows
                 SessionSafety safety=new SessionSafety(); safety.Observe(request,result);
                 Throws(()=>safety.Authorize(request),"rileggi");
                 OperationRequest verify=Request("endpoint.verify"); verify.Parameters["operation"]=request.ActionId;
-                safety.Observe(verify,new StepResult {State=StepState.Success,AuthenticationVerified=true});
+                safety.Observe(verify,VerifiedRead(request.ActionId));
                 safety.Authorize(request);
             });
             Test("enterprise: esito positivo senza autenticazione non certifica target",delegate {
@@ -89,7 +91,7 @@ namespace OnlyTweakWindows
                 Assert(!Wire.Write(profile).Contains("password",StringComparison.OrdinalIgnoreCase),"Segreto in profilo.");
             });
             Test("enterprise: PowerShell strutturato, errore nativo e output enorme",delegate {
-                StepResult valid=Simulated("[Console]::OutputEncoding=New-Object Text.UTF8Encoding; '{\"State\":\"Success\",\"Summary\":\"simulato\",\"Evidence\":[],\"Data\":{\"Count\":3}}'");
+                StepResult valid=Simulated("[Console]::OutputEncoding=New-Object Text.UTF8Encoding; '{\"State\":\"Success\",\"Summary\":\"simulato\",\"Evidence\":[],\"AuthenticationVerified\":false,\"ErrorCode\":\"\",\"Data\":{\"Count\":3,\"Version\":\"5.1\",\"Modules\":[],\"OS\":{}}}'");
                 Assert(valid.State==StepState.Success && valid.Data.Value.GetProperty("Count").GetInt32()==3,"Risposta JSON persa.");
                 StepResult invalid=Simulated("'non-json'");
                 Assert(invalid.State==StepState.Unavailable,"Output malformato accettato.");
@@ -209,9 +211,9 @@ namespace OnlyTweakWindows
                     int start=script.IndexOf("function Require-Module",StringComparison.Ordinal),end=script.IndexOf("function Native",StringComparison.Ordinal);
                     script=prefix+script.Substring(0,start)+"function Require-Module { param($name) }\n"+script.Substring(end);
                     // Count is added only by this isolated fixture, never by production operations.
-                    script=script.Replace("Data=$data;","Data=[pscustomobject]@{Writes=$script:writes;Result=$data};");
+                    script=script.Replace("[pscustomobject]@{ State=$state;","Note ('FixtureWrites='+$script:writes); [pscustomobject]@{ State=$state;");
                     StepResult result=new PowerShellBridge(script).ExecuteAsync(request,EnterpriseCatalog.Get(request.ActionId),CancellationToken.None).GetAwaiter().GetResult();
-                    int writes=result.Data.Value.GetProperty("Writes").GetInt32();
+                    int writes=Int32.Parse(result.Evidence.Single(e=>e.StartsWith("FixtureWrites=",StringComparison.Ordinal)).Substring(14));
                     Assert(writes==(scenario=="valid" ? 1 : 0),"Scrittura inattesa: "+scenario+" "+Wire.Write(result));
                     Assert(scenario!="valid" || result.State==StepState.Success,"Scenario valido non verificato.");
                 }
@@ -246,9 +248,9 @@ namespace OnlyTweakWindows
                     string prefix="function Invoke-Command { param($ScriptBlock,$ArgumentList) & $ScriptBlock @ArgumentList }\n"+
                         "function New-PSSessionOption { }\nfunction Get-CimInstance { [pscustomobject]@{DomainRole="+role+";PartOfDomain=$true} }\n"+
                         "function Get-DnsClientCache { }\nfunction Clear-DnsClientCache { $script:writes++ }\n$script:writes=0\n";
-                    string script=prefix+EmbeddedScripts.Read("Operations.ps1").Replace("Data=$data;","Data=[pscustomobject]@{Writes=$script:writes};");
+                    string script=prefix+EmbeddedScripts.Read("Operations.ps1").Replace("[pscustomobject]@{ State=$state;","Note ('FixtureWrites='+$script:writes); [pscustomobject]@{ State=$state;");
                     StepResult result=new PowerShellBridge(script).ExecuteAsync(Request("endpoint.flushdns"),EnterpriseCatalog.Get("endpoint.flushdns"),CancellationToken.None).GetAwaiter().GetResult();
-                    Assert(result.Data.Value.GetProperty("Writes").GetInt32()==(role=="1" ? 1 : 0),"Protezione DC/ruolo ignoto non valida.");
+                    Assert(result.Evidence.Contains("FixtureWrites="+(role=="1" ? "1" : "0")),"Protezione DC/ruolo ignoto non valida.");
                 }
             });
             Test("enterprise: parser Windows PowerShell 5.1 accetta tutte le procedure",delegate {
@@ -256,7 +258,7 @@ namespace OnlyTweakWindows
                     string encoded=Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(EmbeddedScripts.Read(file)));
                     string command="$source=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"+encoded+"'));"+
                         "$tokens=$null;$errors=$null;$null=[Management.Automation.Language.Parser]::ParseInput($source,[ref]$tokens,[ref]$errors);"+
-                        "if ($errors.Count -gt 0) { throw 'ParseFailure' }; '{\"State\":\"Success\",\"Summary\":\"Parse OK\"}'";
+                        "if ($errors.Count -gt 0) { throw 'ParseFailure' }; '{\"State\":\"Success\",\"Summary\":\"Parse OK\",\"Evidence\":[],\"AuthenticationVerified\":false,\"ErrorCode\":\"\",\"Data\":{\"Version\":\"5.1\",\"Modules\":[],\"OS\":{}}}'";
                     Assert(Simulated(command).State==StepState.Success,"Sintassi non supportata: "+file);
                 }
             });
