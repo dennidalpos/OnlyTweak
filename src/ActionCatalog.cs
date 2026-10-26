@@ -102,6 +102,14 @@ namespace OnlyTweakWindows
                 return new StepResult {State=status.ExitCode==0 && !status.Truncated && !String.IsNullOrWhiteSpace(status.Output) ? StepState.Success : StepState.Inconclusive,
                     Truncated=status.Truncated,Data=JsonSerializer.SerializeToElement(status)};
             };
+            MenuDefinition diagnostics=new MenuDefinition("Diagnostica tecnica","Test dalla postazione corrente, senza modifiche.",Glyphs.Diagnostic,null);
+            foreach(var entry in new[] {("local.ping","Ping","Quattro richieste ICMP verso un FQDN."),("local.dns","Risoluzione DNS","Query DNS A, AAAA o CNAME."),
+                ("local.tcp","Test porta TCP","Connessione verso una singola porta."),("local.connections","Connessioni locali","Connessioni e porte con PID."),
+                ("local.routes","Tabella di routing","Route IPv4 e IPv6."),("local.proxy","Proxy WinHTTP","Configurazione proxy WinHTTP in lettura.")})
+                diagnostics.Actions.Add(LocalDiagnostics.Entry(app,entry.Item1,entry.Item2,entry.Item3));
+            Network.Children.Add(diagnostics);
+            Tools.Actions.Add(LocalDiagnostics.Entry(app,"local.identity","Identità e gruppi","Account, gruppi e privilegi dell'app."));
+            Tools.Actions.Add(LocalDiagnostics.Entry(app,"local.gpo","Criteri utente applicati","Riepilogo gpresult per l'utente dell'app."));
             ApplySummaries();
             foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools }) menu.Prune();
         }

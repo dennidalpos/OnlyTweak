@@ -42,7 +42,7 @@ function Assert-OnlyTweakBuild([string]$Root,$Evidence) {
     if ((Get-FileHash -LiteralPath (Join-Path $Root 'obj/project.assets.json') -Algorithm SHA256).Hash -cne $metadata.AssetsSha256) {
         throw 'Assets diversi dalla build: ricompilare.'
     }
-    $expected=@('Operations.ps1','Provision-Remoting.ps1','OnlyTweakEndpoint.psm1')
+    $expected=@('Operations.ps1','Provision-Remoting.ps1','OnlyTweakEndpoint.psm1','LocalDiagnostics.ps1')
     if (@($Evidence.Scripts).Count -ne $expected.Count) { throw 'Risorse script incomplete.' }
     foreach ($name in $expected) {
         $script=@($Evidence.Scripts | Where-Object Name -CEQ $name)

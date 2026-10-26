@@ -31,6 +31,13 @@ namespace OnlyTweakWindows
             if (!OpenProcessToken(shell.Handle, 0x0002 | 0x0008, out token)) throw new Win32Exception(Marshal.GetLastWin32Error());
             return token;
         }
+        internal static void RequireDesktopIdentity()
+        {
+            using Process shell=GetShellProcess();
+            using WindowsIdentity current=WindowsIdentity.GetCurrent();
+            using WindowsIdentity owner=ReadShellIdentity(shell);
+            if(!current.User.Equals(owner.User)) throw new InvalidOperationException("Il desktop appartiene a un altro account: tweak bloccato.");
+        }
         public static void LaunchInteractiveTarget(string target)
         {
             if (!LocalPrivilege.IsAdministrator)

@@ -8,7 +8,7 @@ using System.Threading;
 
 namespace OnlyTweakWindows
 {
-    internal sealed class OperationDialog : DarkForm
+    internal sealed class OperationDialog : DarkPage
     {
         private readonly AppServices app;
         private readonly ActionSpec action;
@@ -19,15 +19,15 @@ namespace OnlyTweakWindows
         private readonly System.Windows.Forms.Timer outputTimer;
         private readonly Button cancel,read;
         private CancellationTokenSource cancellation;
-        private bool closeAfterCancellation,reading;
+        private bool reading;
         private readonly BoundedText pending=new BoundedText();
         private bool running, checking;
         private readonly bool confirmationGranted;
-        public static void Open(IWin32Window parent, AppServices app, ActionSpec action)
+        public static async Task Open(Control parent, AppServices app, ActionSpec action)
         {
             if (app.Coordinator.IsBusy) return;
-            if (action.Confirmation!=null&&!ConfirmDialog.Ask(parent,action.Title,action.Confirmation)) return;
-            using (OperationDialog form=new OperationDialog(app,action,true,true)) form.ShowDialog(parent);
+            if (action.Confirmation!=null&&!await ConfirmDialog.Ask(parent,action.Title,action.Confirmation)) return;
+            NavigationService.For(parent).Push(new OperationDialog(app,action,true,true));
         }
         public OperationDialog(AppServices app,ActionSpec action,bool startAutomatically=false,bool confirmationGranted=false) : base(action.Title,action.Description,Glyphs.ForAction(action),null)
         {
@@ -77,10 +77,10 @@ namespace OnlyTweakWindows
         private async Task Execute()
         {
             if (running || checking) return;
-            if (!confirmationGranted&&action.Confirmation!=null&&!ConfirmDialog.Ask(this,action.Title,action.Confirmation)) return;
+            if (!confirmationGranted&&action.Confirmation!=null&&!await ConfirmDialog.Ask(this,action.Title,action.Confirmation)) return;
             if (!app.Coordinator.TryEnter()) { status.Text="Un'altra operazione è in corso."; return; }
-            try {app.LocalOperations.Authorize(action);} catch(InvalidOperationException ex) {status.Text=ex.Message;return;}
-            running=true; run.Enabled=false; CloseAction.Enabled=action.IsDiagnostic; progress.Visible=true;
+            try {app.LocalOperations.Authorize(action);} catch(InvalidOperationException ex) {status.Text=ex.Message;app.Coordinator.Leave();return;}
+            running=true; BlocksPush=true; run.Enabled=false; CloseAction.Enabled=action.IsDiagnostic; progress.Visible=true;
             cancellation=new CancellationTokenSource();cancel.Enabled=action.IsDiagnostic;read.Enabled=false;
             output.Clear(); status.Text="Operazione in corso. Attendi il completamento."; status.ForeColor=Theme.Accent;
             app.History.Add("AVVIO · " + action.Title); outputTimer.Start();
@@ -110,23 +110,23 @@ namespace OnlyTweakWindows
             }
             finally
             {
-                outputTimer.Stop(); FlushOutput(); running=false; app.Coordinator.Leave();
+                outputTimer.Stop(); FlushOutput(); running=false;BlocksPush=false; app.Coordinator.Leave();
                 progress.Visible=false; CloseAction.Enabled=true; run.Enabled=true;cancel.Enabled=false;read.Enabled=true;
                 cancellation.Dispose();cancellation=null;
-                if(closeAfterCancellation) Close();
+
             }
         }
         private async Task ReadState()
         {
             if(running || checking || !app.Coordinator.TryEnter()) return;
-            running=true;reading=true;read.Enabled=false;run.Enabled=false;CloseAction.Enabled=true;outputTimer.Start();
+            running=true;BlocksPush=true;reading=true;read.Enabled=false;run.Enabled=false;CloseAction.Enabled=true;outputTimer.Start();
             cancellation=new CancellationTokenSource();cancel.Visible=true;cancel.Enabled=true;
             try {
                 StepResult result=await Task.Run(()=>action.RequiresElevation ? LocalPrivilege.Execute(action.Id,Enqueue,cancellation.Token,true) : app.LocalOperations.Read(action,Enqueue,cancellation.Token));
                 app.LocalOperations.Observe(action,result,true);Enqueue(result.Summary);if(result.Data!=null) Enqueue(result.Data.ToString());status.Text=result.Summary;
                 app.History.Add("RILETTURA · "+action.Title+" · "+result.State);
             } catch(Exception ex) {Enqueue(ex.Message);status.Text="Rilettura incompleta.";}
-            finally {outputTimer.Stop();FlushOutput();running=false;reading=false;app.Coordinator.Leave();read.Enabled=true;run.Enabled=true;CloseAction.Enabled=true;cancel.Enabled=false;cancel.Visible=action.IsDiagnostic;cancellation.Dispose();cancellation=null;if(closeAfterCancellation) Close();}
+            finally {outputTimer.Stop();FlushOutput();running=false;BlocksPush=false;reading=false;app.Coordinator.Leave();read.Enabled=true;run.Enabled=true;CloseAction.Enabled=true;cancel.Enabled=false;cancel.Visible=action.IsDiagnostic;cancellation.Dispose();cancellation=null;}
         }
         private void Enqueue(string line)
         {
@@ -139,8 +139,16 @@ namespace OnlyTweakWindows
             BoundedText combined=new BoundedText(); combined.Append(output.Text); combined.Append(next);
             output.Text=combined.Read();
         }
-        protected override void OnFormClosing(FormClosingEventArgs e)
-        { if (running || checking) {e.Cancel=true;if(running && (action.IsDiagnostic || reading) && cancellation!=null) {closeAfterCancellation=true;cancellation.Cancel();}} base.OnFormClosing(e); }
+        internal override async Task<bool> CanLeaveAsync(bool closing)
+        {
+            if(checking) return false;
+            if(running) {
+                if(!action.IsDiagnostic && !reading) { status.Text="Attendi l'esito della modifica prima di uscire.";return false; }
+                cancellation?.Cancel();
+                while(running) await Task.Delay(20);
+            }
+            return true;
+        }
         protected override void Dispose(bool disposing)
         { if (disposing && outputTimer!=null) outputTimer.Dispose(); base.Dispose(disposing); }
     }

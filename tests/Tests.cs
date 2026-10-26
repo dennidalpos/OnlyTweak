@@ -22,7 +22,8 @@ namespace OnlyTweakWindows
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            EnterpriseTests(); SpoolTests(); OtherTests(); SecurityTests(); CompatibilityTests();
+            if(args.Contains("--features")) {NewFeatureTests();if(args.Contains("--ui")) UiTests();if(args.Contains("--render")) Render();Console.WriteLine("RISULTATO: "+passed+" superati, "+failed+" falliti.");return failed==0 ? 0 : 1;}
+            NewFeatureTests(); EnterpriseTests(); SpoolTests(); OtherTests(); SecurityTests(); CompatibilityTests();
             if (args.Contains("--render")) Test("render UI senza esecuzione azioni",Render);
             if (args.Contains("--read-only")) Test("servizi reali: sole letture",ReadOnlySmoke);
             if (args.Contains("--artifact")) Test("EXE: architettura, manifest e dipendenze",VerifyArtifact);
@@ -133,7 +134,7 @@ namespace OnlyTweakWindows
             Test("catalogo: azioni e identificatori univoci",delegate {
                 AppServices app=TestApp(); HashSet<string> ids=new HashSet<string>();
                 foreach (MenuDefinition menu in new[] { app.Catalog.Network,app.Catalog.Maintenance,app.Catalog.Tools,app.Catalog.Spool }) ValidateMenu(menu,ids);
-                Assert(ids.Count==27,"Catalogo incompleto: attese 27 azioni, trovate " + ids.Count + ".");
+                Assert(ids.Count==35,"Catalogo incompleto: attese 35 azioni, trovate " + ids.Count + ".");
                 Assert(ids.Contains("tools.computer") && ids.Contains("tools.programs") && !ids.Contains("accounts.close") && !ids.Contains("accounts.portal"),"Collegamenti mancanti.");
             });
             Test("catalogo: righe brevi, glifi e testo completo conservato",delegate {
@@ -237,13 +238,13 @@ namespace OnlyTweakWindows
             // Keep a real application message loop and a root form alive for async continuations.
             using (Form host=new Form { ShowInTaskbar=false, Opacity=0, Size=new Size(1,1) })
             {
-                host.Shown+=delegate { host.BeginInvoke((Action)delegate { try { UiTestCases(); WheelTests(); SecurityUiTests(); } finally { host.Close(); } }); };
+                host.Shown+=delegate { host.BeginInvoke((Action)delegate { try { UiTestCases(); WheelTests(); SecurityUiTests(); } finally { ClosePage(host); } }); };
                 Application.Run(host);
             }
         }
         private static void UiTestCases()
         {
-            DirectoryUiTests();
+            NavigationTests(); DirectoryUiTests();
             AppClosureUiTests();
             Test("UI: apertura diretta senza finestre intermedie",delegate {
                 AppServices app=TestApp(); int executed=0,count=Application.OpenForms.Count; string status="";
@@ -264,19 +265,21 @@ namespace OnlyTweakWindows
                 AppServices app=TestApp(); bool executed=false;
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.auto","Test automatico","Simulazione","Test",delegate(Action<string> log) { executed=true; }) {IsDiagnostic=true},true))
                 {
-                    form.ShowInTaskbar=false; form.Show();
+                     ShowPage(form);
                     PumpUntil(delegate { return executed&&!app.Coordinator.IsBusy; });
                     Assert(!Descendants(form).OfType<Button>().Any(b=>b.Text=="&Esegui"&&b.Visible),"Esegui ridondante ancora visibile.");
-                    form.Close();
+                    ClosePage(form);
                 }
             });
             Test("UI: annulla conferma non avvia l'azione",delegate {
                 AppServices app=TestApp(); bool executed=false;
                 ActionSpec action=new ActionSpec("test.cancel","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed=true; }) { Confirmation="Conferma di test, nessuna modifica reale.",Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true}) };
+                using (MainForm fixtureHost=new MainForm(app))
                 using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
                 {
+                    ShowPage(fixtureHost);
                     timer.Tick+=delegate {
-                        ConfirmDialog confirm=Application.OpenForms.OfType<ConfirmDialog>().FirstOrDefault();
+                        ConfirmDialog confirm=Application.OpenForms.Cast<Form>().SelectMany(Descendants).OfType<ConfirmDialog>().FirstOrDefault();
                         if (confirm!=null)
                         {
                             timer.Stop(); Button cancel=Descendants(confirm).OfType<Button>().First(b=>b.Text=="&Annulla");
@@ -284,42 +287,44 @@ namespace OnlyTweakWindows
                             ((Button)confirm.AcceptButton).PerformClick();
                         }
                     };
-                    timer.Start(); OperationDialog.Open(Form.ActiveForm,app,action);
+                    timer.Start(); var pending=OperationDialog.Open(fixtureHost,app,action); PumpUntil(()=>pending.IsCompleted); pending.GetAwaiter().GetResult();
                 }
                 Assert(!executed&&!app.Coordinator.IsBusy,"Annullamento non rispettato.");
             });
             Test("UI: una sola conferma e partenza immediata",delegate {
                 AppServices app=TestApp(); int executed=0,confirmations=0;
                 ActionSpec action=new ActionSpec("test.confirm","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed++; }) { Confirmation="Conferma di test, nessuna modifica reale.",Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true}) };
+                using (MainForm fixtureHost=new MainForm(app))
                 using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
                 {
+                    ShowPage(fixtureHost);
                     timer.Tick+=delegate {
-                        ConfirmDialog confirm=Application.OpenForms.OfType<ConfirmDialog>().FirstOrDefault();
+                        ConfirmDialog confirm=Application.OpenForms.Cast<Form>().SelectMany(Descendants).OfType<ConfirmDialog>().FirstOrDefault();
                         if (confirm!=null) { confirmations++; Descendants(confirm).OfType<Button>().First(b=>b.Text=="&Conferma").PerformClick(); }
-                        OperationDialog operation=Application.OpenForms.OfType<OperationDialog>().FirstOrDefault();
-                        if (operation!=null&&executed>0&&!app.Coordinator.IsBusy) { timer.Stop(); operation.Close(); }
+                        OperationDialog operation=Application.OpenForms.Cast<Form>().SelectMany(Descendants).OfType<OperationDialog>().FirstOrDefault();
+                        if (operation!=null&&executed>0&&!app.Coordinator.IsBusy) { timer.Stop(); ClosePage(operation); }
                     };
-                    timer.Start(); OperationDialog.Open(Form.ActiveForm,app,action);
+                    timer.Start(); var pending=OperationDialog.Open(fixtureHost,app,action); PumpUntil(()=>pending.IsCompleted); pending.GetAwaiter().GetResult();
                 }
-                Assert(executed==1&&confirmations==1,"Conferma o esecuzione duplicata.");
+                PumpUntil(()=>executed==1&&!app.Coordinator.IsBusy); Assert(executed==1&&confirmations==1,"Conferma o esecuzione duplicata.");
             });
             Test("UI: scorrimento dei gruppi e focus da tastiera",delegate {
                 using (Form host=new Form { Size=new Size(600,280),ShowInTaskbar=false })
                 {
                     StackPanel stack=new StackPanel(); host.Controls.Add(stack);
                     for (int i=0;i<15;i++) stack.Controls.Add(Theme.Card("Azione "+i,"Descrizione",null));
-                    host.Show(); Application.DoEvents();
+                    ShowPage(host); Application.DoEvents();
                     Assert(stack.ScrollMaximum>0,"Gruppo non scorrevole.");
                     stack.ScrollTo(Int32.MaxValue); Assert(stack.ScrollOffset==stack.ScrollMaximum,"Fine gruppo irraggiungibile.");
                     stack.Controls[14].Focus(); Application.DoEvents();
                     stack.Controls[0].Focus(); Application.DoEvents(); Assert(stack.ScrollOffset<30,"Il focus non riporta visibile il primo controllo.");
-                    stack.Controls[14].Focus(); Application.DoEvents(); Assert(stack.ScrollOffset>0,"Ultimo controllo non raggiunto."); host.Close();
+                    stack.Controls[14].Focus(); Application.DoEvents(); Assert(stack.ScrollOffset>0,"Ultimo controllo non raggiunto."); ClosePage(host);
                 }
             });
             Test("UI: output lungo con scrollbar verticali e orizzontali scure",delegate {
                 using (Form host=new Form { Size=new Size(500,260),ShowInTaskbar=false })
                 {
-                    DarkOutput output=Theme.Output(); host.Controls.Add(output); host.Show();
+                    DarkOutput output=Theme.Output(); host.Controls.Add(output); ShowPage(host);
                     output.Text=String.Join("\n",Enumerable.Range(0,180).Select(i=>"Riga "+i+" "+new string('x',160)).ToArray());
                     Application.DoEvents();
                     DarkScrollBar vertical=Descendants(output).OfType<DarkScrollBar>().First(b=>!b.Horizontal);
@@ -331,7 +336,7 @@ namespace OnlyTweakWindows
                     Assert(position.Y>100&&position.X>0,"Il trascinamento non scorre l'output.");
                     editor.SelectionStart=0; editor.SelectionLength=0; editor.ScrollToCaret(); Application.DoEvents();
                     Assert(vertical.Value<50,"La scrollbar non segue il cursore.");
-                    host.Close();
+                    ClosePage(host);
                 }
             });
             Test("UI: elenco lungo stampanti e selezione da tastiera",delegate {
@@ -339,21 +344,21 @@ namespace OnlyTweakWindows
                 {
                     DarkPrinterList list=new DarkPrinterList { Dock=DockStyle.Fill }; host.Controls.Add(list);
                     for (int i=0;i<30;i++) list.Items.Add(new PrinterItem { Name="Stampante "+i });
-                    host.Show(); list.SelectedIndex=29; Application.DoEvents();
+                    ShowPage(host); list.SelectedIndex=29; Application.DoEvents();
                     DarkScrollBar bar=Descendants(list).OfType<DarkScrollBar>().Single(); Assert(bar.Value>0,"Selezione fuori vista.");
                     typeof(DarkPrinterList).GetMethod("OnKeyDown",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).Invoke(list,new object[] { new KeyEventArgs(Keys.Home) });
                     Assert(list.SelectedIndex==0&&bar.Value==0,"Home non seleziona/mostra la prima stampante.");
                     AccessibleObject accessible=list.AccessibilityObject;
                     Assert(accessible.GetChildCount()==30&&accessible.GetChild(29).Name=="Stampante 29","Elementi stampante non accessibili.");
                     accessible.GetChild(4).DoDefaultAction(); Assert(list.SelectedIndex==4,"Selezione accessibile non funzionante.");
-                    list.Items.Clear(); Assert(list.SelectedItem==null&&list.SelectedIndex==-1,"Selezione obsoleta dopo aggiornamento."); host.Close();
+                    list.Items.Clear(); Assert(list.SelectedItem==null&&list.SelectedIndex==-1,"Selezione obsoleta dopo aggiornamento."); ClosePage(host);
                 }
             });
             Test("UI: categorie piatte e launcher classificati",delegate {
                 AppServices app=TestApp();
                 using (MenuDialog form=new MenuDialog(app,app.Catalog.Network))
-                    Assert(Descendants(form).OfType<Button>().Count(b=>b.AccessibleDescription!=null)==7,"Rete richiede ancora sottosezioni intermedie.");
-                foreach (ActionSpec action in app.Catalog.Tools.Actions) Assert(action.OpensWindow,"Strumento non diretto: "+action.Id);
+                    Assert(Descendants(form).OfType<Button>().Count(b=>b.AccessibleDescription!=null)==13,"Rete richiede ancora sottosezioni intermedie.");
+                foreach (ActionSpec action in app.Catalog.Tools.Actions.Where(a=>!a.IsDiagnostic)) Assert(action.OpensWindow,"Strumento non diretto: "+action.Id);
                 Assert(app.Catalog.PrinterDialog("/p","Proprietà","Test").OpensWindow&&!app.Catalog.PurgePrinter("Test").OpensWindow,"Classificazione stampanti errata.");
             });
             Test("UI: icone, testo completo nel tooltip ed eyebrow solo nella home",delegate {
@@ -371,7 +376,7 @@ namespace OnlyTweakWindows
                 using (MainForm form=new MainForm(app))
                 {
                     Assert(Descendants(form).OfType<Label>().Any(l=>l.Text.StartsWith("ONLYTWEAK",StringComparison.Ordinal)),"Eyebrow assente nella home.");
-                    Assert(Descendants(form).OfType<DarkButton>().Count(b=>b.Glyph!=null && b.GlyphColor==Theme.Accent)==7,"Tessere home senza icona.");
+                    Assert(Descendants(form).OfType<DarkButton>().Count(b=>b.Glyph!=null && b.GlyphColor==Theme.Accent)==8,"Tessere home senza icona.");
                 }
                 using (MenuDialog form=new MenuDialog(app,app.Catalog.Spool))
                 {
@@ -381,19 +386,19 @@ namespace OnlyTweakWindows
             });
             Test("UI: dettaglio Info solo su richiesta e chiuso con finestra spostata o chiusa",delegate {
                 AppServices app=TestApp();
-                MenuDialog form=new MenuDialog(app,app.Catalog.Spool) { ShowInTaskbar=false };
+                MenuDialog form=new MenuDialog(app,app.Catalog.Spool);
                 // Il banco non può portare la finestra in primo piano: ShowAlways evita il solo controllo di attivazione.
                 form.Tips.ShowAlways=true;
                 try
                 {
-                    form.Show(); Application.DoEvents();
+                    ShowPage(form); Application.DoEvents();
                     InfoIcon info=Descendants(form).OfType<InfoIcon>().Single();
                     Assert(form.ActiveControl!=info && VisibleTooltips()==0,"Dettaglio aperto all'avvio della finestra.");
                     info.Focus(); Application.DoEvents(); Assert(VisibleTooltips()==0,"Dettaglio aperto dal solo focus.");
                     info.ShowDetail(); Application.DoEvents(); Assert(VisibleTooltips()>0,"Dettaglio non mostrato su richiesta.");
                     form.Left+=24; Application.DoEvents(); Assert(VisibleTooltips()==0,"Dettaglio rimasto dopo lo spostamento della finestra.");
                     info.ShowDetail(); Application.DoEvents(); Assert(VisibleTooltips()>0,"Dettaglio non riaperto.");
-                    form.Close(); Application.DoEvents(); Assert(VisibleTooltips()==0,"Dettaglio rimasto dopo la chiusura.");
+                    ClosePage(form); Application.DoEvents(); Assert(VisibleTooltips()==0,"Dettaglio rimasto dopo la chiusura.");
                 }
                 finally { form.Dispose(); }
             });
@@ -403,7 +408,7 @@ namespace OnlyTweakWindows
                 {
                     Assert(Theme.IconFont(12F)==null,"Font icone non disattivato.");
                     AppServices app=TestApp();
-                    foreach (DarkForm form in new DarkForm[] { new MainForm(app),new MenuDialog(app,app.Catalog.Network) })
+                    foreach (DarkPage form in new DarkPage[] { new HomePage(app),new MenuDialog(app,app.Catalog.Network) })
                         using (form) using (Bitmap bitmap=new Bitmap(form.Width,form.Height))
                         { form.CreateControl(); form.PerformLayout(); form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,form.Size)); }
                 }
@@ -415,15 +420,15 @@ namespace OnlyTweakWindows
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.wait","Test simulato","Nessun intervento Windows.","Simulazione",
                     delegate(Action<string> log) { log("output simulato"); release.WaitOne(3000); }) {Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true})}))
                 {
-                    form.ShowInTaskbar=false; form.Show(); Application.DoEvents();
+                     ShowPage(form); Application.DoEvents();
                     Button run=Descendants(form).OfType<Button>().First(b=>b.Text=="&Esegui");
                     PumpUntil(delegate { return run.Enabled; }); run.PerformClick();
                     Assert(app.Coordinator.IsBusy,"Gate non acquisito.");
-                    form.Close(); Assert(!form.IsDisposed,"Chiusura consentita durante l'operazione.");
+                    ClosePage(form); Assert(!form.IsDisposed,"Chiusura consentita durante l'operazione.");
                     release.Set(); PumpUntil(delegate { return !app.Coordinator.IsBusy; });
                     Assert(Descendants(form).OfType<DarkOutput>().Any(t=>t.Text.Contains("output simulato")),"Output perso.");
                     Assert(app.History.Read().Contains("TERMINATA"),"Cronologia successo mancante.");
-                    form.Close();
+                    ClosePage(form);
                 }
             });
             Test("UI: errore simulato riabilita controlli e libera il gate",delegate {
@@ -431,12 +436,12 @@ namespace OnlyTweakWindows
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.error","Errore simulato","Nessun intervento Windows.","Simulazione",
                     delegate(Action<string> log) { throw new IOException("errore controllato"); }) {Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true})}))
                 {
-                    form.ShowInTaskbar=false; form.Show(); Application.DoEvents();
+                     ShowPage(form); Application.DoEvents();
                     Button run=Descendants(form).OfType<Button>().First(b=>b.Text=="&Esegui"); run.PerformClick();
                     PumpUntil(delegate { return !app.Coordinator.IsBusy; });
                     Assert(run.Enabled && app.History.Read().Contains("ERRORE"),"Controlli/gate non ripristinati.");
                     Assert(Descendants(form).OfType<DarkOutput>().Any(t=>t.Text.Contains("errore controllato")),"Errore non mostrato.");
-                    form.Close();
+                    ClosePage(form);
                 }
             });
             Test("UI: azione indisponibile non può avviarsi",delegate {
@@ -445,10 +450,10 @@ namespace OnlyTweakWindows
                 action.Unavailable=delegate { return "blocco simulato"; };
                 using (OperationDialog form=new OperationDialog(app,action))
                 {
-                    form.ShowInTaskbar=false; form.Show();
+                     ShowPage(form);
                     PumpUntil(delegate { return Descendants(form).OfType<DarkOutput>().Any(t=>t.Text.Contains("blocco simulato")); });
                     Button run=Descendants(form).OfType<Button>().First(b=>b.Text=="&Esegui"); run.PerformClick();
-                    Assert(!run.Enabled && !executed,"Azione indisponibile eseguita."); form.Close();
+                    Assert(!run.Enabled && !executed,"Azione indisponibile eseguita."); ClosePage(form);
                 }
             });
         }
@@ -464,17 +469,18 @@ namespace OnlyTweakWindows
             {
                 FakeSecurityBackend security=new FakeSecurityBackend(); AppServices app=TestApp(security);
                 SecurityDialog protections=new SecurityDialog(app,false); protections.DisplayStates(security.Environment);
-                List<DarkForm> forms=new List<DarkForm> {
-                    new MainForm(app),new MenuDialog(app,app.Catalog.Network),new ConfirmDialog("Svuota tutte le code locali",app.Catalog.Spool.Actions[2].Confirmation),
+                List<DarkPage> forms=new List<DarkPage> {
+                    new HomePage(app),new MenuDialog(app,app.Catalog.Network),new ConfirmDialog("Svuota tutte le code locali",app.Catalog.Spool.Actions[2].Confirmation),
                     new PrinterDialog(app,false),new MenuDialog(app,app.Catalog.Network),new MenuDialog(app,app.Catalog.Network.Children[1]),
                     new MenuDialog(app,app.Catalog.Maintenance.Children[0]),new OperationDialog(app,app.Catalog.Spool.Actions[2]),new MenuDialog(app,app.Catalog.Tools),
                     new EnterpriseDialog(false,false),new ProfileEditor(EnterpriseProfile()),
                     new TextDialog("Output di esempio",String.Join("\n",Enumerable.Range(1,80).Select(i=>"Riga di esempio "+i+"  "+new string('x',125)).ToArray())),
-                    protections,new MenuDialog(app,app.Catalog.Spool)
+                    protections,new MenuDialog(app,app.Catalog.Spool),new TweakPage(app),new DiagnosticParametersPage(app,app.Catalog.Network.AllActions().Single(a=>a.Id=="local.tcp"))
                 };
                 for (int i=0;i<forms.Count;i++)
                 {
-                    using (DarkForm form=forms[i])
+                    using (DarkPage form=forms[i])
+                    using (MainForm renderHost=new MainForm(app,form is HomePage ? form : null))
                     {
                         foreach (DarkPrinterList list in Descendants(form).OfType<DarkPrinterList>())
                         {
@@ -482,8 +488,9 @@ namespace OnlyTweakWindows
                             list.Items.Add(new PrinterItem { Name=@"\\server\Stampante reparto",IsConnection=true });
                             list.SelectedIndex=0;
                         }
-                        form.ShowInTaskbar=false;
-                        form.Show();
+
+                        if(form is not HomePage) renderHost.Navigation.Push(form);
+                        renderHost.ShowInTaskbar=false;renderHost.Show();
                         Application.DoEvents();
                         IntPtr handle=form.Handle;
                         form.PerformLayout();
@@ -495,11 +502,11 @@ namespace OnlyTweakWindows
                         foreach (StackPanel panel in Descendants(form).OfType<StackPanel>()) panel.ScrollTo(0);
                         form.Update();
                         CaptureForm(form,Path.Combine(folder,String.Format("{0:00}-{1:0}.png",i,scale*100)));
-                        if (form is EnterpriseDialog) {
-                            TabControl tabs=Descendants(form).OfType<TabControl>().Single();
-                            for (int tab=0;tab<tabs.TabCount;tab++) {
-                                tabs.SelectedIndex=tab; form.PerformLayout(); Application.DoEvents(); form.Update();
-                                CaptureForm(form,Path.Combine(folder,"enterprise-"+tab+"-"+(scale*100).ToString("0")+".png"));
+                        if (form is EnterpriseDialog enterprise) {
+                            foreach(var section in enterprise.Sections.ToArray()) {
+                                enterprise.OpenSection(section);Application.DoEvents();
+                                CaptureForm(enterprise.Navigation.Current,Path.Combine(folder,"enterprise-"+section.Text.Replace(" ","-")+"-"+(scale*100).ToString("0")+".png"));
+                                var back=enterprise.Navigation.BackAsync();PumpUntil(()=>back.IsCompleted);back.GetAwaiter().GetResult();
                             }
                         }
                         if (form is SecurityDialog || (form is MenuDialog && i==11))
@@ -514,8 +521,9 @@ namespace OnlyTweakWindows
             RenderProfiles(folder);
             Console.WriteLine("Rendering: " + folder);
         }
-        private static void CaptureForm(Form form,string path)
+        private static void CaptureForm(Control source,string path)
         {
+            Form form=source as Form ?? source.FindForm();
             form.PerformLayout(); form.Refresh(); Application.DoEvents(); Thread.Sleep(30);
             using (Bitmap bitmap=new Bitmap(form.Width,form.Height))
             {

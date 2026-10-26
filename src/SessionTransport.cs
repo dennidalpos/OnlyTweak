@@ -23,6 +23,7 @@ namespace OnlyTweakWindows
         public string Identity { get; set; } = "";
         public string LocalAction { get; set; } = "";
         public bool LocalReadOnly { get; set; }
+        public bool LocalConfirmed {get;set;}
     }
     internal sealed class PipeChannel : IDisposable
     {
@@ -122,7 +123,7 @@ namespace OnlyTweakWindows
             if (!Elevated) throw new InvalidOperationException("Sessione locale elevata richiesta.");
             bool diagnostic=readOnly || LocalOperationExecutor.IsDiagnostic(actionId);
             if(diagnostic) cancellation.ThrowIfCancellationRequested();
-            await channel.Send(new WorkerMessage {Kind="local",LocalAction=actionId,LocalReadOnly=readOnly});
+            await channel.Send(new WorkerMessage {Kind="local",LocalAction=actionId,LocalReadOnly=readOnly,LocalConfirmed=!readOnly && !diagnostic});
             using(cancellation.Register(()=> {if(diagnostic) _=Cancel();})) {
                 WorkerMessage response=await channel.Receive();
                 if (response.Kind!="result" || response.Result==null || response.Result.ActionId!=actionId) throw new IOException("Risposta locale non valida.");
@@ -187,7 +188,7 @@ namespace OnlyTweakWindows
                                 CancellationToken localToken=cancellation.Token;
                                 active=Task.Run(async ()=> {
                                     StepResult result;
-                                    try { result=LocalPrivilege.RunAuthorized(message.LocalAction,localToken,message.LocalReadOnly); }
+                                    try { result=LocalPrivilege.RunAuthorized(message.LocalAction,localToken,message.LocalReadOnly,message.LocalConfirmed); }
                                     catch (Exception ex) {
                                         result=new StepResult {ActionId=message.LocalAction,State=StepState.Unverified,
                                             Summary="Intervento locale non verificato: controllare audit e stato prima di riprovare.",
@@ -211,7 +212,7 @@ namespace OnlyTweakWindows
                             }
                             if (action.Elevated!=elevated) throw new InvalidOperationException("Tipo di worker non valido per questa operazione.");
                             change=action.IsChange;
-                            if (elevated && change && !ConfirmOnSta(action.Title,Preview(message.Request)))
+                            if (elevated && change && !message.Request.Confirmed)
                             {
                                 await channel.Send(new WorkerMessage {Kind="result",Result=new StepResult {
                                     OperationId=message.Request.OperationId,ProfileId=bind.Profile.Id,ActionId=action.Id,State=StepState.Cancelled,
@@ -245,13 +246,6 @@ namespace OnlyTweakWindows
             "\nOperazione: "+EnterpriseCatalog.Get(request.ActionId).Title+
             "\n"+String.Join("\n",request.Parameters.Select(p=>p.Key+": "+p.Value))+
             "\nLa modifica può interrompere servizi o connessioni. Nessun riavvio automatico.";
-        internal static bool ConfirmOnSta(string title,string detail)
-        {
-            bool confirmed=false;
-            Thread prompt=new Thread(()=>confirmed=ConfirmDialog.Ask(null,title,detail));
-            prompt.SetApartmentState(ApartmentState.STA); prompt.Start(); prompt.Join();
-            return confirmed;
-        }
         [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]
         private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe,out uint processId);
     }

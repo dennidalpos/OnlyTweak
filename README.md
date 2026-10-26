@@ -2,7 +2,7 @@
 
 Toolkit portatile per tecnici e amministratori Windows aziendali. Interfaccia italiana Windows Forms, profili cliente separati, diagnostica AD e postazioni, interventi guidati e preparazione RSAT.
 
-**Stato: chiusura applicativa con verifiche locali.** Per scelta dell'utente non vengono eseguiti test su VM o domini reali. Build e fixture non equivalgono a qualifica ambientale: firma, Windows puliti, WinRM/JEA e pilota restano separati in [PROJECT_STATUS.json](PROJECT_STATUS.json). Nessuna pubblicazione automatica.
+**Stato: chiusura applicativa con verifiche locali.** Per scelta dell'utente non vengono eseguiti test su VM o domini reali. Build e fixture non equivalgono a qualifica ambientale: firma, Windows puliti, WinRM/JEA e pilota restano separati in [tracker SecondBrain](../SecondBrain/02-areas/products/OnlyTweak/tracker.json). Nessuna pubblicazione automatica.
 
 ## Primo utilizzo
 
@@ -15,7 +15,15 @@ Distribuire soltanto **dist/OnlyTweakWindows.exe**, autonomo x64 con .NET 10 inc
 5. Selezionare destinazione e procedura, leggere evidenze e limiti prima degli interventi.
 6. Esportare volontariamente JSON/HTML dopo aver controllato anteprima e destinazione.
 
-Conservate stampa, rete, manutenzione locale, strumenti Windows e letture delle protezioni. Rimossi tweak estetici, ripristino HKCU e account personali; non vengono annullate impostazioni applicate da versioni precedenti.
+Stampa, rete, manutenzione locale, strumenti Windows e letture delle protezioni restano disponibili. La navigazione usa una sola finestra: sezioni, conferme, editor, parametri, risultati e cronologia sono pagine interne. La freccia **Indietro** e **Alt+Sinistra** tornano alla pagina precedente conservandone lo stato. Durante una diagnosi Indietro richiede l'annullamento e ne attende la conclusione; durante una modifica occorre attendere l'esito. I dialoghi Windows per credenziali/file/cartelle e gli strumenti esterni mantengono le proprie finestre. Le sessioni cliente rimangono aperte fino a disconnessione esplicita, cambio profilo o chiusura dell'app.
+
+## Tweak e diagnostiche locali
+
+**Tweak Windows** comprende menu contestuale classico su Windows 11, visualizzazione delle estensioni, elementi nascosti e apertura di Esplora file su Questo PC o Home/Accesso rapido. Ogni intervento presenta stato, anteprima e conferma, scrive soltanto HKCU dell'utente desktop verificato e rilegge il valore. I file protetti di sistema e le protezioni Windows restano invariati. Il menu classico è un workaround non ufficiale: il valore nel registro non dimostra l'effetto visivo su ogni build.
+
+**Ripristina precedente** usa checkpoint persistenti in `%LOCALAPPDATA%\OnlyTweak\Tweaks`, associati a macchina e SID, con tipo e valore originali, eventuale assenza e proprietà delle chiavi create. Un errore prima/durante la scrittura mantiene il checkpoint incompleto e blocca interventi automatici; modifiche esterne o checkpoint alterati richiedono revisione. ACL e checksum proteggono accesso e integrità accidentale, senza costituire uno storico immutabile contro lo stesso utente o un amministratore. Nessun riavvio automatico di Explorer: quando necessario disconnettersi. I checkpoint delle versioni 1.x non vengono importati automaticamente.
+
+In **Rete → Diagnostica tecnica** sono disponibili ping (quattro richieste), query DNS A/AAAA/CNAME, test di una porta TCP, connessioni/PID, routing e proxy WinHTTP. **Strumenti Windows** aggiunge identità/gruppi e criteri utente applicati (`gpresult /r /scope user`). Target FQDN e porte sono validati; le procedure hanno timeout di 60 secondi, annullamento e output limitato. Un test negativo è distinto da una lettura incompleta e non dimostra un guasto generale. Le diagnosi usano l'identità locale dell'app; i profili cliente non forniscono credenziali a questi comandi. Windows PowerShell 5.1 e i singoli cmdlet sono verificati al momento dell'uso, senza bypass delle policy.
 
 ## Funzioni aziendali
 
@@ -34,7 +42,7 @@ Ricerca AD e verifica identità/dominio interrogano il **DC selezionato**, verif
 
 Diagnostica autenticazione, SYSVOL e salute postazione conservano le letture indipendenti quando un sottocontrollo fallisce. `Checks` distingue raccolta completata, vuota, non applicabile, negata, indisponibile, scaduta o fallita. Zero eventi non dimostra salute; una raccolta parziale resta inconcludente, mentre un problema esplicitamente osservato rimane segnalato. WinRM standard e JEA usano lo stesso contratto: aggiornare il modulo JEA tramite il canale amministrativo approvato, senza predisposizione o fallback impliciti.
 
-Le schede aziendali e i risultati rimangono raggiungibili tramite scorrimento anche alla dimensione minima. Le diagnostiche locali, comprese SFC verifica e DISM analisi, hanno timeout e **Annulla diagnosi**; le riparazioni attendono il completamento e non vengono terminate forzatamente. Per gli interventi, richiesta accettata, esecuzione conclusa ed effetto osservato sono distinti: un reset o un codice 3010 non dimostrano il risultato finale. Dopo un esito incerto usare **Rileggi stato** prima di ripetere. La coda stampante viene riletta, senza attestare l'arresto fisico di una stampa.
+Le pagine aziendali e i risultati rimangono raggiungibili tramite scorrimento anche alla dimensione minima. Le diagnostiche locali, comprese SFC verifica e DISM analisi, hanno timeout e **Annulla diagnosi**; le riparazioni attendono il completamento e non vengono terminate forzatamente. Per gli interventi, richiesta accettata, esecuzione conclusa ed effetto osservato sono distinti: un reset o un codice 3010 non dimostrano il risultato finale. Dopo un esito incerto usare **Rileggi stato** prima di ripetere. La coda stampante viene riletta, senza attestare l'arresto fisico di una stampa.
 
 La predisposizione blocca listener incompatibili prima delle scritture. Dopo un Undo verificato, Apply conserva il precedente checkpoint nella cartella History; checkpoint attivi, parziali, legacy o alterati richiedono revisione manuale, senza cancellazioni automatiche. La diagnostica GPO conserva codice nativo gpresult, RSOP e versioni disponibili anche in caso di lettura parziale.
 
@@ -70,11 +78,7 @@ La build pubblica l'EXE autonomo in dist e registra una ricevuta con hash in art
 
 CI su Windows Server con SDK .NET 10 e test.cmd --artifact --read-only. I push sul branch principale avviano il workflow; lo stato remoto è consultabile in [GitHub Actions](https://github.com/dennidalpos/OnlyTweak/actions). Non sostituisce laboratorio AD o Windows client puliti.
 
-Verifica locale 25 ottobre 2026, lotto OT-AUDIT-12/13/17: build autonoma riuscita, **91 test superati, 0 falliti** con suite completa; comando CI locale **69/0**. Rapporti in artifacts/p1-2026-10-25 (p1-build.log, p1-full.log, p1-ci.log e p1-dependency-audit.json). Audit advisory NuGet senza vulnerabilità segnalate per i pacchetti enumerati: non certifica il sistema o l'applicazione. Le prove di rifiuto/consegna usano copie isolate e firme simulate; la qualifica con certificato e policy reali resta aperta.
-
-Verifica locale successiva, lotto OT-AUDIT-14/15: build senza avvisi/errori, suite completa **101/0**, comando CI locale **78/0** e audit NuGet senza advisory per i pacchetti enumerati. Rapporti in artifacts/lot-14-15-2026-10-25. Fixture standard/JEA delle letture parziali e fixture AD dc1/dc2, senza connessioni a domini o interventi modificanti reali. Il gate di provenienza conferma ricevuta, EXE e sorgenti del lotto; laboratorio, firma e pilota restano distinti.
-
-Chiusura applicativa del 26 ottobre 2026, OT-AUDIT-16/18/19/20/21/22/23: build senza avvisi/errori, suite completa **108/0**, comando CI locale **83/0** e audit NuGet senza advisory per i pacchetti enumerati. Evidenze in artifacts/app-close-2026-10-25 (data di inizio del lotto). Nessun test VM o dominio reale, come richiesto. Il vecchio banco 1.2 e stato rimosso dopo backup verificato fuori checkout; log, render e pacchetti storici sono conservati.
+Cronologia delle verifiche locali e dei lotti precedenti: [storico conservato](../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/README.md). I gate ambientali restano aperti; nessuna VM o distribuzione avviata.
 
 ## Consegna
 
@@ -84,9 +88,11 @@ Prepara copia locale e manifest v2 con hash, pacchetti risolti alla compilazione
 
 Firmare ps1/psm1 **prima** di build.cmd. La modalità di sviluppo `OnlyTweakWindows.exe --release-inspect` restituisce su stdout soltanto metadati e risorse incorporate, senza UI, profili o operazioni sul sistema; non certifica la compatibilità dell'app su quel sistema. Le policy possono bloccare script non approvati: l'app lo segnala senza aggirarle.
 
-La build attuale è **non firmata**, destinata alla qualificazione in laboratorio. Documentazione tecnica e fonti Microsoft: [docs/ENTERPRISE.md](docs/ENTERPRISE.md). Storico UI: [docs/UI-UX.md](docs/UI-UX.md). Gate residui: [PROJECT_STATUS.json](PROJECT_STATUS.json).
+La build attuale è **non firmata**, destinata alla qualificazione in laboratorio. Documentazione tecnica e fonti Microsoft: [docs/ENTERPRISE.md](docs/ENTERPRISE.md). Storico UI: [docs/UI-UX.md](docs/UI-UX.md). Gate residui: [tracker SecondBrain](../SecondBrain/02-areas/products/OnlyTweak/tracker.json).
 
 
 ## Ripresa nella prossima sessione
 
-La fonte delle attività rimane [PROJECT_STATUS.json](PROJECT_STATUS.json): **zero task applicativi aperti** dopo la chiusura verificata di OT-AUDIT-16/18/19/20/21/22/23. Schede originali, criteri ed esiti sono conservati nello storico del tracker SecondBrain OnlyTweak, insieme ai lotti precedenti. I sette gate OT-VM-01..04 e OT-ENT-LAB-01/SIGN-01/PILOT-01 restano separati e non dichiarati superati: i test VM sono esclusi da questa chiusura per scelta dell'utente. Nessun nuovo lotto ambientale viene avviato automaticamente. Le correzioni OT-AUDIT-08/09/10 e la rimozione OT-AUDIT-11 rimangono storico; il salvataggio dei sorgenti non equivale a distribuzione o validazione in produzione.
+La fonte delle attività è [tracker SecondBrain](../SecondBrain/02-areas/products/OnlyTweak/tracker.json): **zero task applicativi aperti** dopo la chiusura verificata di OT-AUDIT-16/18/19/20/21/22/23. Schede originali, criteri ed esiti sono conservati nello storico del tracker SecondBrain OnlyTweak, insieme ai lotti precedenti. I sette gate preesistenti OT-VM-01..04 e OT-ENT-LAB-01/SIGN-01/PILOT-01 e il nuovo OT-VM-TWEAK-01 restano separati e non dichiarati superati: i test VM sono esclusi da questa chiusura per scelta dell'utente. Nessun nuovo lotto ambientale viene avviato automaticamente. Le correzioni OT-AUDIT-08/09/10 e la rimozione OT-AUDIT-11 rimangono storico; il salvataggio dei sorgenti non equivale a distribuzione o validazione in produzione.
+
+Verifica del lotto navigazione/tweak: 121 test desktop e 91 test CI locale superati, zero fallimenti. [Rapporto](../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-navigation-tweaks/report.md).

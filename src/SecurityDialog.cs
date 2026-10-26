@@ -6,13 +6,13 @@ using System.Windows.Forms;
 
 namespace OnlyTweakWindows
 {
-    internal sealed class SecurityDialog : DarkForm
+    internal sealed class SecurityDialog : DarkPage
     {
         private readonly AppServices app;
         private readonly List<SecurityPane> panes=new List<SecurityPane>();
         private readonly Button refresh;
         private bool loading;
-        public SecurityDialog(AppServices app,bool loadOnShown=true) : base("Compatibilità e protezioni","Computer locale, tutti gli utenti.",Glyphs.Shield,
+        public SecurityDialog(AppServices app,bool loadOnShown=true) : base("CompatibilitÃ  e protezioni","Computer locale, tutti gli utenti.",Glyphs.Shield,
             "Letture dello stato e accesso alle pagine Windows. Le modifiche si effettuano negli strumenti di sistema.")
         {
             this.app=app;
@@ -24,8 +24,9 @@ namespace OnlyTweakWindows
             }
             refresh=Theme.Button("Aggiorna stato",async delegate { await RefreshStates(); }); Footer.Controls.Add(refresh);
             if (loadOnShown) Shown+=async delegate { await RefreshStates(); };
-            FormClosing+=delegate(object sender,FormClosingEventArgs e) { if (loading || app.Coordinator.IsBusy) e.Cancel=true; };
+
         }
+        internal override Task<bool> CanLeaveAsync(bool closing) => Task.FromResult(!loading && !app.Coordinator.IsBusy);
         internal void DisplayStates(SecurityEnvironment environment)
         {
             foreach (SecurityPane pane in panes)
@@ -39,7 +40,7 @@ namespace OnlyTweakWindows
             if (!app.Coordinator.TryEnter()) { SetFeedback("Attendi il completamento dell'operazione in corso."); return; }
             loading=true; refresh.Enabled=false;
             foreach (SecurityPane pane in panes) pane.SetBusy();
-            SetFeedback("Lettura protezioni e criteri…");
+            SetFeedback("Lettura protezioni e criteriâ€¦");
             try
             {
                 List<SecurityStatus> states=await Task.Run(delegate {

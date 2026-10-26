@@ -12,12 +12,15 @@ using System.Windows.Forms;
 
 namespace OnlyTweakWindows
 {
-    internal sealed class EnterpriseDialog : DarkForm
+    internal sealed class EnterpriseDialog : DarkPage
     {
         private readonly ComboBox profiles=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,Width=220,DisplayMember="Customer"};
         private readonly ComboBox targets=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,Width=260};
         private readonly Label identity=Theme.Label("Nessuna sessione di rete. Seleziona un profilo e connetti.",Theme.Muted);
-        private readonly TabControl tabs=new DarkTabs {Dock=DockStyle.Fill};
+        private readonly WorkspaceSections tabs=new WorkspaceSections {Dock=DockStyle.Fill};
+        private Panel workspace;
+        private StackPanel index;
+        private bool changing;
         private readonly DarkOutput output=Theme.Output();
         private readonly FlowLayoutPanel profileBar=Bar();
         private readonly List<EnvironmentProfile> environments=new List<EnvironmentProfile>();
@@ -49,18 +52,18 @@ namespace OnlyTweakWindows
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             layout.Dock=DockStyle.Top; layout.AutoSize=true;
             profileBar.Controls.Add(profiles);
-            profileBar.Controls.Add(Theme.Button("Nuovo",delegate { EditProfile(true); }));
-            profileBar.Controls.Add(Theme.Button("Modifica",delegate { EditProfile(false); }));
-            profileBar.Controls.Add(Theme.Button("Elimina",delegate { DeleteProfile(); }));
+            profileBar.Controls.Add(Theme.Button("Nuovo",async delegate { await EditProfile(true); }));
+            profileBar.Controls.Add(Theme.Button("Modifica",async delegate { await EditProfile(false); }));
+            profileBar.Controls.Add(Theme.Button("Elimina",async delegate { await DeleteProfile(); }));
             profileBar.Controls.Add(Theme.Button("Identità corrente",async delegate { await Connect(false); }));
             profileBar.Controls.Add(Theme.Button("Credenziali sessione…",async delegate { await Connect(true); }));
             profileBar.Controls.Add(Theme.Button("Disconnetti",delegate { Disconnect(); }));
             FlowLayoutPanel context=Bar(); context.Controls.Add(Theme.Label("Destinazione",Theme.Muted)); context.Controls.Add(targets); context.Controls.Add(identity);
             layout.Controls.Add(profileBar,0,0); layout.Controls.Add(context,0,1); layout.Controls.Add(tabs,0,2); layout.Controls.Add(output,0,3);
-            Panel viewport=new Panel {Dock=DockStyle.Fill,AutoScroll=true};
+            Panel viewport=new Panel {Dock=DockStyle.Fill,AutoScroll=true}; workspace=viewport;
             viewport.Controls.Add(layout); Content.Controls.Add(viewport);
             BuildProcedures(); BuildTechnician(); BuildDirectory(); BuildDfs(); BuildEndpoint(); BuildProvisioning();
-            foreach(TabPage tab in tabs.TabPages) {
+            foreach(Panel tab in tabs.TabPages) {
                 Control[] controls=tab.Controls.Cast<Control>().OrderBy(c=>c is FlowLayoutPanel ? 0 : c is Label ? 2 : 1).ToArray();
                 tab.Controls.Clear();
                 TableLayoutPanel page=new TableLayoutPanel {Dock=DockStyle.Top,AutoSize=true,ColumnCount=1,RowCount=controls.Length};
@@ -75,14 +78,46 @@ namespace OnlyTweakWindows
             }
             if (technician) tabs.SelectedIndex=1;
             cancel=Theme.Button("Annulla diagnosi",delegate { cancellation?.Cancel(); }); cancel.Enabled=false; Footer.Controls.Add(cancel);
-            Footer.Controls.Add(Theme.Button("Esporta JSON",delegate { Export(false); }));
-            Footer.Controls.Add(Theme.Button("Esporta HTML",delegate { Export(true); }));
+            Footer.Controls.Add(Theme.Button("Esporta JSON",async delegate { await Export(false); }));
+            Footer.Controls.Add(Theme.Button("Esporta HTML",async delegate { await Export(true); }));
             profiles.SelectedIndexChanged+=delegate { Disconnect(); RefreshTargets(); };
             targets.SelectedIndexChanged+=delegate { page=0; directory.Rows.Clear(); directory.ClearSelection(); };
             try { if (loadProfiles) environments.AddRange(ProfileStore.Load()); RefreshProfiles(null); }
             catch (Exception ex) { SetFeedback("Archivio profili non caricato: "+ex.Message); }
-            FormClosing+=delegate(object sender,FormClosingEventArgs e) { if (busy) { e.Cancel=true; SetFeedback("Attendi l'esito. Le modifiche non vengono terminate forzatamente."); } };
+            ShowIndex(technician);
         }
+        protected override void SetFeedback(string text)
+        {
+            base.SetFeedback(text);
+            if(Navigation?.Current is EnterpriseSectionPage section && section.WorkspaceOwner==this) section.ShowWorkspaceFeedback(text);
+        }
+        internal IEnumerable<Panel> Sections => tabs.TabPages;
+        internal void ShowIndex(bool technician=false)
+        {
+            if(index!=null) return;
+            Content.Controls.Clear();
+            index=new StackPanel();Content.Controls.Add(index);
+            index.Controls.Add(Theme.Label("Seleziona una sezione. Cliente, sessione e risultati vengono conservati tornando indietro.",Theme.Muted));
+            foreach(Panel section in tabs.TabPages) {
+                Panel selected=section;
+                index.Controls.Add(Theme.Card(section.Text,"Apri nella finestra corrente",delegate { OpenSection(selected); },Glyphs.Network));
+            }
+        }
+        internal void OpenSection(Panel section)
+        {
+            tabs.SelectedIndex=tabs.TabPages.IndexOf(section);
+            Navigation.Push(new EnterpriseSectionPage(this,workspace,section.Text));
+        }
+        internal override async Task<bool> CanLeaveAsync(bool closing)
+        {
+            if(!busy) return true;
+            if(changing) { SetFeedback("Attendi l'esito della modifica prima di uscire.");return false; }
+            cancellation?.Cancel();
+            while(busy) await Task.Delay(20);
+            return true;
+        }
+        internal IEnumerable<Control> WorkspaceFooter => Footer.Controls.Cast<Control>().Where(c=>c!=CloseAction).ToArray();
+        internal void RestoreFooter(Control control) {Footer.Controls.Add(control);}
         private static FlowLayoutPanel Bar() => new FlowLayoutPanel {AutoSize=true,Dock=DockStyle.Fill,WrapContents=true,Margin=new Padding(3)};
         private static TextBox Field() => new TextBox {Width=220,BackColor=Theme.Surface,ForeColor=Theme.Text};
         private static ComboBox Choice(params string[] items)
@@ -98,11 +133,11 @@ namespace OnlyTweakWindows
                 e.DrawFocusRectangle();
             };
         }
-        private TabPage Tab(string name)
-        { TabPage tab=new TabPage(name) {BackColor=Theme.Background,ForeColor=Theme.Text,Padding=new Padding(8)}; tabs.TabPages.Add(tab); return tab; }
+        private Panel Tab(string name)
+        { Panel tab=new Panel {Text=name,BackColor=Theme.Background,ForeColor=Theme.Text,Padding=new Padding(8)}; tabs.TabPages.Add(tab); return tab; }
         private void BuildProcedures()
         {
-            TabPage tab=Tab("Problemi comuni");
+            Panel tab=Tab("Problemi comuni");
             ListBox list=new ListBox {Dock=DockStyle.Fill,BackColor=Theme.Surface,ForeColor=Theme.Text};
             list.Items.AddRange(EnterpriseCatalog.Runbooks); list.SelectedIndex=0;
             FlowLayoutPanel buttons=Bar(); buttons.Dock=DockStyle.Bottom;
@@ -123,7 +158,7 @@ namespace OnlyTweakWindows
         }
         private void BuildTechnician()
         {
-            TabPage tab=Tab("Tecnico e RSAT"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
+            Panel tab=Tab("Tecnico e RSAT"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
             ComboBox capability=Choice(EnterpriseCatalog.Rsat.Keys.ToArray()); TextBox source=Field(); source.PlaceholderText="Sorgente FoD locale, opzionale";
             bar.Controls.Add(Theme.Button("Verifica prerequisiti",async delegate { await RunLocal("technician.inspect",false); }));
             bar.Controls.Add(Theme.Button("Inventario RSAT",async delegate { await RunLocal("rsat.inspect",true); }));
@@ -136,12 +171,12 @@ namespace OnlyTweakWindows
                 ["GPO"]="gpmc.msc",["DNS"]="dnsmgmt.msc",["DFS"]="dfsmgmt.msc",["DHCP"]="dhcpmgmt.msc"})
             {
                 string file=entry.Value;
-                consoles.Controls.Add(Theme.Button(entry.Key,delegate {
+                consoles.Controls.Add(Theme.Button(entry.Key,async delegate {
                     try {
                         if (session==null) throw new InvalidOperationException("Connetti prima una sessione cliente. Le console usano l'identità corrente di Windows: per credenziali alternative usa una sessione amministrativa Windows dedicata.");
                         if (!identity.Text.Contains("rete dichiarata: "+EnvironmentInfo.Account,StringComparison.OrdinalIgnoreCase))
                             throw new InvalidOperationException("La console esterna non eredita le credenziali del worker. Aprila da una sessione Windows dedicata al cliente.");
-                        if (!ConfirmDialog.Ask(this,"Apri console Microsoft","La console userà l'identità Windows corrente e manterrà il proprio contesto. Seleziona e verifica il dominio nella console.")) return;
+                        if (!await ConfirmDialog.Ask(this,"Apri console Microsoft","La console userà l'identità Windows corrente e manterrà il proprio contesto. Seleziona e verifica il dominio nella console.")) return;
                         new ProcessService().LaunchSystem("mmc.exe",ProcessService.QuoteArgument(new ProcessService().SystemFile(file)),Append);
                     } catch (Exception ex) { SetFeedback(ex.Message); }
                 }));
@@ -151,7 +186,7 @@ namespace OnlyTweakWindows
         }
         private void BuildDirectory()
         {
-            TabPage tab=Tab("Active Directory"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
+            Panel tab=Tab("Active Directory"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
             search.PlaceholderText="Nome o account, almeno 2 caratteri";
             bar.Controls.Add(kind); bar.Controls.Add(search);
             bar.Controls.Add(Theme.Button("Cerca",async delegate { page=0; await SearchDirectory(); }));
@@ -198,13 +233,13 @@ namespace OnlyTweakWindows
             string secret="";
             if (action=="ad.password") {
                 using (PasswordEntry form=new PasswordEntry())
-                    if (form.ShowDialog(this)==DialogResult.OK) secret=form.ProtectedPassword; else return;
+                    if (await Navigation.PresentAsync(form)==DialogResult.OK) secret=form.TakePassword(); else return;
             }
             await Run(action,new Dictionary<string,string> {["objectGuid"]=item.Guid,["expectedDn"]=item.Dn},secret);
         }
         private void BuildDfs()
         {
-            TabPage tab=Tab("DFS e replica"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
+            Panel tab=Tab("DFS e replica"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
             TextBox path=Field(),destination=Field(),group=Field(),folder=Field();
             path.PlaceholderText=@"\\dominio\namespace\cartella"; destination.PlaceholderText="Partner FQDN del profilo";
             group.PlaceholderText="Gruppo replica"; folder.PlaceholderText="Cartella replicata";
@@ -218,7 +253,7 @@ namespace OnlyTweakWindows
         }
         private void BuildEndpoint()
         {
-            TabPage tab=Tab("Interventi postazione"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
+            Panel tab=Tab("Interventi postazione"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
             ComboBox operations=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,Width=350,DisplayMember="Title"};
             StyleChoice(operations);
             operations.Items.AddRange(EnterpriseCatalog.Actions.Where(a=>a.Risk==ActionRisk.EndpointChange).ToArray()); operations.SelectedIndex=0;
@@ -232,11 +267,11 @@ namespace OnlyTweakWindows
         }
         private void BuildProvisioning()
         {
-            TabPage tab=Tab("Predisposizione remota"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
+            Panel tab=Tab("Predisposizione remota"); FlowLayoutPanel bar=Bar(); bar.Dock=DockStyle.Top;
             bar.Controls.Add(Theme.Label("Esporta script revisionabili, modulo JEA e istruzioni GPO.\nApplicare in laboratorio e poi tramite strumenti aziendali; nessuna configurazione remota avviata da questa pagina.",Theme.Muted));
             bar.Controls.Add(Theme.Button("Esporta pacchetto…",delegate {
                 using (FolderBrowserDialog dialog=new FolderBrowserDialog {Description="Cartella del pacchetto di predisposizione"})
-                    if (dialog.ShowDialog(this)==DialogResult.OK)
+                    if (dialog.ShowDialog(Navigation.Window)==DialogResult.OK)
                         try { RemoteProvisioning.Export(dialog.SelectedPath); SetFeedback("Pacchetto esportato: revisiona README e modalità Inspect/WhatIf prima dell'applicazione."); }
                         catch (Exception ex) { SetFeedback(ex.Message); }
             }));
@@ -247,7 +282,7 @@ namespace OnlyTweakWindows
             await Work(false,async ()=> {
                 if (Selected==null) throw new InvalidOperationException("Crea o seleziona un profilo.");
                 Disconnect();
-                session=await CustomerSession.Start(Selected,alternate,owner:Handle);
+                session=await CustomerSession.Start(Selected,alternate,owner:Navigation.Window.Handle);
                 identity.Text=session.Identity+" · autenticazione da verificare sul target";
                 Append("Sessione creata per "+Selected.Customer+". L'avvio non prova validità delle credenziali.");
             });
@@ -270,7 +305,7 @@ namespace OnlyTweakWindows
                 StepResult before=await Execute("endpoint.verify",new Dictionary<string,string> {["operation"]=action.Id});
                 if (before.State!=StepState.Success || !before.AuthenticationVerified) return before;
             }
-            if (action.IsChange && !ConfirmDialog.Ask(this,action.Title,WorkerHost.Preview(request)+"\n\nIdentità: "+session.Identity+"\nL'audit è obbligatorio; nessun ripristino automatico della password."))
+            if (action.IsChange && !await ConfirmDialog.Ask(this,action.Title,WorkerHost.Preview(request)+"\n\nIdentità: "+session.Identity+"\nL'audit è obbligatorio; nessun ripristino automatico della password."))
                 return new StepResult {State=StepState.Cancelled};
             Append("AVVIO · "+action.Title+" · "+request.Profile.Customer+" · "+request.Target);
             Append("Fonte Microsoft: "+action.Source);
@@ -283,12 +318,14 @@ namespace OnlyTweakWindows
         }
         private async Task RunLocal(string id,bool elevated,Dictionary<string,string> args=null)
         {
-            await Work(EnterpriseCatalog.Get(id).IsChange,async ()=> {
+            ActionDefinition definition=EnterpriseCatalog.Get(id);
+            if(definition.IsChange && !await ConfirmDialog.Ask(this,definition.Title,"Intervento sul computer locale con UAC.\n"+definition.Title+"\n"+String.Join("\n",(args??new Dictionary<string,string>()).Select(p=>p.Key+": "+p.Value)))) return;
+            await Work(definition.IsChange,async ()=> {
                 EnvironmentProfile profile=LocalPrivilege.TechnicianProfile();
                 OperationRequest request=new OperationRequest {Profile=profile,ActionId=id,Target=profile.DomainController,
                     Parameters=args??new Dictionary<string,string>(),Confirmed=EnterpriseCatalog.Get(id).IsChange};
                 EnterpriseCatalog.Get(id).Validate(request);
-                using (CustomerSession local=await CustomerSession.Start(profile,false,elevated,Handle))
+                using (CustomerSession local=await CustomerSession.Start(profile,false,elevated,Navigation.Window.Handle))
                     AddResult(profile,await local.Execute(request,cancellation.Token));
             });
         }
@@ -302,13 +339,13 @@ namespace OnlyTweakWindows
         private async Task Work(bool change,Func<Task> action)
         {
             if (busy) return;
-            busy=true; profileBar.Enabled=false; targets.Enabled=false; tabs.Enabled=false;
-            cancel.Enabled=!change; CloseAction.Enabled=false; cancellation=new CancellationTokenSource();
+            busy=true;changing=change;BlocksPush=true; profileBar.Enabled=false; targets.Enabled=false; tabs.Enabled=false;
+            cancel.Enabled=!change; CloseAction.Enabled=false;Navigation.Current.BackButton.Enabled=!change; cancellation=new CancellationTokenSource();
             SetFeedback(change ? "Intervento in corso: attendi l'esito. Non chiudere l'app." : "Diagnostica in corso…");
             try { await action(); }
             catch (OperationCanceledException) { SetFeedback("Operazione annullata."); }
             catch (Exception ex) { SetFeedback("Operazione non completata: "+ex.Message); Append("Operazione non verificata. Rileggere lo stato prima di ripetere modifiche."); }
-            finally { cancellation.Dispose(); cancellation=null; busy=false; profileBar.Enabled=true; targets.Enabled=true; tabs.Enabled=true; cancel.Enabled=false; CloseAction.Enabled=true; }
+            finally { cancellation.Dispose(); cancellation=null; busy=false;BlocksPush=false; profileBar.Enabled=true; targets.Enabled=true; tabs.Enabled=true; cancel.Enabled=false; CloseAction.Enabled=true;Navigation.Current.BackButton.Enabled=true; }
         }
         private void Append(string line) { text.Append(line+"\r\n\r\n"); output.Text=text.Read(); }
         private void Disconnect()
@@ -330,39 +367,40 @@ namespace OnlyTweakWindows
             else if (profiles.Items.Count>0) profiles.SelectedIndex=0;
             RefreshTargets();
         }
-        private void EditProfile(bool create)
+        private async Task EditProfile(bool create)
         {
             if (!create && Selected==null) { SetFeedback("Seleziona un profilo."); return; }
             using (ProfileEditor editor=new ProfileEditor(create ? new EnvironmentProfile() : Selected.Copy()))
-                if (editor.ShowDialog(this)==DialogResult.OK) {
+                if (await Navigation.PresentAsync(editor)==DialogResult.OK) {
                     Disconnect(); environments.RemoveAll(p=>p.Id==editor.Profile.Id); environments.Add(editor.Profile);
                     try { ProfileStore.Save(environments); RefreshProfiles(editor.Profile.Id); }
                     catch (Exception ex) { SetFeedback("Profilo non salvato: "+ex.Message); }
                 }
         }
-        private void DeleteProfile()
+        private async Task DeleteProfile()
         {
-            if (Selected==null || !ConfirmDialog.Ask(this,"Elimina profilo",Selected.Customer+"\nSaranno rimossi soltanto i dati del profilo; audit e report rimangono.")) return;
+            if (Selected==null || !await ConfirmDialog.Ask(this,"Elimina profilo",Selected.Customer+"\nSaranno rimossi soltanto i dati del profilo; audit e report rimangono.")) return;
             Guid id=Selected.Id; Disconnect(); environments.RemoveAll(p=>p.Id==id);
             try { ProfileStore.Save(environments); RefreshProfiles(null); } catch (Exception ex) { SetFeedback(ex.Message); }
         }
-        private void Export(bool html)
+        private async Task Export(bool html)
         {
             if (busy || reportProfile==null) return;
             StepResult[] subset=results.Where(r=>r.ProfileId==reportProfile.Id).ToArray();
             string preview=ReportExport.Json(reportProfile,subset);
-            using (TextDialog form=new TextDialog("Anteprima dati da esportare",preview)) form.ShowDialog(this);
-            if (!ConfirmDialog.Ask(this,"Esporta dati aziendali","Cliente: "+reportProfile.Customer+"\nIl rapporto include nomi, identità, percorsi e risultati. Conferma la destinazione secondo le policy del cliente.")) return;
+            using (TextDialog form=new TextDialog("Anteprima dati da esportare",preview)) await Navigation.PresentAsync(form);
+            if (!await ConfirmDialog.Ask(this,"Esporta dati aziendali","Cliente: "+reportProfile.Customer+"\nIl rapporto include nomi, identità, percorsi e risultati. Conferma la destinazione secondo le policy del cliente.")) return;
             using (SaveFileDialog dialog=new SaveFileDialog {Filter=html ? "Rapporto HTML|*.html" : "Rapporto JSON|*.json",FileName="OnlyTweak-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")})
-                if (dialog.ShowDialog(this)==DialogResult.OK)
+                if (dialog.ShowDialog(Navigation.Window)==DialogResult.OK)
                     try { File.WriteAllText(dialog.FileName,html ? ReportExport.Html(reportProfile,subset) : preview,new UTF8Encoding(false)); }
                     catch (Exception ex) { SetFeedback("Esportazione fallita: "+ex.Message); }
         }
-        protected override void Dispose(bool disposing) { if (disposing) { session?.Dispose(); cancellation?.Dispose(); } base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { session?.Dispose(); cancellation?.Dispose();workspace?.Dispose();tabs.Dispose(); } base.Dispose(disposing); }
     }
-    internal sealed class ProfileEditor : DarkForm
+    internal sealed class ProfileEditor : DarkPage
     {
         internal EnvironmentProfile Profile {get; private set;}
+        private bool dirty,saved;
         public ProfileEditor(EnvironmentProfile profile) : base("Profilo cliente","Il profilo non contiene password.",Glyphs.Contact,null)
         {
             Profile=profile; StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
@@ -382,10 +420,16 @@ namespace OnlyTweakWindows
                     profile.Targets=Lines(targets); profile.AllowedOus=Lines(allowed); profile.ExcludedOus=Lines(excluded);
                     profile.ProtectedGroupSids=Lines(groups); profile.JeaEndpoint=jea.Text.Trim(); profile.UseHttps=https.Checked;
                     profile.DelegatedUserOusReviewed=reviewed.Checked;
-                    profile.Validate(); DialogResult=DialogResult.OK; Close();
+                    profile.Validate(); saved=true;DialogResult=DialogResult.OK; Close();
                 } catch (Exception ex) { SetFeedback(ex.Message); }
             }));
+            foreach(TextBox field in AllFields(stack)) field.TextChanged+=delegate {dirty=true;};
+            https.CheckedChanged+=delegate {dirty=true;};reviewed.CheckedChanged+=delegate {dirty=true;};
         }
+        private static IEnumerable<TextBox> AllFields(Control parent) {
+            foreach(Control child in parent.Controls) {if(child is TextBox field) yield return field;foreach(var field2 in AllFields(child)) yield return field2;}
+        }
+        internal override async Task<bool> CanLeaveAsync(bool closing) => !dirty || saved || await ConfirmDialog.Ask(this,"Modifiche non salvate","Scartare le modifiche al profilo e uscire dall'editor?");
         private static string[] Lines(TextBox box) => box.Lines.Select(s=>s.Trim()).Where(s=>s.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         private static TextBox Add(StackPanel stack,string title,string value,bool multiple=false)
         {
@@ -395,9 +439,10 @@ namespace OnlyTweakWindows
             stack.Controls.Add(field); return field;
         }
     }
-    internal sealed class PasswordEntry : DarkForm
+    internal sealed class PasswordEntry : DarkPage
     {
-        public string ProtectedPassword {get; private set;}
+        private string protectedPassword;
+        internal string TakePassword() {string value=protectedPassword;protectedPassword=null;return value;}
         public PasswordEntry() : base("Nuova password","Inserisci due volte la password. Nessun salvataggio negli appunti o nei report.",Glyphs.Shield,null)
         {
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
@@ -409,29 +454,39 @@ namespace OnlyTweakWindows
                 if (first.Text.Length==0 || first.Text!=second.Text) { SetFeedback("Le password devono coincidere e non essere vuote."); return; }
                 using (SecureString secret=new SecureString()) {
                     foreach (char ch in first.Text) secret.AppendChar(ch);
-                    secret.MakeReadOnly(); ProtectedPassword=WindowsCredentials.Protect(secret);
+                    secret.MakeReadOnly(); protectedPassword=WindowsCredentials.Protect(secret);
                 }
                 first.Clear(); second.Clear(); DialogResult=DialogResult.OK; Close();
             }));
-            FormClosed+=delegate { first.Clear(); second.Clear(); };
+            Disposed+=delegate { first.Clear(); second.Clear();protectedPassword=null; };
         }
     }
-    internal sealed class DarkTabs : TabControl
+    internal sealed class EnterpriseSectionPage : DarkPage
     {
-        public DarkTabs() {
-            SizeMode=TabSizeMode.Fixed; ItemSize=new Size(160,32); ShowToolTips=true;
-            SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
-        }
-        protected override void OnPaint(PaintEventArgs e)
+        private readonly EnterpriseDialog owner;
+        internal EnterpriseDialog WorkspaceOwner => owner;
+        internal void ShowWorkspaceFeedback(string text) {SetFeedback(text);}
+        internal EnterpriseSectionPage(EnterpriseDialog owner,Panel workspace,string title) : base(title,"Cliente, identità e destinazione indicati nel contesto della sessione.",Glyphs.Network,null)
         {
-            e.Graphics.Clear(Theme.Background);
-            using (Pen border=new Pen(Theme.Muted)) e.Graphics.DrawRectangle(border,0,Math.Max(0,DisplayRectangle.Top-2),Math.Max(0,Width-1),Math.Max(0,Height-DisplayRectangle.Top));
-            for (int i=0;i<TabCount;i++) {
-                Rectangle area=GetTabRect(i);
-                using (SolidBrush brush=new SolidBrush(i==SelectedIndex ? Theme.Surface : Theme.Background)) e.Graphics.FillRectangle(brush,area);
-                TextRenderer.DrawText(e.Graphics,TabPages[i].Text,Font,area,i==SelectedIndex ? Theme.Accent : Theme.Text,
-                    TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
-            }
+            this.owner=owner;Content.Controls.Add(workspace);
+            foreach(Control control in owner.WorkspaceFooter) Footer.Controls.Add(control);
         }
+        internal override Task<bool> CanLeaveAsync(bool closing) => owner.CanLeaveAsync(closing);
+        internal override void OnRemoved() {
+            Content.Controls.Clear();
+            foreach(Control control in Footer.Controls.Cast<Control>().Where(c=>c!=CloseAction).ToArray()) owner.RestoreFooter(control);
+        }
+        protected override void Dispose(bool disposing) {if(disposing) OnRemoved();base.Dispose(disposing);}
+    }
+    internal sealed class WorkspaceSections : UserControl
+    {
+        internal readonly List<Panel> TabPages=new List<Panel>();
+        private int selected;
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal int SelectedIndex {get=>selected;set {
+            if(value<0 || value>=TabPages.Count) return;
+            Controls.Clear();selected=value;Panel page=TabPages[value];page.Dock=DockStyle.Fill;Controls.Add(page);
+        }}
+        protected override void Dispose(bool disposing) {if(disposing) foreach(var page in TabPages) page.Dispose();base.Dispose(disposing);}
     }
 }

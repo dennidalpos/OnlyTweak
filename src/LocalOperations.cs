@@ -12,7 +12,7 @@ namespace OnlyTweakWindows
         private readonly IOperationAudit audit;
         private readonly HashSet<string> uncertain=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal LocalOperationExecutor(IOperationAudit audit=null) { this.audit=audit??new FileOperationAudit(); }
-        internal static bool IsDiagnostic(string id) => id is "spool.status" or "network.info" or "network.ipconfig" or "sfc.verify" or "dism.scan";
+        internal static bool IsDiagnostic(string id) => Array.IndexOf(LocalDiagnostics.Ids,id)>=0 || id is "spool.status" or "network.info" or "network.ipconfig" or "sfc.verify" or "dism.scan";
         private static string Key(ActionSpec action) => action.Id+"|"+action.Scope;
         internal void Authorize(ActionSpec action) {
             if(!action.IsDiagnostic && uncertain.Contains(Key(action))) throw new InvalidOperationException("Esito incerto: usa Rileggi stato prima di ripetere l'intervento.");
@@ -57,11 +57,12 @@ namespace OnlyTweakWindows
                 if(action.Unavailable!=null) {string reason=action.Unavailable();if(reason!=null) throw new InvalidOperationException(reason);}
                 if(action.ExecuteResult!=null) execution=action.ExecuteResult(Write,action.IsDiagnostic ? cancellation : CancellationToken.None);
                 else {action.Execute(Write);execution=new StepResult {State=StepState.Success};}
-                completed=execution!=null && execution.State==StepState.Success;
+                completed=execution!=null && (execution.State==StepState.Success || (action.IsDiagnostic && execution.State==StepState.ObservedIssue));
                 if(!action.IsDiagnostic) after=action.Observe?.Invoke(Write,CancellationToken.None);
-                result.State=action.IsDiagnostic ? (completed ? StepState.Success : StepState.Inconclusive) :
+                result.State=action.IsDiagnostic ? (execution?.State??StepState.Inconclusive) :
                     completed && after!=null && after.ReadComplete && after.Satisfied==true ? StepState.Success : StepState.Unverified;
-                result.Summary=action.IsDiagnostic ? "Diagnostica conclusa: leggere le evidenze." : result.State==StepState.Success ?
+                result.Summary=action.IsDiagnostic ? (!String.IsNullOrWhiteSpace(execution?.Summary) ? execution.Summary :
+                    result.State==StepState.Success ? "Diagnostica conclusa: leggere le evidenze." : result.State==StepState.ObservedIssue ? "Test negativo osservato: leggere le evidenze." : "Diagnostica incompleta o indisponibile: nessuna conclusione positiva.") : result.State==StepState.Success ?
                     "Esecuzione conclusa e condizione finale osservata; verificare anche il dispositivo interessato." : "Richiesta/esecuzione distinta dall'effetto: intervento non verificato. Rileggere prima del retry.";
                 result.ErrorCode=execution?.ErrorCode??"";
             } catch(OperationCanceledException) {result.State=StepState.Cancelled;result.ErrorCode="DiagnosticCancelled";result.Summary="Diagnostica annullata; esito sconosciuto.";}

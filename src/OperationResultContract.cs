@@ -32,6 +32,8 @@ namespace OnlyTweakWindows
                 !properties.TryGetValue("ErrorCode",out JsonElement error) || error.ValueKind!=JsonValueKind.String ||
                 !properties.ContainsKey("Data")) throw new FormatException("Contratto risultato incompleto.");
             StepResult parsed=Wire.Read<StepResult>(json);
+            if(request.ActionId is "local.dns" or "local.tcp" && parsed.State is StepState.Success or StepState.ObservedIssue && !LocalDiagnosticData(request,parsed))
+                throw new FormatException("Evidenze diagnostiche insufficienti.");
             if (parsed.Truncated || (parsed.State==StepState.Success &&
                 (!String.IsNullOrEmpty(parsed.ErrorCode) || !HasActionData(request,parsed))))
                 throw new FormatException("Evidenze insufficienti per un risultato positivo.");
@@ -124,10 +126,21 @@ namespace OnlyTweakWindows
             return shares.Length==2 && new[]{"Services","Folders","Events"}.All(n=>
                 checks.GetProperty("Remote"+n).GetRawText()==data.GetProperty("Remote").GetProperty("Checks").GetProperty(n).GetRawText());
         }
+        private static bool LocalDiagnosticData(OperationRequest request,StepResult result)
+        {
+            if(result.AuthenticationVerified || result.Data is not JsonElement data || !Text(data,"Target") || data.GetProperty("Target").GetString()!=request.Target || !Field(data,"ReadComplete",JsonValueKind.True)) return false;
+            bool success=result.State==StepState.Success;
+            if(request.ActionId=="local.tcp") return Field(data,"Port",JsonValueKind.Number) && data.GetProperty("Port").TryGetInt32(out int port) &&
+                request.Parameters.TryGetValue("port",out string requestedPort) && port.ToString(System.Globalization.CultureInfo.InvariantCulture)==requestedPort &&
+                Field(data,"TcpTestSucceeded",success ? JsonValueKind.True : JsonValueKind.False);
+            return Text(data,"RecordType") && request.Parameters.TryGetValue("recordType",out string type) && data.GetProperty("RecordType").GetString()==type &&
+                Field(data,"Records",JsonValueKind.Array) && (success ? data.GetProperty("Records").GetArrayLength()>0 : data.GetProperty("Records").GetArrayLength()==0);
+        }
         private static bool HasActionData(OperationRequest request,StepResult result)
         {
             if (result.Data is not JsonElement data || data.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return false;
             return request.ActionId switch {
+                "local.dns" or "local.tcp" => LocalDiagnosticData(request,result),
                 "technician.inspect" => Text(data,"Version") && Field(data,"Modules",JsonValueKind.Array) && Field(data,"OS",JsonValueKind.Object),
                 "rsat.inspect" => Field(data,"Capabilities",JsonValueKind.Array) && Field(data,"Policy",JsonValueKind.Array) && Text(data,"Source"),
                 "rsat.install" => Text(data,"Name") && Text(data,"Before") && Text(data,"After") && Boolean(data,"RestartNeeded") &&

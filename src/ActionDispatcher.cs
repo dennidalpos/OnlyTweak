@@ -6,9 +6,10 @@ namespace OnlyTweakWindows
 {
     internal static class ActionDispatcher
     {
-        public static async Task Invoke(IWin32Window owner, AppServices app, ActionSpec action, Action<string> status)
+        public static async Task Invoke(Control owner, AppServices app, ActionSpec action, Action<string> status)
         {
-            if (!action.OpensWindow) { OperationDialog.Open(owner,app,action); return; }
+            if(action.DiagnosticInput!=null) {NavigationService.For(owner).Push(new DiagnosticParametersPage(app,action));return;}
+            if (!action.OpensWindow) { await OperationDialog.Open(owner,app,action); return; }
             await Launch(app,action,status);
         }
         internal static async Task Launch(AppServices app,ActionSpec action,Action<string> status)

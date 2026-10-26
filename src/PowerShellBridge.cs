@@ -26,8 +26,11 @@ namespace OnlyTweakWindows
     }
     internal sealed class PowerShellBridge
     {
-        private readonly string scriptOverride;
-        internal PowerShellBridge(string scriptOverride=null) { this.scriptOverride=scriptOverride; }
+        private readonly string scriptOverride,embeddedName;
+        internal PowerShellBridge(string scriptOverride=null,string embeddedName="Operations.ps1") {
+            if(embeddedName is not ("Operations.ps1" or "LocalDiagnostics.ps1")) throw new ArgumentException("Procedura non consentita.");
+            this.scriptOverride=scriptOverride;this.embeddedName=embeddedName;
+        }
         private static async Task Drain(StreamReader reader,BoundedText output)
         {
             char[] buffer=new char[4096]; int count;
@@ -40,10 +43,10 @@ namespace OnlyTweakWindows
                 ProfileId=request.Profile.Id,Target=action.Elevated || action.Id=="technician.inspect" ? Environment.MachineName : request.Target,Started=DateTimeOffset.UtcNow};
             string folder=Path.Combine(Path.GetTempPath(),"OnlyTweak-"+Guid.NewGuid().ToString("N"));
             SecureFiles.EnsureDirectory(folder);
-            string script=Path.Combine(folder,"Operations.ps1");
+            string script=Path.Combine(folder,embeddedName);
             try
             {
-                if (scriptOverride==null) EmbeddedScripts.WriteTo("Operations.ps1",script);
+                if (scriptOverride==null) EmbeddedScripts.WriteTo(embeddedName,script);
                 else File.WriteAllText(script,scriptOverride,new UTF8Encoding(true));
                 string system=Environment.GetFolderPath(Environment.SpecialFolder.System);
                 ProcessStartInfo start=new ProcessStartInfo(Path.Combine(system,@"WindowsPowerShell\v1.0\powershell.exe")) {

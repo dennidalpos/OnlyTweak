@@ -9,6 +9,7 @@ namespace OnlyTweakWindows
         public string Id, Title, Description, Scope, Confirmation, Restart;
         // Riga breve per le card; Description resta il testo completo (tooltip, accessibilità, dettaglio operazione).
         public string Summary;
+        public string DiagnosticInput;
         public string CardText { get { return String.IsNullOrEmpty(Summary) ? Description : Summary; } }
         public Action<Action<string>> Execute;
         public Func<string> Unavailable;
@@ -49,6 +50,7 @@ namespace OnlyTweakWindows
         public readonly SpoolService Spool;
         public readonly ActionCatalog Catalog;
         public readonly SecurityService Security;
+        public readonly RegistryTweakService Tweaks;
         public readonly OsProfile OS;
         public readonly FeatureAvailability Availability;
         public AppServices() : this(new WindowsSecurityBackend()) { }
@@ -59,6 +61,7 @@ namespace OnlyTweakWindows
             OS=os;
             Availability=availability??new FeatureAvailability(os,name=>Processes.FileUnavailable(name)==null,target=>Processes.TargetUnavailable(target)==null);
             Security=new SecurityService(security);
+            Tweaks=new RegistryTweakService(new WindowsRegistryStore(),os);
             Spool = new SpoolService(new WindowsSpoolBackend());
             Catalog = new ActionCatalog(this);
         }

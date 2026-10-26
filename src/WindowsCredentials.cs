@@ -103,7 +103,7 @@ namespace OnlyTweakWindows
                 return result;
             }
         }
-        internal static StepResult RunAuthorized(string id,CancellationToken cancellation=default,bool readOnly=false)
+        internal static StepResult RunAuthorized(string id,CancellationToken cancellation=default,bool readOnly=false,bool confirmed=false)
         {
             if (!IsAdministrator) throw new InvalidOperationException("Elevazione locale richiesta.");
             string[] allowed={"spool.restart","spool.clean","network.dns","network.winsock","network.tcpip",
@@ -115,7 +115,7 @@ namespace OnlyTweakWindows
                 foreach (ActionSpec candidate in menu.AllActions()) if (candidate.Id==id) action=candidate;
             if (action==null || !action.Applicable) throw new InvalidOperationException("Componente non disponibile.");
             if(readOnly) return app.LocalOperations.Read(action,delegate{},cancellation);
-            if(!action.IsDiagnostic && !WorkerHost.ConfirmOnSta(action.Title,action.Confirmation??action.Description))
+            if(!action.IsDiagnostic && !confirmed)
                 return new StepResult {ActionId=id,Target=Environment.MachineName,State=StepState.Cancelled,Summary="Operazione annullata."};
             return app.LocalOperations.Execute(action,delegate{},cancellation);
 

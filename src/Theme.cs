@@ -223,7 +223,7 @@ namespace OnlyTweakWindows
             if (Focused&&ShowFocusCues&&Enabled) ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(6,6,Width-13,Height-13),BackColor==Theme.Accent ? Theme.Background : emphasis,background);
         }
     }
-    internal class DarkForm : Form
+    internal class DarkPage : UserControl
     {
         protected readonly TableLayoutPanel Root;
         protected readonly FlowLayoutPanel Footer;
@@ -234,8 +234,8 @@ namespace OnlyTweakWindows
         internal readonly ToolTip Tips;
         protected readonly GlyphLabel Heading;
         protected override void Dispose(bool disposing) { if (disposing) Tips.Dispose(); base.Dispose(disposing); }
-        public DarkForm(string title,string subtitle) : this(title,subtitle,null,null) { }
-        public DarkForm(string title,string subtitle,string glyph,string detail)
+        public DarkPage(string title,string subtitle) : this(title,subtitle,null,null) { }
+        public DarkPage(string title,string subtitle,string glyph,string detail)
         {
             Tips=new ToolTip { AutoPopDelay=InfoIcon.DetailDuration,InitialDelay=400,ReshowDelay=100,OwnerDraw=true };
             Tips.Popup+=delegate(object sender,PopupEventArgs e) {
@@ -247,11 +247,11 @@ namespace OnlyTweakWindows
                 using (Pen pen=new Pen(Theme.Border)) e.Graphics.DrawRectangle(pen,0,0,e.Bounds.Width-1,e.Bounds.Height-1);
                 TextRenderer.DrawText(e.Graphics,e.ToolTipText,Font,new Rectangle(10,7,e.Bounds.Width-20,e.Bounds.Height-14),Theme.Text,TextFormatFlags.WordBreak|TextFormatFlags.NoPrefix);
             };
-            WheelRouter.Install();
+            WheelRouter.Install(); LocationChanged+=delegate {HideTips();};
             Text=title=="OnlyTweakWindows" ? title : title+" · OnlyTweakWindows";
             BackColor=Theme.Background; ForeColor=Theme.Text; Font=new Font("Segoe UI",10F);
             AutoScaleDimensions=new SizeF(96F,96F); AutoScaleMode=AutoScaleMode.Dpi;
-            ClientSize=new Size(920,740); MinimumSize=new Size(660,540); StartPosition=FormStartPosition.CenterParent; Icon=AppIcon.Value;
+            ClientSize=new Size(920,740); MinimumSize=new Size(660,540);
             Root=new TableLayoutPanel { Dock=DockStyle.Fill,ColumnCount=1,RowCount=4,Margin=Padding.Empty,Padding=Padding.Empty };
             Root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.Percent,100)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -269,18 +269,19 @@ namespace OnlyTweakWindows
             if (!String.IsNullOrEmpty(detail)) { info=new InfoIcon(Tips,detail); header.Controls.Add(info,1,2); }
             else header.SetColumnSpan(Subtitle,2);
             header.SizeChanged+=delegate {
-                int width=Math.Max(100,header.ClientSize.Width-header.Padding.Horizontal); heading.MaximumSize=new Size(width,0);
+                int width=Math.Max(100,header.ClientSize.Width-header.Padding.Horizontal); heading.MaximumSize=new Size(Math.Max(100,width-(CloseAction?.Visible==true ? CloseAction.Width+CloseAction.Margin.Horizontal : 0)),0);
                 Subtitle.MaximumSize=new Size(Math.Max(100,width-(info==null ? 0 : info.Width+info.Margin.Horizontal)),0);
             };
             Content=new Panel { Dock=DockStyle.Fill,Margin=Padding.Empty };
             Footer=new FlowLayoutPanel { Dock=DockStyle.Fill,AutoSize=true,FlowDirection=FlowDirection.RightToLeft,WrapContents=true,Padding=new Padding(20,10,20,12),Margin=Padding.Empty };
-            CloseAction=Theme.Button("&Chiudi",delegate { Close(); }); Footer.Controls.Add(CloseAction); CancelButton=CloseAction;
+            CloseAction=Theme.Button("← Indietro",async delegate { if (Navigation!=null) await Navigation.BackAsync(); }); CloseAction.AccessibleName="Indietro"; header.Controls.Remove(heading); header.Controls.Add(heading,1,1); header.SetColumnSpan(heading,1); header.Controls.Add(CloseAction,0,1); CancelButton=CloseAction;
+            CloseAction.VisibleChanged+=delegate {header.ColumnStyles[0].SizeType=CloseAction.Visible ? SizeType.AutoSize : SizeType.Absolute;header.ColumnStyles[0].Width=0;};
             Feedback=Theme.Label("",Theme.Muted); Feedback.Dock=DockStyle.Top; Feedback.Padding=new Padding(26,9,26,0); Feedback.Visible=false;
             Footer.Paint+=delegate(object sender,PaintEventArgs e) { using (Pen pen=new Pen(Theme.Border)) e.Graphics.DrawLine(pen,24,0,Footer.Width-24,0); };
             Root.Controls.Add(header,0,0); Root.Controls.Add(Content,0,1); Root.Controls.Add(Feedback,0,2); Root.Controls.Add(Footer,0,3); Controls.Add(Root);
             // L'icona Info segue contenuti e pulsanti nell'ordine di tabulazione: all'apertura il focus non finisce sull'intestazione.
             header.TabIndex=Root.Controls.Count;
-            Move+=delegate { HideTips(); }; ResizeBegin+=delegate { HideTips(); };
+
         }
         private readonly InfoIcon info;
         // Chiude sia i tooltip al passaggio del mouse sia il dettaglio richiesto dall'icona Info.
@@ -289,39 +290,48 @@ namespace OnlyTweakWindows
             if (info!=null) info.HideDetail();
             if (Tips.Active) { Tips.Active=false; Tips.Active=true; }
         }
-        protected override void OnFormClosing(FormClosingEventArgs e) { HideTips(); base.OnFormClosing(e); }
-        protected void SetFeedback(string text)
+        protected virtual void SetFeedback(string text)
         { if (IsDisposed) return; Feedback.Text=text; Feedback.Visible=!String.IsNullOrEmpty(text); Feedback.MaximumSize=new Size(Math.Max(100,ClientSize.Width-16),0); }
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
-            try { SendMessage(Handle,0x0080,(IntPtr)0,AppIcon.Small.Handle); } catch (EntryPointNotFoundException) { }
-            ApplyFrame();
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal NavigationService Navigation { get; set; }
+        internal string PageTitle => Heading.Text;
+        internal Button BackButton => CloseAction;
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal IButtonControl AcceptButton { get; set; }
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal IButtonControl CancelButton { get; set; }
+        internal event EventHandler Shown;
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal DialogResult DialogResult { get; set; }
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal bool Persistent { get; set; }
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        internal bool BlocksPush { get; set; }
+        private bool activated;
+        internal virtual System.Threading.Tasks.Task<bool> CanLeaveAsync(bool closing) => System.Threading.Tasks.Task.FromResult(CloseAction.Enabled);
+        internal virtual void OnRemoved() { }
+        internal virtual void ResumePage() { }
+        internal virtual void ActivatePage() {
+            if (!activated) { activated=true; Shown?.Invoke(this,EventArgs.Empty); }
         }
-        protected override void OnActivated(EventArgs e) { base.OnActivated(e); ApplyFrame(); }
-        protected override void OnDeactivate(EventArgs e) { HideTips(); base.OnDeactivate(e); ApplyFrame(); }
-        private void ApplyFrame()
-        {
-            if (!IsHandleCreated) return;
-            try { SetFrame(20,1); SetFrame(34,ColorTranslator.ToWin32(Theme.Border)); SetFrame(35,ColorTranslator.ToWin32(Theme.Background)); SetFrame(36,ColorTranslator.ToWin32(Theme.Text)); }
-            catch (DllNotFoundException) { } catch (EntryPointNotFoundException) { }
-        }
-        private void SetFrame(int attribute,int value) { DwmSetWindowAttribute(Handle,attribute,ref value,4); }
-        [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd,int attribute,ref int value,int size);
-        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr wParam,IntPtr lParam);
+        internal void Close() { if (Navigation!=null) _=Navigation.BackAsync(); }
     }
-    internal sealed class ConfirmDialog : DarkForm
+    internal sealed class ConfirmDialog : DarkPage
     {
         public ConfirmDialog(string title,string message) : base(title,"Conferma l'operazione prima di continuare.",Glyphs.Warning,null)
         {
             Heading.GlyphColor=Theme.Warning;
-            ClientSize=new Size(700,440); MinimumSize=new Size(560,360); MaximizeBox=false; MinimizeBox=false;
+            ClientSize=new Size(700,440);
             StackPanel stack=new StackPanel(); stack.Controls.Add(Theme.Label(message,Theme.Warning)); Content.Controls.Add(stack);
             CloseAction.Text="&Annulla";
             DarkButton confirm=(DarkButton)Theme.Button("&Conferma",delegate { DialogResult=DialogResult.Yes; Close(); }); confirm.Caution=true; confirm.ForeColor=Theme.Warning; Footer.Controls.Add(confirm);
             AcceptButton=CloseAction; Shown+=delegate { CloseAction.Focus(); };
         }
-        public static bool Ask(IWin32Window owner,string title,string message)
-        { using (ConfirmDialog dialog=new ConfirmDialog(title,message)) return dialog.ShowDialog(owner)==DialogResult.Yes; }
+        public static async System.Threading.Tasks.Task<bool> Ask(Control owner,string title,string message)
+        {
+            NavigationService nav=NavigationService.For(owner);
+            using ConfirmDialog dialog=new ConfirmDialog(title,message);
+            return await nav.PresentAsync(dialog)==DialogResult.Yes;
+        }
     }
 }

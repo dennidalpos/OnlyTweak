@@ -48,6 +48,17 @@ namespace OnlyTweakWindows
             };
             return RunProcess(start,log,diagnostic,cancellation,timeoutSeconds);
         }
+        internal NativeObservation RunObserved(string name,string[] arguments,Action<string> log,bool diagnostic,CancellationToken cancellation,int timeoutSeconds)
+        {
+            string file=SystemFile(name);
+            if(!File.Exists(file)) throw new FileNotFoundException("Componente Windows non trovato.",file);
+            var start=new ProcessStartInfo(file) {UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true,RedirectStandardError=true,
+                WorkingDirectory=Environment.GetFolderPath(Environment.SpecialFolder.System),
+                StandardOutputEncoding=Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage),StandardErrorEncoding=Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage)};
+            foreach(string argument in arguments) start.ArgumentList.Add(argument);
+            log(name+" "+String.Join(" ",arguments));
+            return RunProcess(start,log,diagnostic,cancellation,timeoutSeconds);
+        }
         internal static NativeObservation RunProcess(ProcessStartInfo start,Action<string> log,bool diagnostic,CancellationToken cancellation,int timeoutSeconds)
         {
             if (diagnostic) cancellation.ThrowIfCancellationRequested();

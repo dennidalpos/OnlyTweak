@@ -41,7 +41,7 @@ namespace OnlyTweakWindows
                 FeatureAvailability availability=new FeatureAvailability(TestProfile(19045,"Core"),name=>name!="sfc.exe" && name!="dism.exe" && name!="cleanmgr.exe" && name!="netplwiz.exe",target=>target!="ms-settings:storagesense");
                 AppServices app=TestApp(availability:availability);
                 Assert(!app.Catalog.Maintenance.AllActions().Any() && app.Catalog.Maintenance.Children.Count==0,"Sezione vuota rimasta.");
-                Assert(app.Catalog.Tools.AllActions().Count()==11,"Strumenti richiesti rimossi.");
+                Assert(app.Catalog.Tools.AllActions().Count()==13,"Strumenti richiesti rimossi.");
                 Assert(app.Catalog.Tools.Actions.Single(a=>a.Id=="tools.apps").Title=="App e funzionalità","Etichetta Windows 10 errata.");
             });
             Test("catalogo: rileva Explorer nella cartella Windows",delegate {
@@ -79,13 +79,13 @@ namespace OnlyTweakWindows
         {
             foreach (int build in new[] {17763,19044,19045,22000,22621,26100}) {
                 FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=TestApp(backend,build);
-                using (MainForm home=new MainForm(app))
+                using (HomePage home=new HomePage(app))
                 using (MenuDialog explorer=new MenuDialog(app,app.Catalog.Network))
                 using (SecurityDialog security=new SecurityDialog(app,false)) {
                     security.DisplayStates(backend.Environment);
-                    foreach (DarkForm form in new DarkForm[] {home,explorer,security}) {
-                        form.ShowInTaskbar=false; form.Show(); Application.DoEvents(); form.Update();
-                        CaptureForm(form,Path.Combine(folder,"os-"+build+"-"+form.GetType().Name+".png")); form.Close();
+                    foreach (DarkPage form in new DarkPage[] {home,explorer,security}) {
+                         ShowPage(form); Application.DoEvents(); form.Update();
+                        CaptureForm(form,Path.Combine(folder,"os-"+build+"-"+form.GetType().Name+".png")); ClosePage(form);
                     }
                 }
             }

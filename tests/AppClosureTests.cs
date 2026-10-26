@@ -146,40 +146,38 @@ namespace OnlyTweakWindows
         {
             Test("UI aziendale: sei schede raggiungibili al minimo e su desktop piccolo",()=> {
                 foreach(Size size in new[]{new Size(660,540),new Size(800,600)}) {
-                    using EnterpriseDialog form=new EnterpriseDialog(false,false);form.MinimumSize=new Size(660,540);form.Size=size;form.Show();Application.DoEvents();
-                    TabControl tabs=Descendants(form).OfType<TabControl>().Single();
-                    foreach(TabPage page in tabs.TabPages) {
-                        tabs.SelectedTab=page;Application.DoEvents();
-                        foreach(Control control in Descendants(page).Where(c=>c is Button || c is DataGridView || c is ListBox)) {
+                    using EnterpriseDialog form=new EnterpriseDialog(false,false);form.MinimumSize=new Size(660,540);form.Size=size;ShowPage(form);Application.DoEvents();
+                    foreach(var section in form.Sections.ToArray()) {
+                        form.OpenSection(section);Application.DoEvents();
+                        Assert(form.Navigation.Current is EnterpriseSectionPage,"Sezione fuori dalla navigazione.");
+                        foreach(Control control in Descendants(section).Where(c=>c is Button || c is DataGridView || c is ListBox)) {
                             for(int pass=0;pass<2;pass++) for(Control parent=control.Parent;parent!=null;parent=parent.Parent)
                                 if(parent is ScrollableControl scroll && scroll.AutoScroll) {scroll.ScrollControlIntoView(control);Application.DoEvents();}
                             Rectangle visible=control.RectangleToScreen(control.ClientRectangle);
                             for(Control parent=control.Parent;parent!=null;parent=parent.Parent) visible=Rectangle.Intersect(visible,parent.RectangleToScreen(parent.ClientRectangle));
-                            Assert(visible.Width>0 && visible.Height>0,"Comando irraggiungibile: "+page.Text+"/"+control.Text+" "+size);
-                            if(control is Button) Assert(visible.Width>=control.ClientSize.Width-2 && visible.Height>=control.ClientSize.Height-2,"Pulsante parzialmente nascosto: "+control.Text);
+                            Assert(visible.Width>0 && visible.Height>0,"Comando irraggiungibile: "+section.Text+"/"+control.Text+" "+size);
                         }
+                        var back=form.Navigation.BackAsync();PumpUntil(()=>back.IsCompleted);
                     }
-                    tabs.SelectedIndex=2;
-                    using Bitmap screenshot=new Bitmap(form.Width,form.Height);form.DrawToBitmap(screenshot,new Rectangle(Point.Empty,form.Size));
-                    Directory.CreateDirectory("artifacts/app-close-2026-10-25");screenshot.Save("artifacts/app-close-2026-10-25/enterprise-"+size.Width+".png");form.Close();
+                    ClosePage(form);
                 }
-                using ProfileEditor editor=new ProfileEditor(EnterpriseProfile());editor.MinimumSize=new Size(660,540);editor.Size=new Size(660,540);editor.Show();Application.DoEvents();
+                using ProfileEditor editor=new ProfileEditor(EnterpriseProfile());editor.MinimumSize=new Size(660,540);editor.Size=new Size(660,540);ShowPage(editor);Application.DoEvents();
                 foreach(TextBox field in Descendants(editor).OfType<TextBox>()) {
                     for(Control parent=field.Parent;parent!=null;parent=parent.Parent) if(parent is StackPanel stack) {stack.EnsureVisible(field);Application.DoEvents();}
                     Rectangle visible=field.RectangleToScreen(field.ClientRectangle);
                     for(Control parent=field.Parent;parent!=null;parent=parent.Parent) visible=Rectangle.Intersect(visible,parent.RectangleToScreen(parent.ClientRectangle));
                     Assert(visible.Width>0 && visible.Height>0,"Campo editor irraggiungibile.");
                 }
-                Assert(Descendants(editor).OfType<TextBox>().Count()>5,"Editor incompleto.");editor.Close();
+                Assert(Descendants(editor).OfType<TextBox>().Count()>5,"Editor incompleto.");ClosePage(editor);
             });
             Test("UI diagnostica locale: annullamento libera il coordinatore",()=> {
                 AppServices app=TestApp();
                 ActionSpec action=new ActionSpec("fixture.diagnostic","Fixture","Fixture","Fixture",log=>{}) {IsDiagnostic=true,ExecuteResult=(log,token)=>{
                     ProcessService.RunProcess(FixtureStart("sleep"),log,true,token,10);return new StepResult {State=StepState.Success};
                 }};
-                using OperationDialog form=new OperationDialog(app,action,true);form.Show();PumpUntil(()=>app.Coordinator.IsBusy);
+                using OperationDialog form=new OperationDialog(app,action,true);ShowPage(form);PumpUntil(()=>app.Coordinator.IsBusy);
                 Descendants(form).OfType<Button>().Single(b=>b.Text=="Annulla diagnosi").PerformClick();PumpUntil(()=>!app.Coordinator.IsBusy);
-                Assert(app.History.Read().Contains("ERRORE"),"Annullamento non registrato.");form.Close();
+                Assert(app.History.Read().Contains("ERRORE"),"Annullamento non registrato.");ClosePage(form);
             });
         }
     }

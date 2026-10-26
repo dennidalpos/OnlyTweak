@@ -118,7 +118,7 @@ namespace OnlyTweakWindows
                     Panel nested=new Panel { Height=80 }; Button button=new Button { Text="Test" }; Label label=new Label { Top=40,Text="Test" };
                     nested.Controls.Add(button); nested.Controls.Add(label); stack.Controls.Add(nested);
                     for (int i=0;i<12;i++) stack.Controls.Add(Theme.Card("Azione "+i,"Dettaglio",null));
-                    host.Show(); Application.DoEvents();
+                    ShowPage(host); Application.DoEvents();
                     Assert(WheelRouter.Route(button,host,-120,false,false) && stack.ScrollOffset>0,"Pulsante non inoltra.");
                     int first=stack.ScrollOffset; WheelRouter.Route(label,host,-120,false,false);
                     Assert(stack.ScrollOffset==first*2,"Evento consumato due volte o etichetta ignorata.");
@@ -126,7 +126,7 @@ namespace OnlyTweakWindows
                     DarkScrollBar bar=Descendants(host).OfType<DarkScrollBar>().First(); WheelRouter.Route(bar,host,-120,false,false);
                     Assert(stack.ScrollOffset==first,"Barra applica velocità o doppio scorrimento diverso.");
                     stack.ScrollTo(Int32.MaxValue); int maximum=stack.ScrollMaximum; WheelRouter.Route(label,host,-120,false,false);
-                    Assert(stack.ScrollOffset==maximum,"Limite finale superato."); host.Close();
+                    Assert(stack.ScrollOffset==maximum,"Limite finale superato."); ClosePage(host);
                 }
             });
             Test("rotella: instradamento messaggio e isolamento del modale",delegate {
@@ -135,34 +135,34 @@ namespace OnlyTweakWindows
                 {
                     StackPanel stack=new StackPanel(); owner.Controls.Add(stack);
                     for (int i=0;i<10;i++) stack.Controls.Add(Theme.Card("Azione","Test",null));
-                    owner.Show(); modal.Show(owner); Application.DoEvents();
+                    ShowPage(owner); modal.Show(owner); Application.DoEvents();
                     Assert(!WheelRouter.Route(stack.Controls[0],modal,-120,false,false) && stack.ScrollOffset==0,"Owner scorre sotto modale.");
                     owner.Enabled=false; Assert(!WheelRouter.Route(stack.Controls[0],owner,-120,false,false),"Finestra disabilitata riceve rotella."); owner.Enabled=true;
-                    modal.Close(); owner.Activate(); stack.Controls[0].Focus(); Application.DoEvents();
+                    ClosePage(modal); owner.Activate(); stack.Controls[0].Focus(); Application.DoEvents();
                     Point point=stack.Controls[0].PointToScreen(new Point(10,10));
                     Message message=Message.Create(stack.Controls[0].Handle,0x020a,new IntPtr(-120*65536),new IntPtr(((point.Y&0xffff)<<16)|(point.X&0xffff)));
-                    Assert(WheelRouter.RouteMessage(ref message,stack.Controls[0],owner,false) && stack.ScrollOffset>0,"WM_MOUSEWHEEL non gestito."); owner.Close();
+                    Assert(WheelRouter.RouteMessage(ref message,stack.Controls[0],owner,false) && stack.ScrollOffset>0,"WM_MOUSEWHEEL non gestito."); ClosePage(owner);
                 }
             });
             Test("rotella: output verticale, Shift/orizzontale e lista stampanti",delegate {
                 using (Form host=new Form { Size=new Size(500,260),ShowInTaskbar=false })
                 {
-                    DarkOutput output=Theme.Output(); host.Controls.Add(output); host.Show();
+                    DarkOutput output=Theme.Output(); host.Controls.Add(output); ShowPage(host);
                     output.Text=String.Join("\n",Enumerable.Range(0,180).Select(i=>"Riga "+i+new string('x',160)).ToArray()); Application.DoEvents();
                     RichTextBox editor=Descendants(output).OfType<RichTextBox>().Single();
                     WheelRouter.Route(editor,host,-120,false,false); WheelRouter.Route(editor,host,-120,true,false);
                     Point position=new Point(); ScrollPosition(editor.Handle,0x04dd,IntPtr.Zero,ref position);
                     Assert(position.Y>0 && position.X>0,"Output non scorre sui due assi.");
                     WheelRouter.Route(editor,host,120,true,true); Point next=new Point(); ScrollPosition(editor.Handle,0x04dd,IntPtr.Zero,ref next);
-                    Assert(next.X>position.X,"Verso WM_MOUSEHWHEEL errato."); host.Close();
+                    Assert(next.X>position.X,"Verso WM_MOUSEHWHEEL errato."); ClosePage(host);
                 }
                 using (Form host=new Form { Size=new Size(500,220),ShowInTaskbar=false })
                 {
                     DarkPrinterList list=new DarkPrinterList { Dock=DockStyle.Fill }; host.Controls.Add(list);
                     for (int i=0;i<30;i++) list.Items.Add("Stampante "+i);
-                    host.Show(); Application.DoEvents(); DarkScrollBar bar=Descendants(list).OfType<DarkScrollBar>().Single();
+                    ShowPage(host); Application.DoEvents(); DarkScrollBar bar=Descendants(list).OfType<DarkScrollBar>().Single();
                     WheelRouter.Route(list,host,-120,false,false); Assert(bar.Value>0,"Lista stampanti non scorre.");
-                    list.Focus(); host.Close();
+                    list.Focus(); ClosePage(host);
                 }
             });
         }
@@ -172,7 +172,7 @@ namespace OnlyTweakWindows
                 FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=TestApp(backend);
                 using (SecurityDialog form=new SecurityDialog(app,false))
                 {
-                    form.ShowInTaskbar=false; form.Show(); Application.DoEvents();
+                     ShowPage(form); Application.DoEvents();
                     SecurityPane pane=Descendants(form).OfType<SecurityPane>().Single(p=>p.Definition.Id=="hvci");
                     pane.ShowState(new SecurityStatus { Configured="attivata",Effective="HVCI in esecuzione",Protection=ProtectionState.Active });
                     Label state=Descendants(pane).OfType<Label>().Single(l=>l.Text.StartsWith("Configurazione:"));
@@ -190,14 +190,14 @@ namespace OnlyTweakWindows
                     Assert(state.ForeColor==Theme.Warning && state.Text.Contains("lettura non riuscita"),"Errore asincrono della singola scheda senza avviso.");
                     pane.ShowFailure("Errore simulato");
                     Assert(state.ForeColor==Theme.Warning && state.Text.Contains("sconosciuto"),"Errore conserva il colore precedente.");
-                    form.Close();
+                    ClosePage(form);
                 }
             });
             Test("UI protezioni: solo pagine Windows, nessun comando di modifica",delegate {
                 foreach (int build in new[] { 17763,19044,19045,22000,22621,26100 }) {
                     FakeSecurityBackend backend=new FakeSecurityBackend(); AppServices app=TestApp(backend,build);
                     using (SecurityDialog form=new SecurityDialog(app,false)) {
-                        form.ShowInTaskbar=false; form.Show(); form.DisplayStates(backend.Environment); Application.DoEvents();
+                         ShowPage(form); form.DisplayStates(backend.Environment); Application.DoEvents();
                         SecurityPane[] panes=Descendants(form).OfType<SecurityPane>().ToArray();
                         Assert(panes.Length==(build>=22621 ? 7 : 5),"Filtro pannelli errato: "+build);
                         foreach (SecurityPane pane in panes) {
@@ -209,7 +209,7 @@ namespace OnlyTweakWindows
                         }
                         StackPanel stack=Descendants(form).OfType<StackPanel>().Single(); stack.ScrollTo(Int32.MaxValue);
                         Assert(stack.ScrollOffset==stack.ScrollMaximum,"Ultima voce non raggiungibile.");
-                        Assert(backend.Store.WriteCount==0,"La UI ha scritto nel registro."); form.Close();
+                        Assert(backend.Store.WriteCount==0,"La UI ha scritto nel registro."); ClosePage(form);
                     }
                 }
             });
