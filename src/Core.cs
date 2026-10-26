@@ -14,6 +14,10 @@ namespace OnlyTweakWindows
         public Func<string> Unavailable;
         public bool OpensWindow;
         public bool RequiresElevation;
+        public bool IsDiagnostic;
+        public int TimeoutSeconds=60;
+        public Func<Action<string>,CancellationToken,StepResult> ExecuteResult;
+        public Func<Action<string>,CancellationToken,LocalObservation> Observe;
         public Func<bool> IsApplicable;
         public bool Applicable { get { return IsApplicable==null || IsApplicable(); } }
         public ActionSpec(string id, string title, string description, string scope, Action<Action<string>> execute)
@@ -40,6 +44,7 @@ namespace OnlyTweakWindows
         public readonly OperationCoordinator Coordinator = new OperationCoordinator();
         public readonly SessionHistory History = new SessionHistory();
         public readonly ProcessService Processes = new ProcessService();
+        public readonly LocalOperationExecutor LocalOperations;
         public readonly PrinterService Printers = new PrinterService();
         public readonly SpoolService Spool;
         public readonly ActionCatalog Catalog;
@@ -48,8 +53,9 @@ namespace OnlyTweakWindows
         public readonly FeatureAvailability Availability;
         public AppServices() : this(new WindowsSecurityBackend()) { }
         internal AppServices(ISecurityBackend security) : this(security,EnvironmentInfo.Profile,null) { }
-        internal AppServices(ISecurityBackend security,OsProfile os,FeatureAvailability availability)
+        internal AppServices(ISecurityBackend security,OsProfile os,FeatureAvailability availability,IOperationAudit localAudit=null)
         {
+            LocalOperations=new LocalOperationExecutor(localAudit);
             OS=os;
             Availability=availability??new FeatureAvailability(os,name=>Processes.FileUnavailable(name)==null,target=>Processes.TargetUnavailable(target)==null);
             Security=new SecurityService(security);

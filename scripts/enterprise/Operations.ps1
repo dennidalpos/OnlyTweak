@@ -37,6 +37,18 @@ function Verify-DirectoryTarget([string]$server) {
     $expected=($r.Profile.Domain.Split('.') | ForEach-Object { 'DC='+$_ }) -join ','
     if ($root.defaultNamingContext -ine $expected) { throw 'TargetDomainIdentityMismatch' }
 }
+function Verify-SelectedDirectory {
+    Require-Module 'ActiveDirectory'
+    $server=$r.Target
+    $root=Get-ADRootDSE -Server $server -AuthType Negotiate -ErrorAction Stop
+    $expected=($r.Profile.Domain.Split('.') | ForEach-Object { 'DC='+$_ }) -join ','
+    if ($root.defaultNamingContext -ine $expected) { throw 'TargetDomainIdentityMismatch' }
+    if ($root.dnsHostName -ine $server) { throw 'TargetDirectoryIdentityMismatch' }
+    $dc=Get-ADDomainController -Identity $server -Server $server -AuthType Negotiate -ErrorAction Stop
+    if (-not $dc -or $dc.HostName -ine $server -or $dc.Domain -ine $r.Profile.Domain) { throw 'TargetDomainControllerRequired' }
+    $script:authenticated=$true
+    Note ('Bind AD riuscito sul DC selezionato '+$server+'. Nessun fallback al DC del profilo.')
+}
 function Endpoint([scriptblock]$command, [object[]]$arguments = @()) {
     $options = @{ ComputerName=$r.Target; Authentication='Kerberos'; ScriptBlock=$command;
         ArgumentList=$arguments; ErrorAction='Stop'; SessionOption=(New-PSSessionOption -OpenTimeout 15000 -OperationTimeout 60000) }
@@ -86,6 +98,135 @@ function In-OrganizationalUnit([string]$dn,[string]$ou) {
     $slashes=0
     for ($n=$index-1; $n -ge 0 -and $dn[$n] -eq '\'; $n--) { $slashes++ }
     return ($slashes % 2 -eq 0)
+}
+# Keep this literal block identical to the private collector in OnlyTweakEndpoint.psm1.
+# It is sent only to the fixed WinRM diagnostic operations; no request contains code.
+$diagnosticEvidence = {
+    param([ValidateSet('health','auth','sysvol')][string]$Kind,[bool]$Jea=$false)
+    $ErrorActionPreference='Stop'
+    $values=[ordered]@{}
+    $checks=[ordered]@{}
+    function Read-Part([string]$name,[scriptblock]$read,[switch]$Many,[switch]$Events) {
+        $items=New-Object 'System.Collections.Generic.List[object]'
+        $status='Completed'; $code=''
+        try {
+            & $read | ForEach-Object { if ($null -ne $_) { $items.Add($_) } }
+            if ($items.Count -eq 0) {
+                if ($Many) { $status='Empty' } else { $status='Unavailable'; $code='MissingData' }
+            }
+        } catch {
+            # Do not serialize exception text or arbitrary FullyQualifiedErrorId values.
+            $id=($_.FullyQualifiedErrorId -split ',')[0]
+            $types=@(); $exception=$_.Exception
+            while ($null -ne $exception) { $types+=$exception.GetType().FullName; $exception=$exception.InnerException }
+            $category=$_.CategoryInfo.Category.ToString()
+            if ($Events -and $id -eq 'NoMatchingEventsFound' -and $items.Count -eq 0) { $status='Empty'; $code='NoMatchingEventsFound' }
+            elseif ($category -in @('PermissionDenied','SecurityError') -or $types -contains 'System.UnauthorizedAccessException') { $status='Denied'; $code='AccessDenied' }
+            elseif ($category -eq 'OperationTimeout' -or $types -contains 'System.TimeoutException') { $status='TimedOut'; $code='ReadTimeout' }
+            elseif ($id -in @('NoMatchingLogsFound','NoMatchingProvidersFound') -or $category -eq 'ObjectNotFound' -or
+                $types -contains 'System.Diagnostics.Eventing.Reader.EventLogNotFoundException') { $status='Unavailable'; $code='SourceUnavailable' }
+            else { $status='Failed'; $code='ReadFailed' }
+        }
+        if ($Many) { $values[$name]=@($items.ToArray()) }
+        else { $values[$name]=if ($items.Count -gt 0) { $items[0] } else { $null } }
+        $checks[$name]=[pscustomobject]@{Status=$status;ErrorCode=$code}
+    }
+    if ($Kind -eq 'health') {
+        Read-Part 'OS' { Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,LastBootUpTime,FreePhysicalMemory }
+        Read-Part 'Computer' { Get-CimInstance Win32_ComputerSystem | Select-Object Name,Domain,DomainRole,PartOfDomain }
+        Read-Part 'Services' { Get-Service -Name Spooler,WinRM,Netlogon,W32Time,wuauserv | Select-Object Name,Status,StartType } -Many
+        Read-Part 'Printers' { Get-CimInstance Win32_Printer | Select-Object -First 100 Name,PrinterStatus,WorkOffline } -Many
+        Read-Part 'Updates' { Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 20 HotFixID,InstalledOn } -Many
+    } elseif ($Kind -eq 'auth') {
+        $values['Computer']=$env:COMPUTERNAME
+        Read-Part 'Machine' {
+            $machine=Get-CimInstance Win32_ComputerSystem
+            if ($null -eq $machine.DomainRole -or $null -eq $machine.PartOfDomain) { throw 'ComputerRoleUnavailable' }
+            $machine | Select-Object Domain,DomainRole,PartOfDomain
+        }
+        $values['Domain']=$null; $values['Role']=$null
+        if ($checks['Machine'].Status -eq 'Completed') {
+            $values['Domain']=$values['Machine'].Domain; $values['Role']=$values['Machine'].DomainRole
+            if ($values['Machine'].DomainRole -lt 4 -and $values['Machine'].PartOfDomain) {
+                Read-Part 'SecureChannel' { Test-ComputerSecureChannel -ErrorAction Stop }
+            } else {
+                $values['SecureChannel']=$null
+                $checks['SecureChannel']=[pscustomobject]@{Status='NotApplicable';ErrorCode='NotDomainMember'}
+            }
+        } else {
+            $values['SecureChannel']=$null
+            $checks['SecureChannel']=[pscustomobject]@{Status='Unavailable';ErrorCode='ComputerRoleUnavailable'}
+        }
+        Read-Part 'Time' {
+            $global:LASTEXITCODE=$null
+            $text=& "$env:windir\System32\w32tm.exe" /query /status 2>&1 | Out-String
+            if ($null -eq $LASTEXITCODE -or $LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($text)) { throw 'NativeReadIncomplete' }
+            $text
+        }
+        if ($Jea) {
+            $values['Tickets']='Non esposti dal profilo JEA: contesto virtuale diverso dall utente interattivo.'
+            $checks['Tickets']=[pscustomobject]@{Status='NotApplicable';ErrorCode='JeaNotExposed'}
+        } else {
+            Read-Part 'Tickets' {
+                $global:LASTEXITCODE=$null
+                $text=& "$env:windir\System32\klist.exe" 2>&1 | Out-String
+                if ($null -eq $LASTEXITCODE -or $LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($text)) { throw 'NativeReadIncomplete' }
+                $text
+            }
+        }
+        Read-Part 'Identity' {
+            [pscustomobject]@{ConnectedUser="$($PSSenderInfo.ConnectedUser)";ExecutionIdentity=[Security.Principal.WindowsIdentity]::GetCurrent().Name}
+        }
+        $values['ConnectedUser']=$null; $values['ExecutionIdentity']=$null
+        if ($null -ne $values['Identity']) {
+            $values['ConnectedUser']=$values['Identity'].ConnectedUser; $values['ExecutionIdentity']=$values['Identity'].ExecutionIdentity
+        }
+    } else {
+        Read-Part 'Services' { Get-Service -Name DFSR,Netlogon | Select-Object Name,Status } -Many
+        Read-Part 'Folders' { Get-CimInstance -Namespace root\MicrosoftDFS -ClassName DfsrReplicatedFolderInfo |
+            Select-Object ReplicationGroupName,ReplicatedFolderName,State } -Many
+    }
+    Read-Part 'Events' {
+        $filter=if ($Kind -eq 'sysvol') { @{LogName='DFS Replication';StartTime=(Get-Date).AddDays(-1)} }
+            elseif ($Kind -eq 'health') { @{LogName='System';Level=1,2,3;StartTime=(Get-Date).AddHours(-4)} }
+            else { @{LogName='System';StartTime=(Get-Date).AddHours(-4)} }
+        $limit=if ($Kind -eq 'sysvol') {100} else {60}
+        Get-WinEvent -FilterHashtable $filter -MaxEvents $limit -ErrorAction Stop |
+            Where-Object { $Kind -ne 'auth' -or $_.ProviderName -match 'NETLOGON|Time-Service|Kerberos' } |
+            Select-Object TimeCreated,Id,ProviderName,LevelDisplayName
+    } -Many -Events
+    $values['Checks']=[pscustomobject]$checks
+    [pscustomobject]$values
+}
+$gpoEvidence = {
+    $ErrorActionPreference='Stop'
+    $applied=@(); $rsopComplete=$false; $output=''; $code=$null; $nativeComplete=$false
+    try {
+        $applied=@(Get-CimInstance -Namespace root\RSOP\Computer -ClassName RSOP_GPO -ErrorAction Stop | Select-Object name,guidName,version,enabled,accessDenied)
+        $rsopComplete=$true
+    } catch { }
+    try {
+        $global:LASTEXITCODE=$null
+        $output=& "$env:windir\System32\gpresult.exe" /scope computer /r 2>&1 | Out-String
+        $code=$LASTEXITCODE
+        $nativeComplete=($null -ne $code -and $code -eq 0 -and -not [string]::IsNullOrWhiteSpace($output))
+    } catch { }
+    $domain=$null
+    try { $domain=(Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).Domain } catch { }
+    [pscustomobject]@{Computer=$env:COMPUTERNAME;Domain=$domain;Applied=$applied;Result=$output;NativeExitCode=$code;
+        ReadComplete=($rsopComplete -and $nativeComplete);Checks=[pscustomobject]@{
+            RSOP=[pscustomobject]@{Status=$(if (-not $rsopComplete) {'Failed'} elseif ($applied.Count -eq 0) {'Empty'} else {'Completed'});ErrorCode=$(if ($rsopComplete) {''} else {'RsopReadFailed'})}
+            Gpresult=[pscustomobject]@{Status=$(if ($nativeComplete) {'Completed'} else {'Failed'});ErrorCode=$(if ($nativeComplete) {''} else {'GpresultReadIncomplete'})}
+        }}
+}
+function Complete-Diagnostic($value) {
+    if ($null -eq $value -or $null -eq $value.Checks) { throw 'DiagnosticChecksRequired' }
+    $incomplete=@($value.Checks.PSObject.Properties | Where-Object { $_.Value.Status -notin @('Completed','Empty','NotApplicable') })
+    if ($incomplete.Count -gt 0) {
+        $script:state='Inconclusive'; $script:errorCode='PartialDiagnosticRead'
+        $script:summary='Raccolta parziale: consultare Checks e i dati disponibili; nessuna conclusione di salute.'
+        Note ('Sottocontrolli incompleti: '+(($incomplete | ForEach-Object {$_.Name}) -join ', '))
+    }
 }
 function Eligible-User {
     if (-not $r.Profile.DelegatedUserOusReviewed) { throw 'DelegatedScopeNotReviewed' }
@@ -173,8 +314,10 @@ try {
             $summary = 'Installazione conclusa; consulta verifica componenti e riavvio richiesto. Nessun riavvio automatico.'
         }
         'session.authenticate' {
-            Verify-Directory
-            $data = Get-ADDomain -Server $r.Profile.DomainController | Select-Object DNSRoot,DomainMode,PDCEmulator,RIDMaster,InfrastructureMaster
+            Verify-SelectedDirectory
+            $domain=Get-ADDomain -Server $r.Target -ErrorAction Stop
+            if ($domain.DNSRoot -ine $r.Profile.Domain) { throw 'TargetDomainIdentityMismatch' }
+            $data = $domain | Select-Object @{Name='Server';Expression={$r.Target}},DNSRoot,DomainMode,PDCEmulator,RIDMaster,InfrastructureMaster
         }
         'domain.discovery' {
             $data = [pscustomobject]@{
@@ -191,18 +334,11 @@ try {
             Note 'Misure dalla postazione tecnico. TCP aperto non prova LDAP/Kerberos, UDP o porte RPC dinamiche; timeout non prova servizio inattivo.'
         }
         'domain.auth' {
-            $data = Endpoint {
-                $computer = Get-CimInstance Win32_ComputerSystem
-                $channel = $null
-                if ($computer.DomainRole -lt 4 -and $computer.PartOfDomain) { $channel=Test-ComputerSecureChannel -ErrorAction Stop }
-                [pscustomobject]@{ Computer=$env:COMPUTERNAME; Domain=$computer.Domain; Role=$computer.DomainRole;
-                    SecureChannel=$channel; ConnectedUser="$($PSSenderInfo.ConnectedUser)"; ExecutionIdentity=[Security.Principal.WindowsIdentity]::GetCurrent().Name;
-                    Time=(& "$env:windir\System32\w32tm.exe" /query /status | Out-String);
-                    Tickets=(& "$env:windir\System32\klist.exe" | Out-String);
-                    Events=@(Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=(Get-Date).AddHours(-4)} -MaxEvents 60 |
-                        Where-Object ProviderName -match 'NETLOGON|Time-Service|Kerberos' | Select-Object TimeCreated,Id,ProviderName,LevelDisplayName) }
+            $data = Endpoint $diagnosticEvidence @('auth',$false)
+            Complete-Diagnostic $data
+            if ($null -ne $data.SecureChannel -and $data.SecureChannel -eq $false) {
+                $state='ObservedIssue'; $summary='Canale sicuro del computer membro non valido; consultare anche Checks per le letture incomplete.'
             }
-            if ($data.SecureChannel -eq $false) { $state='ObservedIssue'; $summary='Canale sicuro del computer membro non valido.' }
             Note 'Ticket del contesto remoto amministrativo, non della sessione interattiva dell utente. Nessun test/ripristino canale sicuro sui DC.'
         }
         'ad.replication' {
@@ -248,10 +384,10 @@ try {
             Note 'USN e whenChanged sono locali al DC: confrontare anche versione e origine dei metadati, non solo valori numerici.'
         }
         'ad.search' {
-            Verify-Directory
+            Verify-SelectedDirectory
             $query=Escape-Ldap $r.Parameters.query
             $filter="(|(sAMAccountName=*$query*)(displayName=*$query*)(name=*$query*))"
-            $options=@{ LDAPFilter=$filter; Server=$r.Profile.DomainController; ResultPageSize=50; ResultSetSize=1001; ErrorAction='Stop' }
+            $options=@{ LDAPFilter=$filter; Server=$r.Target; ResultPageSize=50; ResultSetSize=1001; ErrorAction='Stop' }
             switch ($r.Parameters.kind) {
                 'user' { $items=@(Get-ADUser @options -Properties LockedOut,AccountExpirationDate,PasswordExpired,LastLogonDate,MemberOf |
                     Select-Object ObjectGUID,SID,DistinguishedName,SamAccountName,Name,Enabled,LockedOut,AccountExpirationDate,PasswordExpired,LastLogonDate,MemberOf) }
@@ -263,7 +399,7 @@ try {
             $page=0
             if ($r.Parameters.page) { $page=[int]$r.Parameters.page }
             $sorted=@($items | Sort-Object ObjectGUID | Select-Object -First 1000)
-            $data=[pscustomobject]@{ Page=$page; PageSize=50; Rows=@($sorted | Select-Object -Skip ($page*50) -First 50);
+            $data=[pscustomobject]@{ Server=$r.Target; Page=$page; PageSize=50; Rows=@($sorted | Select-Object -Skip ($page*50) -First 50);
                 HasMore=(($page+1)*50 -lt $sorted.Count); LimitReached=($items.Count -gt 1000) }
             Note 'Massimo 1000 oggetti per ricerca; raffinare se raggiunto. LastLogonDate e approssimato, lockout letto sul DC selezionato.'
         }
@@ -309,34 +445,60 @@ try {
             Note 'Rilettura osservativa prima/dopo intervento: leggere il risultato nativo, non solo il completamento del comando.'
         }
         'endpoint.gpo' {
-            $data = Endpoint {
-                $applied=@(Get-CimInstance -Namespace root\RSOP\Computer -ClassName RSOP_GPO -ErrorAction Stop | Select-Object name,guidName,version,enabled,accessDenied)
-                [pscustomobject]@{ Computer=$env:COMPUTERNAME; Domain=(Get-CimInstance Win32_ComputerSystem).Domain;
-                    Applied=$applied; Result=(& "$env:windir\System32\gpresult.exe" /scope computer /r | Out-String) }
+            $endpointData=Endpoint $gpoEvidence
+            $versions=New-Object 'System.Collections.Generic.List[object]'
+            $versionsComplete=$false
+            try {
+                Verify-Directory
+                Require-Module 'GroupPolicy'
+                foreach ($item in $endpointData.Applied) {
+                    Get-GPO -Guid ([guid]$item.guidName.Trim('{}')) -Domain $r.Profile.Domain -Server $r.Profile.DomainController -ErrorAction Stop |
+                        Select-Object DisplayName,Id,Computer,User | ForEach-Object { $versions.Add($_) }
+                }
+                $versionsComplete=$true
+            } catch { }
+            $data=[pscustomobject]@{Endpoint=$endpointData;Versions=@($versions.ToArray());Checks=[pscustomobject]@{
+                Versions=[pscustomobject]@{Status=$(if (-not $versionsComplete) {'Failed'} elseif ($versions.Count -eq 0) {'Empty'} else {'Completed'});ErrorCode=$(if ($versionsComplete) {''} else {'GpoVersionReadFailed'})}
+            }}
+            if (-not $endpointData.ReadComplete -or -not $versionsComplete) {
+                $state='Inconclusive'; $errorCode='PartialGpoRead'; $summary='Raccolta GPO parziale: consultare codice nativo, RSOP e versioni disponibili.'
             }
-            Verify-Directory
-            Require-Module 'GroupPolicy'
-            $versions = foreach ($item in $data.Applied) {
-                Get-GPO -Guid ([guid]$item.guidName.Trim('{}')) -Domain $r.Profile.Domain -Server $r.Profile.DomainController |
-                    Select-Object DisplayName,Id,Computer,User
-            }
-            $data=[pscustomobject]@{ Endpoint=$data; Versions=@($versions) }
             Note 'Contesto computer; GPO utente da raccogliere nella sua sessione. Versioni AD/SYSVOL lette direttamente dal tecnico, senza secondo salto.'
         }
         'domain.sysvol' {
-            Verify-Directory
-            $shares=@(foreach ($name in @('SYSVOL','NETLOGON')) {
-                $item=Get-Item -LiteralPath ('\\'+$r.Profile.DomainController+'\'+$name) -ErrorAction Stop
-                [pscustomobject]@{ Name=$name; Accessible=[bool]$item.PSIsContainer }
-            })
-            $remote=Endpoint {
-                [pscustomobject]@{ Services=@(Get-Service -Name DFSR,Netlogon | Select-Object Name,Status);
-                    Folders=@(Get-CimInstance -Namespace root\MicrosoftDFS -ClassName DfsrReplicatedFolderInfo |
-                        Select-Object ReplicationGroupName,ReplicatedFolderName,State);
-                    Events=@(Get-WinEvent -FilterHashtable @{LogName='DFS Replication'; StartTime=(Get-Date).AddDays(-1)} -MaxEvents 100 |
-                        Select-Object TimeCreated,Id,LevelDisplayName) }
+            $remote=$null; $remoteCheck=$null
+            try { $remote=Endpoint $diagnosticEvidence @('sysvol',$false) }
+            catch {
+                $category=$_.CategoryInfo.Category.ToString()
+                if ($category -in @('PermissionDenied','SecurityError') -or $_.Exception -is [UnauthorizedAccessException]) {
+                    $remoteCheck=[pscustomobject]@{Status='Denied';ErrorCode='RemoteReadDenied'}
+                } elseif ($category -eq 'OperationTimeout' -or $_.Exception -is [TimeoutException]) {
+                    $remoteCheck=[pscustomobject]@{Status='TimedOut';ErrorCode='RemoteReadTimeout'}
+                } else { $remoteCheck=[pscustomobject]@{Status='Unavailable';ErrorCode='RemoteReadUnavailable'} }
             }
-            $data=[pscustomobject]@{ Shares=$shares; Remote=$remote }
+            $shares=New-Object 'System.Collections.Generic.List[object]'
+            $shareChecks=[ordered]@{}
+            foreach ($name in @('SYSVOL','NETLOGON')) {
+                $shareStatus='Completed'; $shareCode=''
+                try {
+                    Verify-Directory
+                    $item=Get-Item -LiteralPath ('\\'+$r.Profile.DomainController+'\'+$name) -ErrorAction Stop
+                    if (-not $item.PSIsContainer) { throw 'ShareNotDirectory' }
+                    $shares.Add([pscustomobject]@{Name=$name;Accessible=$true})
+                } catch {
+                    $category=$_.CategoryInfo.Category.ToString()
+                    if ($category -in @('PermissionDenied','SecurityError') -or $_.Exception -is [UnauthorizedAccessException]) { $shareStatus='Denied'; $shareCode='AccessDenied' }
+                    elseif ($category -eq 'OperationTimeout' -or $_.Exception -is [TimeoutException]) { $shareStatus='TimedOut'; $shareCode='ReadTimeout' }
+                    else { $shareStatus='Unavailable'; $shareCode='ShareReadUnavailable' }
+                    $shares.Add([pscustomobject]@{Name=$name;Accessible=$null})
+                }
+                $shareChecks[$name]=[pscustomobject]@{Status=$shareStatus;ErrorCode=$shareCode}
+            }
+            if ($null -ne $remote) {
+                foreach ($property in $remote.Checks.PSObject.Properties) { $shareChecks['Remote'+$property.Name]=$property.Value }
+            } else { $shareChecks['Remote']=$remoteCheck }
+            $data=[pscustomobject]@{Shares=@($shares.ToArray());Remote=$remote;Checks=[pscustomobject]$shareChecks}
+            Complete-Diagnostic $data
             Note 'Letture SYSVOL/DFSR separate dalla replica AD. Eventi storici e assenza di attivita non provano da soli guasto o convergenza.'
         }
         'dfs.namespace' {
@@ -373,15 +535,8 @@ try {
             Note 'Backlog non nullo o invariato in tre secondi non prova guasto: considerare orari, traffico e pianificazione.'
         }
         'endpoint.health' {
-            $data=Endpoint {
-                [pscustomobject]@{ OS=(Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,LastBootUpTime,FreePhysicalMemory);
-                    Computer=(Get-CimInstance Win32_ComputerSystem | Select-Object Name,Domain,DomainRole,PartOfDomain);
-                    Services=@(Get-Service -Name Spooler,WinRM,Netlogon,W32Time,wuauserv | Select-Object Name,Status,StartType);
-                    Printers=@(Get-CimInstance Win32_Printer | Select-Object -First 100 Name,PrinterStatus,WorkOffline);
-                    Updates=@(Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 20 HotFixID,InstalledOn);
-                    Events=@(Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2,3; StartTime=(Get-Date).AddHours(-4)} -MaxEvents 60 |
-                        Select-Object TimeCreated,Id,ProviderName,LevelDisplayName) }
-            }
+            $data=Endpoint $diagnosticEvidence @('health',$false)
+            Complete-Diagnostic $data
             Note 'Elenco hotfix non completo per ogni tipo di aggiornamento; assenza di eventi non prova assenza di problemi.'
         }
         { $_ -in @('ad.unlock','ad.enable','ad.disable','ad.password') } {

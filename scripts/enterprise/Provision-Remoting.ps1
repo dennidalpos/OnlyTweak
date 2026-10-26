@@ -33,6 +33,7 @@ function Protect-Directory([string]$path) {
     Set-Acl -LiteralPath $path -AclObject $acl
 }
 function Save-State($value) {
+    $value | Add-Member -NotePropertyName CheckpointHash -NotePropertyValue (Checkpoint-Hash $value) -Force
     Protect-Directory $root
     $tmp=Join-Path $root ([guid]::NewGuid().ToString('N')+'.tmp')
     try {
@@ -51,6 +52,35 @@ function Listener-State([string]$transport) {
         ForEach-Object { [pscustomobject]@{Keys=@($_.Keys | Sort-Object); Values=@(Get-ChildItem -LiteralPath $_.PSPath |
             Select-Object Name,Value | Sort-Object Name)} })
 }
+function Listener-Preflight([string]$transport,[int]$port,[string]$thumbprint) {
+    $listeners=@(Get-ChildItem WSMan:\localhost\Listener | Where-Object { $_.Keys -contains ('Transport='+$transport) })
+    if ($listeners.Count -gt 1) { throw 'MultipleListenersConflict' }
+    foreach ($listener in $listeners) {
+        if ($listener.Keys -notcontains 'Address=*') { throw 'ListenerAddressConflict' }
+        $settings=@{}
+        foreach ($property in Get-ChildItem -LiteralPath $listener.PSPath) { $settings[$property.Name]=$property.Value }
+        if ([string]$settings['Enabled'] -ine 'true' -or [string]$settings['Port'] -ne [string]$port -or
+            $settings['Transport'] -ine $transport -or $settings['URLPrefix'] -ine 'wsman') { throw 'ListenerConfigurationConflict' }
+        if ($transport -eq 'HTTPS') {
+            $fqdn=[Net.Dns]::GetHostEntry($env:COMPUTERNAME).HostName
+            if ($settings['CertificateThumbprint'] -ine $thumbprint -or $settings['Hostname'] -ine $fqdn) { throw 'ListenerCertificateOrHostnameConflict' }
+        }
+    }
+    $listeners
+}
+function Read-Checkpoint {
+    Assert-Plain $root
+    if ((Get-Item -LiteralPath $statePath).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'SnapshotReparsePoint' }
+    $saved=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    if ($saved.Computer -ine $env:COMPUTERNAME) { throw 'SnapshotMachineMismatch' }
+    if ($saved.SchemaVersion -ne 2 -or $saved.Generation -notmatch '^[a-f0-9]{32}$' -or
+        $saved.CheckpointHash -cne (Checkpoint-Hash $saved)) { throw 'SnapshotIntegrityMismatch' }
+    $saved
+}
+function Checkpoint-Hash($saved) {
+    $copy=$saved | Select-Object * -ExcludeProperty CheckpointHash
+    Fingerprint $copy
+}
 function Rule-State {
     $rule=Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue
     if ($rule) {
@@ -67,22 +97,26 @@ function Endpoint-State {
 $machine=Get-CimInstance Win32_ComputerSystem
 $policy=Test-Path -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service'
 if ($Mode -eq 'Inspect') {
+    $transport=if ($UseHttps) {'HTTPS'} else {'HTTP'}
+    $port=if ($UseHttps) {5986} else {5985}
+    $compatibility='CompatibleOrAbsent'
+    try { $null=Listener-Preflight $transport $port $CertificateThumbprint } catch { $compatibility=$_.Exception.Message }
     [pscustomobject]@{Computer=$env:COMPUTERNAME; DomainRole=$machine.DomainRole; ManagedByPolicy=$policy;
+        Listeners=@(Listener-State 'HTTP')+@(Listener-State 'HTTPS'); RequestedListener=$transport; ListenerCompatibility=$compatibility;
         Service=(Get-Service WinRM | Select-Object Status,StartType); SnapshotPresent=(Test-Path -LiteralPath $statePath);
         ExistingFirewall=@(Get-NetFirewallRule -Name '*WINRM*','OnlyTweak-*' -ErrorAction SilentlyContinue |
             Select-Object Name,Enabled,Profile,PolicyStoreSourceType)}
     return
 }
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole('Administrator')) { throw 'AdministratorRequired' }
-if ($machine.DomainRole -ge 4 -or -not $machine.PartOfDomain) { throw 'DomainMemberRequiredNoDomainControllers' }
+if ($null -eq $machine.DomainRole -or $machine.DomainRole -notin @(1,3) -or -not $machine.PartOfDomain) { throw 'DomainMemberRequiredNoDomainControllers' }
 if ($policy) { throw 'ManagedByGroupPolicyUseCentralConfiguration' }
 Assert-Plain $root
 Assert-Plain $moduleRoot
 if ($Mode -eq 'Undo') {
     if (-not (Test-Path -LiteralPath $statePath)) { throw 'SnapshotMissing' }
-    $saved=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
-    if ($saved.Computer -ine $env:COMPUTERNAME) { throw 'SnapshotMachineMismatch' }
-    if ($saved.Restored) { throw 'SnapshotAlreadyRestored' }
+    $saved=Read-Checkpoint
+    if ($saved.Restored) { 'Checkpoint gia ripristinato; nessuna modifica.'; return }
     if ($saved.Phase -ne 'Applied') { throw 'PartialDeploymentNeedsManualRecoveryFromSnapshot' }
     foreach ($entry in $saved.FileHashes) {
         Assert-Plain (Split-Path $entry.Path)
@@ -124,7 +158,11 @@ if ($Mode -eq 'Undo') {
     }
     return
 }
-if (Test-Path -LiteralPath $statePath) { throw 'SnapshotAlreadyPresentInspectOrUndoFirst' }
+$previous=$null
+if (Test-Path -LiteralPath $statePath) {
+    $previous=Read-Checkpoint
+    if (-not $previous.Restored -or $previous.Phase -ne 'Applied') { throw 'SnapshotAlreadyPresentInspectOrUndoFirst' }
+}
 if (Test-Path -LiteralPath $moduleRoot) { throw 'ModuleAlreadyPresent' }
 if (-not $ManagementAddresses -or -not $AllowedGroupSid) { throw 'ManagementAddressesAndDedicatedGroupRequired' }
 foreach ($address in $ManagementAddresses) {
@@ -140,6 +178,7 @@ if ($AllowedGroupSid -notmatch '^S-1-5-21-.+-[0-9]+$' -or $AllowedGroupSid -matc
 $group=$sid.Translate([Security.Principal.NTAccount]).Value
 $transport=if ($UseHttps) {'HTTPS'} else {'HTTP'}
 $port=if ($UseHttps) {5986} else {5985}
+$listener=@(Listener-Preflight $transport $port $CertificateThumbprint)
 if ($UseHttps) {
     if ($CertificateThumbprint -notmatch '^[0-9A-Fa-f]{40}$') { throw 'CertificateThumbprintRequired' }
     $cert=Get-Item -LiteralPath ('Cert:\LocalMachine\My\'+$CertificateThumbprint)
@@ -156,7 +195,19 @@ if (Get-PSSessionConfiguration -Name $endpoint -ErrorAction SilentlyContinue) { 
 $source=Join-Path $PSScriptRoot 'OnlyTweakEndpoint.psm1'
 if (-not (Test-Path -LiteralPath $source)) { throw 'ReviewedModuleMissing' }
 if (-not $PSCmdlet.ShouldProcess($env:COMPUTERNAME,('Configura endpoint JEA '+$endpoint+', '+$transport+', firewall Domain da '+($ManagementAddresses -join ',')+', gruppo '+$group))) { return }
-$snapshot=[pscustomobject]@{Computer=$env:COMPUTERNAME; StartMode=$service.StartMode; ServiceState=$service.State;
+$listener=@(Listener-Preflight $transport $port $CertificateThumbprint)
+if ($previous) {
+    $history=Join-Path $root 'History'; Protect-Directory $history
+    $archive=Join-Path $history ($previous.Generation+'.json'); Assert-Plain $history
+    if (Test-Path -LiteralPath $archive) {
+        if ((Get-Item -LiteralPath $archive).Attributes -band [IO.FileAttributes]::ReparsePoint -or
+            (Get-FileHash -LiteralPath $archive).Hash -ne (Get-FileHash -LiteralPath $statePath).Hash) { throw 'CheckpointArchiveConflict' }
+    } else {
+        Copy-Item -LiteralPath $statePath -Destination $archive
+        if ((Get-FileHash -LiteralPath $archive).Hash -ne (Get-FileHash -LiteralPath $statePath).Hash) { throw 'CheckpointArchiveVerificationFailed' }
+    }
+}
+$snapshot=[pscustomobject]@{SchemaVersion=2;Generation=[guid]::NewGuid().ToString('N');Computer=$env:COMPUTERNAME; StartMode=$service.StartMode; ServiceState=$service.State;
     Transport=$transport; CreatedListener=$false; ModuleHash=(Get-FileHash -LiteralPath $source).Hash;
     FirewallDisplayName='OnlyTweak remoting '+[guid]::NewGuid().ToString('N'); Phase='Snapshot'; Restored=$null;
     FileHashes=@(); FirewallHash=''; EndpointHash=''; ListenerHash=''; EndpointsHash=''; ListenersHash=''}
@@ -164,10 +215,9 @@ Save-State $snapshot
 try {
     Set-Service WinRM -StartupType Automatic
     Start-Service WinRM
-    $listener=Get-ChildItem WSMan:\localhost\Listener | Where-Object { $_.Keys -contains ('Transport='+$transport) -and $_.Keys -contains 'Address=*' }
     if (-not $listener) {
         $values=@{Address='*'; Transport=$transport; Force=$true}
-        if ($UseHttps) { $values.CertificateThumbprint=$CertificateThumbprint }
+        if ($UseHttps) { $values.CertificateThumbprint=$CertificateThumbprint; $values.Hostname=$fqdn }
         New-Item WSMan:\localhost\Listener @values | Out-Null
         $snapshot.CreatedListener=$true; Save-State $snapshot
     }

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Text.Json;
 
 namespace OnlyTweakWindows
 {
@@ -88,7 +90,18 @@ namespace OnlyTweakWindows
             Tools.Actions.Add(Settings("tools.startup", "Applicazioni all'avvio", "Gestione dei programmi avviati all'accesso.", "ms-settings:startupapps"));
             Tools.Actions.Add(Settings("tools.update", "Windows Update", "Stato aggiornamenti e opzioni di Windows Update.", "ms-settings:windowsupdate"));
             Tools.Actions.Add(SystemTool("tools.system", "Informazioni di sistema", "Configurazione hardware e software del PC.", "msinfo32.exe", ""));
-            foreach (ActionSpec action in Spool.Actions) action.IsApplicable=delegate { return app.Availability.File("spoolsv.exe"); };
+            foreach (ActionSpec action in Spool.Actions) {
+                action.IsApplicable=delegate { return app.Availability.File("spoolsv.exe"); };
+                action.IsDiagnostic=LocalOperationExecutor.IsDiagnostic(action.Id);
+                bool clean=action.Id=="spool.clean";
+                action.Observe=(log,token)=>app.Spool.Observe(clean);
+            }
+            networkInfo.Actions[0]=Command("network.info","Schede, indirizzi IP e DNS","Elenca interfacce, indirizzi IP, gateway e DNS tramite ipconfig /all.","ipconfig.exe","/all",false);
+            Spool.Actions[0].ExecuteResult=(log,token)=> {
+                NativeObservation status=app.Processes.RunObserved("sc.exe","query Spooler",log,false,true,token,60);
+                return new StepResult {State=status.ExitCode==0 && !status.Truncated && !String.IsNullOrWhiteSpace(status.Output) ? StepState.Success : StepState.Inconclusive,
+                    Truncated=status.Truncated,Data=JsonSerializer.SerializeToElement(status)};
+            };
             ApplySummaries();
             foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools }) menu.Prune();
         }
@@ -125,8 +138,25 @@ namespace OnlyTweakWindows
             { OpensWindow=true,IsApplicable=delegate { return app.Availability.Target(target); },Unavailable=delegate { return app.Processes.TargetUnavailable(app.Availability.ResolveTarget(target)); } }; }
         private ActionSpec Command(string id, string title, string description, string file, string arguments, bool unicode)
         {
-            return new ActionSpec(id, title, description, "Computer locale", delegate(Action<string> log) { app.Processes.Run(file, arguments, log, unicode); })
-                { RequiresElevation=true,IsApplicable=delegate { return app.Availability.File(file); },Unavailable=delegate { return app.Processes.FileUnavailable(file); } };
+            ActionSpec action=new ActionSpec(id,title,description,"Computer locale",log=>app.Processes.Run(file,arguments,log,unicode)) {
+                RequiresElevation=id!="network.ipconfig" && id!="network.info",IsDiagnostic=LocalOperationExecutor.IsDiagnostic(id),TimeoutSeconds=id.StartsWith("sfc.") || id.StartsWith("dism.") ? 1800 : 60,
+                IsApplicable=()=>app.Availability.File(file),Unavailable=()=>app.Processes.FileUnavailable(file)
+            };
+            action.ExecuteResult=(log,token)=> {
+                NativeObservation native=app.Processes.RunObserved(file,arguments,log,unicode,action.IsDiagnostic,token,action.TimeoutSeconds);
+                return new StepResult {State=(native.ExitCode==0 || (!action.IsDiagnostic && native.ExitCode==3010)) && !native.Truncated ? StepState.Success : StepState.Inconclusive,
+                    Truncated=native.Truncated,Data=JsonSerializer.SerializeToElement(new {NativeExitCode=native.ExitCode,Output=native.Output,RestartRequired=native.ExitCode==3010})};
+            };
+            action.Observe=(log,token)=> {
+                (string readFile,string readArgs,bool readUnicode)=id switch {
+                    "network.dns"=>("ipconfig.exe","/displaydns",false),"network.winsock"=>("netsh.exe","winsock show catalog",false),
+                    "network.tcpip"=>("ipconfig.exe","/all",false),"sfc.repair"=>("sfc.exe","/verifyonly",true),
+                    "dism.repair"=>("dism.exe","/Online /Cleanup-Image /CheckHealth /NoRestart",false),_=>(file,arguments,unicode)
+                };
+                NativeObservation read=app.Processes.RunObserved(readFile,readArgs,log,readUnicode,true,token,action.TimeoutSeconds);
+                return new LocalObservation(read.ExitCode==0 && !read.Truncated && !String.IsNullOrWhiteSpace(read.Output),null,read);
+            };
+            return action;
         }
         public ActionSpec SystemTool(string id, string title, string description, string file, string arguments)
         {
@@ -144,6 +174,7 @@ namespace OnlyTweakWindows
         {
             return new ActionSpec("printer.purge", "Annulla lavori della selezionata", "Richiede l'annullamento dei lavori nella sola coda selezionata, senza fermare lo spooler locale.", printer,
                 delegate(Action<string> log) { app.Printers.Purge(printer, log); }) {
+                    Observe=(log,token)=>app.Printers.ObserveQueue(printer),
                     Confirmation="Eliminare definitivamente tutti i lavori nella coda di «" + printer + "»? Per stampanti condivise possono essere coinvolti lavori di altri utenti; servono i permessi sul server. Un lavoro già in stampa può proseguire." };
         }
     }

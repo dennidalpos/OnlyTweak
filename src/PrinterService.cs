@@ -61,6 +61,18 @@ namespace OnlyTweakWindows
             }
             finally { ClosePrinter(printer); }
         }
+        internal LocalObservation ObserveQueue(string name)
+        {
+            PRINTER_DEFAULTS defaults=new PRINTER_DEFAULTS {DesiredAccess=8};
+            if(!OpenPrinter(name,out IntPtr printer,ref defaults)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            try {
+                bool success=EnumJobs(printer,0,1,1,IntPtr.Zero,0,out uint needed,out uint returned);
+                int error=success ? 0 : Marshal.GetLastWin32Error();
+                if(!success && (error!=122 || needed==0)) throw new Win32Exception(error);
+                bool empty=success && returned==0 && needed==0;
+                return new LocalObservation(true,empty,new {Printer=name,QueueEmpty=empty,SampleLimit=1,DeviceOutputVerified=false});
+            } finally {ClosePrinter(printer);}
+        }
         [StructLayout(LayoutKind.Sequential)]
         private struct PRINTER_INFO_4 { public IntPtr Name, Server; public uint Attributes; }
         [StructLayout(LayoutKind.Sequential)]
@@ -80,5 +92,8 @@ namespace OnlyTweakWindows
         [DllImport("winspool.drv", SetLastError=true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool ClosePrinter(IntPtr printer);
+        [DllImport("winspool.drv",EntryPoint="EnumJobsW",SetLastError=true)]
+        [return:MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumJobs(IntPtr printer,uint first,uint count,uint level,IntPtr buffer,uint size,out uint needed,out uint returned);
     }
 }

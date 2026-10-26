@@ -2,7 +2,7 @@
 
 Toolkit portatile per tecnici e amministratori Windows aziendali. Interfaccia italiana Windows Forms, profili cliente separati, diagnostica AD e postazioni, interventi guidati e preparazione RSAT.
 
-**Stato: implementazione locale da qualificare in laboratorio.** Build e fixture non equivalgono a validazione su domini reali. Firma, Windows puliti, credenziali tra foreste senza trust, WinRM/JEA e pilota sono gate aperti in [PROJECT_STATUS.json](PROJECT_STATUS.json). Nessuna pubblicazione automatica.
+**Stato: chiusura applicativa con verifiche locali.** Per scelta dell'utente non vengono eseguiti test su VM o domini reali. Build e fixture non equivalgono a qualifica ambientale: firma, Windows puliti, WinRM/JEA e pilota restano separati in [PROJECT_STATUS.json](PROJECT_STATUS.json). Nessuna pubblicazione automatica.
 
 ## Primo utilizzo
 
@@ -29,6 +29,14 @@ Conservate stampa, rete, manutenzione locale, strumenti Windows e letture delle 
 | Predisposizione remota | Esportazione script Inspect/WhatIf/Apply/Undo, istruzioni GPO e modulo JEA. Nessuna configurazione remota implicita. |
 
 Le console esterne mantengono identità e ciclo di vita propri. Non ereditano le credenziali temporanee del worker: per queste usare una sessione Windows amministrativa dedicata al cliente.
+
+Ricerca AD e verifica identità/dominio interrogano il **DC selezionato**, verificandone identità e dominio prima delle query. Risultati e report indicano il server effettivo; non viene usato automaticamente il DC del profilo come alternativa. Cambiare destinazione svuota la ricerca e la selezione precedenti. Le scritture sugli utenti rimangono vincolate al DC esplicito del profilo.
+
+Diagnostica autenticazione, SYSVOL e salute postazione conservano le letture indipendenti quando un sottocontrollo fallisce. `Checks` distingue raccolta completata, vuota, non applicabile, negata, indisponibile, scaduta o fallita. Zero eventi non dimostra salute; una raccolta parziale resta inconcludente, mentre un problema esplicitamente osservato rimane segnalato. WinRM standard e JEA usano lo stesso contratto: aggiornare il modulo JEA tramite il canale amministrativo approvato, senza predisposizione o fallback impliciti.
+
+Le schede aziendali e i risultati rimangono raggiungibili tramite scorrimento anche alla dimensione minima. Le diagnostiche locali, comprese SFC verifica e DISM analisi, hanno timeout e **Annulla diagnosi**; le riparazioni attendono il completamento e non vengono terminate forzatamente. Per gli interventi, richiesta accettata, esecuzione conclusa ed effetto osservato sono distinti: un reset o un codice 3010 non dimostrano il risultato finale. Dopo un esito incerto usare **Rileggi stato** prima di ripetere. La coda stampante viene riletta, senza attestare l'arresto fisico di una stampa.
+
+La predisposizione blocca listener incompatibili prima delle scritture. Dopo un Undo verificato, Apply conserva il precedente checkpoint nella cartella History; checkpoint attivi, parziali, legacy o alterati richiedono revisione manuale, senza cancellazioni automatiche. La diagnostica GPO conserva codice nativo gpresult, RSOP e versioni disponibili anche in caso di lettura parziale.
 
 ## Sicurezza e dati
 
@@ -64,6 +72,10 @@ CI su Windows Server con SDK .NET 10 e test.cmd --artifact --read-only. I push s
 
 Verifica locale 25 ottobre 2026, lotto OT-AUDIT-12/13/17: build autonoma riuscita, **91 test superati, 0 falliti** con suite completa; comando CI locale **69/0**. Rapporti in artifacts/p1-2026-10-25 (p1-build.log, p1-full.log, p1-ci.log e p1-dependency-audit.json). Audit advisory NuGet senza vulnerabilità segnalate per i pacchetti enumerati: non certifica il sistema o l'applicazione. Le prove di rifiuto/consegna usano copie isolate e firme simulate; la qualifica con certificato e policy reali resta aperta.
 
+Verifica locale successiva, lotto OT-AUDIT-14/15: build senza avvisi/errori, suite completa **101/0**, comando CI locale **78/0** e audit NuGet senza advisory per i pacchetti enumerati. Rapporti in artifacts/lot-14-15-2026-10-25. Fixture standard/JEA delle letture parziali e fixture AD dc1/dc2, senza connessioni a domini o interventi modificanti reali. Il gate di provenienza conferma ricevuta, EXE e sorgenti del lotto; laboratorio, firma e pilota restano distinti.
+
+Chiusura applicativa del 26 ottobre 2026, OT-AUDIT-16/18/19/20/21/22/23: build senza avvisi/errori, suite completa **108/0**, comando CI locale **83/0** e audit NuGet senza advisory per i pacchetti enumerati. Evidenze in artifacts/app-close-2026-10-25 (data di inizio del lotto). Nessun test VM o dominio reale, come richiesto. Il vecchio banco 1.2 e stato rimosso dopo backup verificato fuori checkout; log, render e pacchetti storici sono conservati.
+
 ## Consegna
 
     pwsh -NoProfile -File scripts/prepare-release.ps1
@@ -77,4 +89,4 @@ La build attuale è **non firmata**, destinata alla qualificazione in laboratori
 
 ## Ripresa nella prossima sessione
 
-La fonte delle attività aperte rimane [PROJECT_STATUS.json](PROJECT_STATUS.json). Il lotto P1 OT-AUDIT-12/13/17 è completato e verificato localmente; esiti e schede originali sono conservati nello storico del tracker SecondBrain OnlyTweak. Restano nove attività autonome OT-AUDIT-14/15/16/18/19/20/21/22/23 e i sette gate OT-VM-01..04, OT-ENT-LAB-01, OT-ENT-SIGN-01 e OT-ENT-PILOT-01, con dipendenze aggiornate. OT-AUDIT-23 registra il residuo gpresult della diagnostica GPO, riprodotto ma non incluso nel lotto P1. Prima proseguire con letture/DC effettivo e predisposizione/recupero; laboratorio, firma reale e pilota seguono i rispettivi prerequisiti. Le correzioni OT-AUDIT-08/09/10 e la rimozione OT-AUDIT-11 rimangono storico. Il salvataggio dei sorgenti non equivale a distribuzione o validazione in produzione.
+La fonte delle attività rimane [PROJECT_STATUS.json](PROJECT_STATUS.json): **zero task applicativi aperti** dopo la chiusura verificata di OT-AUDIT-16/18/19/20/21/22/23. Schede originali, criteri ed esiti sono conservati nello storico del tracker SecondBrain OnlyTweak, insieme ai lotti precedenti. I sette gate OT-VM-01..04 e OT-ENT-LAB-01/SIGN-01/PILOT-01 restano separati e non dichiarati superati: i test VM sono esclusi da questa chiusura per scelta dell'utente. Nessun nuovo lotto ambientale viene avviato automaticamente. Le correzioni OT-AUDIT-08/09/10 e la rimozione OT-AUDIT-11 rimangono storico; il salvataggio dei sorgenti non equivale a distribuzione o validazione in produzione.

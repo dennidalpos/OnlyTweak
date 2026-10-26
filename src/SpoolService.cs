@@ -23,6 +23,13 @@ namespace OnlyTweakWindows
         private readonly ISpoolBackend backend;
         public SpoolService(ISpoolBackend backend) { this.backend = backend; }
         public string Status() { return backend.Status(); }
+        internal LocalObservation Observe(bool clean)
+        {
+            string status=backend.Status(); int count=0;
+            if(clean) foreach(string file in backend.Files(Validate()))
+                if(String.Equals(Path.GetExtension(file),".spl",StringComparison.OrdinalIgnoreCase) || String.Equals(Path.GetExtension(file),".shd",StringComparison.OrdinalIgnoreCase)) count++;
+            return new LocalObservation(!String.IsNullOrWhiteSpace(status),(status=="In esecuzione" || status=="Running") && (!clean || count==0),new {Status=status,SpoolFiles=clean ? (int?)count : null});
+        }
         public string CleanupUnavailable()
         { try { Validate(); return null; } catch (Exception ex) { return ex.Message; } }
         private string Validate()

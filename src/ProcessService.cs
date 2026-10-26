@@ -6,6 +6,8 @@ using System.IO;
 using System.Net.NetworkInformation;
 using System.Text;
 using Microsoft.Win32;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OnlyTweakWindows
 {
@@ -29,6 +31,12 @@ namespace OnlyTweakWindows
         { return File.Exists(SystemFile(name)) ? null : "Componente Windows non disponibile: " + name; }
         public void Run(string name, string arguments, Action<string> log, bool unicode)
         {
+            NativeObservation observed=RunObserved(name,arguments,log,unicode);
+            if (observed.ExitCode!=0 && observed.ExitCode!=3010) throw new InvalidOperationException("Lo strumento ha restituito un errore ("+observed.ExitCode+"). Consulta l'output.");
+        }
+        internal NativeObservation RunObserved(string name,string arguments,Action<string> log,bool unicode,
+            bool diagnostic=false,CancellationToken cancellation=default,int timeoutSeconds=60)
+        {
             string file = SystemFile(name);
             if (!File.Exists(file)) throw new FileNotFoundException("Componente Windows non trovato.", file);
             log(name + " " + arguments);
@@ -38,20 +46,39 @@ namespace OnlyTweakWindows
                 StandardOutputEncoding=unicode ? Encoding.Unicode : Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage),
                 StandardErrorEncoding=unicode ? Encoding.Unicode : Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage)
             };
+            return RunProcess(start,log,diagnostic,cancellation,timeoutSeconds);
+        }
+        internal static NativeObservation RunProcess(ProcessStartInfo start,Action<string> log,bool diagnostic,CancellationToken cancellation,int timeoutSeconds)
+        {
+            if (diagnostic) cancellation.ThrowIfCancellationRequested();
             using (Process process = new Process { StartInfo=start })
             {
-                process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (!String.IsNullOrEmpty(e.Data)) log(e.Data.Replace("\0", "")); };
-                process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (!String.IsNullOrEmpty(e.Data)) log(e.Data.Replace("\0", "")); };
                 if (!process.Start()) throw new InvalidOperationException("Impossibile avviare lo strumento.");
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-                process.WaitForExit(); // Also drains both async output streams.
+                BoundedText captured=new BoundedText();
+                Task stdout=Drain(process.StandardOutput,captured,log),stderr=Drain(process.StandardError,captured,log);
+                using CancellationTokenSource timeout=diagnostic ? new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)) : new CancellationTokenSource();
+                using CancellationTokenSource linked=CancellationTokenSource.CreateLinkedTokenSource(cancellation,timeout.Token);
+                try { process.WaitForExitAsync(diagnostic ? linked.Token : CancellationToken.None).GetAwaiter().GetResult(); }
+                catch(OperationCanceledException) {
+                    if (!process.HasExited) process.Kill(true);
+                    process.WaitForExitAsync().GetAwaiter().GetResult(); Task.WhenAll(stdout,stderr).GetAwaiter().GetResult();
+                    if (cancellation.IsCancellationRequested) throw;
+                    throw new TimeoutException("Timeout diagnostico: esito sconosciuto.");
+                }
+                Task.WhenAll(stdout,stderr).GetAwaiter().GetResult();
                 log("Codice di uscita: " + process.ExitCode + ".");
-                if (String.Equals(name, "sfc.exe", StringComparison.OrdinalIgnoreCase))
+                if (String.Equals(Path.GetFileName(start.FileName), "sfc.exe", StringComparison.OrdinalIgnoreCase))
                     log("Per l'esito dell'integrità e delle eventuali riparazioni, leggi il riepilogo SFC sopra: il solo codice di uscita non descrive tutti i casi.");
                 // Servicing may return ERROR_SUCCESS_REBOOT_REQUIRED (3010).
                 if (process.ExitCode == 3010) log("Riavvio del PC richiesto dallo strumento. Riavvia manualmente quando pronto.");
-                else if (process.ExitCode != 0) throw new InvalidOperationException("Lo strumento ha restituito un errore (" + process.ExitCode + "). Consulta l'output.");
+                return new NativeObservation(process.ExitCode,captured.Read(),captured.Truncated);
+            }
+        }
+        private static async Task Drain(StreamReader reader,BoundedText captured,Action<string> log)
+        {
+            char[] buffer=new char[4096]; int count;
+            while((count=await reader.ReadAsync(buffer,0,buffer.Length).ConfigureAwait(false))>0) {
+                string text=new string(buffer,0,count).Replace("\0",""); captured.Append(text); log(text);
             }
         }
         public void LaunchSystem(string name, string arguments, Action<string> log)

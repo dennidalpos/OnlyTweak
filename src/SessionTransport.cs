@@ -22,6 +22,7 @@ namespace OnlyTweakWindows
         public StepResult Result { get; set; }
         public string Identity { get; set; } = "";
         public string LocalAction { get; set; } = "";
+        public bool LocalReadOnly { get; set; }
     }
     internal sealed class PipeChannel : IDisposable
     {
@@ -116,14 +117,17 @@ namespace OnlyTweakWindows
         }
         private async Task Cancel()
         { try { await channel.Send(new WorkerMessage {Kind="cancel"}); } catch (IOException) { } catch (ObjectDisposedException) { } }
-        public async Task<string> ExecuteLocal(string actionId)
+        public async Task<StepResult> ExecuteLocal(string actionId,bool readOnly=false,CancellationToken cancellation=default)
         {
             if (!Elevated) throw new InvalidOperationException("Sessione locale elevata richiesta.");
-            await channel.Send(new WorkerMessage {Kind="local",LocalAction=actionId});
-            WorkerMessage response=await channel.Receive();
-            if (response.Kind!="result") throw new IOException("Risposta locale non valida.");
-            if (response.Result.State!=StepState.Success) throw new InvalidOperationException(response.Result.Summary);
-            return String.Join(Environment.NewLine,response.Result.Evidence);
+            bool diagnostic=readOnly || LocalOperationExecutor.IsDiagnostic(actionId);
+            if(diagnostic) cancellation.ThrowIfCancellationRequested();
+            await channel.Send(new WorkerMessage {Kind="local",LocalAction=actionId,LocalReadOnly=readOnly});
+            using(cancellation.Register(()=> {if(diagnostic) _=Cancel();})) {
+                WorkerMessage response=await channel.Receive();
+                if (response.Kind!="result" || response.Result==null || response.Result.ActionId!=actionId) throw new IOException("Risposta locale non valida.");
+                return response.Result;
+            }
         }
         public void Dispose()
         {
@@ -179,10 +183,11 @@ namespace OnlyTweakWindows
                             if (message.Kind=="local")
                             {
                                 if (!elevated) throw new InvalidOperationException("Worker locale richiesto.");
-                                change=true;
+                                change=!message.LocalReadOnly && !LocalOperationExecutor.IsDiagnostic(message.LocalAction);
+                                CancellationToken localToken=cancellation.Token;
                                 active=Task.Run(async ()=> {
                                     StepResult result;
-                                    try { result=LocalPrivilege.RunAuthorized(message.LocalAction); }
+                                    try { result=LocalPrivilege.RunAuthorized(message.LocalAction,localToken,message.LocalReadOnly); }
                                     catch (Exception ex) {
                                         result=new StepResult {ActionId=message.LocalAction,State=StepState.Unverified,
                                             Summary="Intervento locale non verificato: controllare audit e stato prima di riprovare.",

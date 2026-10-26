@@ -13,7 +13,7 @@ namespace OnlyTweakWindows
         private static AppServices TestApp(ISecurityBackend backend=null,int build=26100,string edition="Professional",FeatureAvailability availability=null)
         {
             OsProfile os=availability==null ? TestProfile(build,edition) : availability.OS;
-            return new AppServices(backend??new FakeSecurityBackend(),os,availability??new FeatureAvailability(os,name=>true,target=>true));
+            return new AppServices(backend??new FakeSecurityBackend(),os,availability??new FeatureAvailability(os,name=>true,target=>true),new FakeAudit());
         }
         private static void CompatibilityTests()
         {

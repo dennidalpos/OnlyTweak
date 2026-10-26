@@ -32,6 +32,8 @@ namespace OnlyTweakWindows
         {
             ResultContractTests();
             EndpointReadTests();
+            DiagnosticTests();
+            AppClosureTests();
             Test("enterprise: input, wildcard, destinazioni e parametri estranei rifiutati",delegate {
                 EnterpriseProfile().Validate();
                 foreach (string host in new[] {"dc1 & whoami","*.corp.example","-server","dc1.corp.example:5985","dc1..example"})
@@ -266,7 +268,7 @@ namespace OnlyTweakWindows
                 string script=EmbeddedScripts.Read("Provision-Remoting.ps1");
                 string mocks="\nfunction Get-CimInstance { [pscustomobject]@{DomainRole=1;PartOfDomain=$true;StartMode='Manual';State='Stopped'} }\n"+
                     "function Test-Path { param($LiteralPath) [bool]($LiteralPath -like '*OnlyTweakEndpoint.psm1') }\n"+
-                    "function Get-NetFirewallRule { }\nfunction Get-PSSessionConfiguration { }\n"+
+                    "function Get-NetFirewallRule { }\nfunction Get-PSSessionConfiguration { }\nfunction Get-ChildItem { }\n"+
                     "function Save-State { $global:mutations++; throw 'UnexpectedWrite' }\n"+
                     "function Set-Service { $global:mutations++; throw 'UnexpectedWrite' }\n"+
                     "function Start-Service { $global:mutations++; throw 'UnexpectedWrite' }\n"+

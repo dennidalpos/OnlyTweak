@@ -24,7 +24,17 @@ Operations.ps1 viene estratto dalla risorsa incorporata in una directory tempora
 
 L'annullamento chiude solo il processo diagnostico e i suoi figli. Le modifiche non usano questo percorso: si attende la terminazione e si tenta la verifica. Dopo disconnessione il worker lascia terminare un intervento iniziato, poi chiude la sessione. Se Windows o il processo vengono terminati esternamente, l'esito richiede verifica manuale.
 
+Anche il catalogo locale ActionSpec distingue diagnostiche e modifiche. Entrambe le viste di rete usano ipconfig /all; stato spooler usa sc query Spooler: tutte queste letture hanno un limite di 60 secondi. SFC /verifyonly e DISM /ScanHealth hanno un limite di 1800 secondi. Annullamento e timeout raggiungono il processo locale o il worker elevato; solo le diagnostiche possono terminare il proprio albero di processi. L'output viene drenato e limitato anche dopo l'annullamento. Le modifiche ignorano questi token e non ricevono un kill generico.
+
+LocalOperationExecutor esegue audit preventivo, lettura prima/dopo e risultato strutturato: RequestAccepted, ExecutionCompleted, EffectVerified, AuditComplete, codice nativo e osservazioni disponibili. SFC/DISM/reset rete rimangono Unverified quando il solo codice o la rilettura non dimostrano l'effetto; 3010 richiede riavvio manuale. Spooler e coda selezionata usano condizioni osservabili; EnumJobs campiona la presenza di lavori senza certificare il dispositivo fisico. Un errore nell'audit finale o nel trasporto mantiene l'esito incerto. Nella sessione UI il retry resta bloccato fino a una rilettura esplicita riuscita mediante Rileggi stato; una lettura riuscita non equivale a riparazione riuscita. La rilettura ha a sua volta annullamento e timeout. Audit e azione elevati usano l'identita effettiva del worker, mentre il contesto desktop resta distinto.
+
 JSON malformato, output troncato o codici nativi ambigui non diventano successi. La localizzazione dell'output non è usata come criterio generale di parsing.
+
+`domain.auth`, `domain.sysvol` ed `endpoint.health` isolano le raccolte indipendenti. I dati già ottenuti restano nel risultato, anche se una raccolta successiva o una fonte opzionale fallisce. `Checks`, indicizzato per sottocontrollo, espone `Status` e `ErrorCode` sanitizzato: `Completed`, `Empty`, `NotApplicable`, `Denied`, `Unavailable`, `TimedOut`, `Failed`. Non contiene messaggi originali delle eccezioni. L'assenza di eventi corrispondenti è `Empty`, distinta da permessi negati o log/provider assenti, senza dedurre salute. Array parziali emessi prima di un errore sono conservati con lo stato incompleto.
+
+Una raccolta incompleta rende l'esito `Inconclusive` con `PartialDiagnosticRead`; un canale sicuro esplicitamente falso conserva `ObservedIssue` anche in presenza di altre letture incomplete. `Success` richiede metadati coerenti e sole raccolte completate, vuote valide o non applicabili. Se scade l'intero processo diagnostico rimane l'esito sconosciuto del bridge: non vengono ricostruiti dati mai ricevuti. SYSVOL conserva separatamente le share lette dal tecnico sul DC del profilo e servizi/cartelle/eventi letti sul target remoto.
+
+Il modulo JEA revisionato espone gli stessi sottocontrolli e gli eventi delle tre diagnostiche; i ticket del contesto JEA sono esplicitamente `NotApplicable/JeaNotExposed`. Il test del canale sicuro non viene eseguito su DC o computer fuori dominio; se il ruolo non è leggibile resta indisponibile. Un modulo precedente privo di `Checks` non può produrre un successo accettato. Aggiornamento e firma del modulo restano operazioni amministrative tramite canale approvato: nessun Apply o allentamento delle policy automatico.
 
 Il confine PowerShell valida presenza e tipo di stato, riepilogo, evidenze, autenticazione, codice errore e dati. Uno stato assente/sconosciuto, campi duplicati o dati essenziali mancanti per l'azione non producono Success; una ricerca o cache legittimamente vuota rimane valida. Questo contratto è distinto dalla costruzione dei risultati interni e dal trasporto IPC.
 
@@ -40,6 +50,8 @@ DCDiag gira sul DC selezionato via WinRM con Connectivity, Advertising, SysVolCh
 
 Ricerca AD: filtro LDAP con escaping, massimo 1000 oggetti, pagine UI da 50, GUID stabile per selezione. Ricerca limitata ripetuta per pagina, non snapshot transazionale: cambiamenti directory possono cambiare i risultati. LastLogonDate è approssimato; lockout letto sul DC scelto, senza ricostruzione di tutta la cronologia accessi.
 
+`ad.search` e `session.authenticate` usano `Server=Target` per bind e query. Prima della raccolta confrontano il naming context RootDSE con il dominio del profilo, `dnsHostName` con il FQDN selezionato e l'identità/dominio restituiti da Get-ADDomainController interrogato sullo stesso server. Membri, identità discordanti e domini diversi vengono rifiutati senza fallback; alias diversi dal FQDN del DC non sono accettati. I dati includono `Server`, che il contratto confronta con il target; la verifica sessione confronta anche DNSRoot. Cambiare destinazione azzera pagina, righe e selezione AD; i risultati storici conservano il proprio target nei report. Le scritture restano limitate al DC del profilo e richiedono nuova rilettura di GUID/DN ed eleggibilità.
+
 Prima di una modifica utente si rileggono stato e percorso. Al confine della scrittura: conferma, OU revisionate per persone, GUID/DC/DN espliciti; adminCount, SID speciali, primaryGroupID, SPN e gruppi di autorizzazione privilegiati bloccano l'azione. Errori di eleggibilità impediscono la scrittura. Verificata anche la delimitazione delle OU nei DN con caratteri escape.
 
 Non si possono riconoscere automaticamente tutti i servizi senza SPN o i ruoli privilegiati personalizzati. Le OU ammesse devono contenere soltanto utenti ordinari; OU escluse e SID protetti vanno revisionati dal responsabile del cliente. Il controllo integra ACL/deleghe AD, senza sostituirle o eliminare la concorrenza tra lettura e scrittura.
@@ -49,6 +61,8 @@ Reset password: nessun login di prova, ripristino password precedente o ulterior
 ## GPO, DFS e postazioni
 
 GPO computer: RSOP/gpresult sul target e versioni AD/SYSVOL via GroupPolicy dal tecnico. Il contesto dell'utente interattivo richiede raccolta dalla sua sessione, senza sostituirlo con l'amministratore remoto.
+
+La raccolta GPO standard/JEA espone NativeExitCode, Result, ReadComplete e Checks RSOP/Gpresult. gpresult richiede codice esplicito zero e output presente; codice diverso/assente, output vuoto o RSOP fallito producono Inconclusive/PartialGpoRead. RSOP, output nativo e versioni rimangono indipendenti: anche un errore nel confronto delle versioni conserva le evidenze endpoint. I testi localizzati non vengono interpretati per dedurre successo.
 
 SYSVOL/NETLOGON: SMB e segnali DFSR distinti dalla replica AD. Namespace DFS: target/referral configurati e accessibilità SMB dal tecnico; non è una ricostruzione del referral effettivamente usato da un altro client. Target scoperti fuori dal profilo non contattati.
 
@@ -62,9 +76,13 @@ Provision-Remoting.ps1 viene esportato con modulo JEA e istruzioni GPO; Inspect 
 
 Apply accetta membri di dominio, CIDR espliciti, gruppo dedicato e assenza di conflitti/GPO WinRM. Crea modulo con funzioni esportate nominate, ruolo JEA, endpoint RestrictedRemoteServer con account virtuale, trascrizioni e regola firewall Domain limitata alle reti indicate. HTTPS richiede chiave privata, validità temporale, EKU Server Authentication, FQDN esatto e catena attendibile; il client non usa opzioni Skip*.
 
+Inspect espone listener e compatibilita richiesta. Prima di qualsiasi scrittura Apply rifiuta listener multipli o con indirizzo, porta, Enabled, trasporto o URLPrefix diversi dal contratto; HTTPS richiede anche thumbprint e Hostname/FQDN corrispondenti. Il preflight viene ripetuto dopo la conferma. Non vengono sostituiti listener preesistenti, ne creati checkpoint in presenza di questi conflitti.
+
 Non modifica TrustedHosts, Basic, CredSSP, AllowUnencrypted o regole preesistenti. Una regola ristretta non chiude esposizioni più ampie già presenti. Mai distribuire account virtuali amministrativi sui DC: lo script li rifiuta.
 
 Snapshot in ProgramData/OnlyTweak/Remoting, ACL Administrators/SYSTEM, con stato servizio e impronte degli artefatti. Undo verifica file, endpoint, listener, firewall e nuove configurazioni condivise prima di rimuovere soltanto gli artefatti registrati. Snapshot/trascrizioni restano. Una configurazione cambiata o un'installazione parziale richiedono recupero manuale dal checkpoint, senza cancellazioni automatiche.
+
+I nuovi checkpoint hanno SchemaVersion 2, Generation, identita macchina e CheckpointHash. Dopo Undo verificato un nuovo Apply copia lo stato precedente in History/Generation.json e ne verifica i byte prima di creare una nuova generazione. Undo ripetuto su uno stato gia ripristinato e un'operazione senza scritture; WhatIf non modifica stato o storico. Stati attivi, Partial, alterati o di altra macchina restano bloccanti. Gli snapshot legacy senza schema 2 richiedono revisione manuale: nessuna migrazione o cancellazione implicita. Hash e ACL non rendono lo storico immutabile contro un amministratore che possa alterare stato e hash.
 
 Per App Control/AllSigned firmare ps1/psm1 prima della build/esportazione. Le configurazioni generate possono richiedere approvazione/firma aziendale: non si allenta ExecutionPolicy. Le GPO vanno ripristinate dalla stessa fonte centrale.
 
@@ -76,9 +94,15 @@ Build e consegna richiedono PowerShell 7.4+; il prodotto continua a usare Window
 
 Prima della consegna aziendale: firma script/EXE, App Control/AllSigned, avvio senza runtime installato, UAC multiutente, due domini senza trust, due DC nello stesso dominio, SYSVOL/DFSR, errori rete/deleghe, confronto con strumenti Microsoft e DPI fisici. Prove modificanti solo in VM ripristinabili. Gate nel tracker, distinti dalle fixture locali.
 
+Chiusura applicativa del 26 ottobre 2026: per richiesta dell'utente le prove su VM/domini e le qualifiche ambientali sono fuori perimetro. I task applicativi si chiudono con fixture, build e controlli locali; i gate ambientali non vengono dichiarati superati o cancellati per questa scelta.
+
+Fonti rivalidate per questi percorsi: [listener WinRM](https://learn.microsoft.com/en-us/windows/win32/winrm/installation-and-configuration-for-windows-remote-management), [attesa asincrona .NET 10](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.waitforexitasync?view=net-10.0), [EnumJobs](https://learn.microsoft.com/en-us/windows/win32/printdocs/enumjobs). Le API e le fixture locali non certificano comportamento di driver, server o policy reali.
+
 ## Fonti primarie
 
 Consultate il 24 ottobre 2026; la documentazione corrente non certifica ogni build/server legacy.
+
+Rivalidate il 25 ottobre 2026 per il lotto 14/15: [Get-WinEvent, Windows PowerShell 5.1](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent?view=powershell-5.1), [Get-ADRootDSE](https://learn.microsoft.com/en-us/powershell/module/activedirectory/get-adrootdse?view=windowsserver2025-ps), [Get-ADDomainController](https://learn.microsoft.com/en-us/powershell/module/activedirectory/get-addomaincontroller?view=windowsserver2025-ps). I riferimenti AD descrivono il modulo corrente; le fixture eseguono Windows PowerShell 5.1, senza qualificare tutte le versioni RSAT/server o un dominio reale. Gli identificatori eventi sono verificati nelle fixture, senza usare testi localizzati come discriminante.
 
 - [Supporto .NET](https://dotnet.microsoft.com/en-us/platform/support/policy), [Windows supportati](https://learn.microsoft.com/en-us/dotnet/core/install/windows), [single file](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview).
 - [RSAT](https://learn.microsoft.com/en-us/windows-server/administration/install-remote-server-administration-tools), [FoD e WSUS/UUP](https://learn.microsoft.com/en-us/windows/deployment/update/fod-and-lang-packs).

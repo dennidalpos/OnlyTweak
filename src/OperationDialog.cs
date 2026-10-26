@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Threading;
 
 namespace OnlyTweakWindows
 {
@@ -15,7 +16,10 @@ namespace OnlyTweakWindows
         private readonly Label status;
         private readonly ActivityBar progress;
         private readonly Button run;
-        private readonly Timer outputTimer;
+        private readonly System.Windows.Forms.Timer outputTimer;
+        private readonly Button cancel,read;
+        private CancellationTokenSource cancellation;
+        private bool closeAfterCancellation,reading;
         private readonly BoundedText pending=new BoundedText();
         private bool running, checking;
         private readonly bool confirmationGranted;
@@ -49,7 +53,9 @@ namespace OnlyTweakWindows
             run.Visible=!startAutomatically;
             Footer.Controls.Add(run); AcceptButton=startAutomatically ? CloseAction : run;
             Footer.Controls.Add(Theme.Button("Copia output",delegate { if (output.TextLength>0 && !Theme.TryCopy(output.Text)) { status.Text="Appunti occupati: impossibile copiare."; status.ForeColor=Theme.Warning; } }));
-            outputTimer=new Timer { Interval=100 };
+            cancel=Theme.Button("Annulla diagnosi",delegate {cancellation?.Cancel();}); cancel.Enabled=false;cancel.Visible=action.IsDiagnostic;Footer.Controls.Add(cancel);
+            read=Theme.Button("Rileggi stato",async delegate {await ReadState();});read.Visible=!action.IsDiagnostic && action.Observe!=null;Footer.Controls.Add(read);
+            outputTimer=new System.Windows.Forms.Timer { Interval=100 };
             outputTimer.Tick+=delegate { FlushOutput(); progress.Invalidate(); };
             Shown+=async delegate { await CheckAvailability(); if (startAutomatically&&run.Enabled) await Execute(); };
         }
@@ -73,35 +79,54 @@ namespace OnlyTweakWindows
             if (running || checking) return;
             if (!confirmationGranted&&action.Confirmation!=null&&!ConfirmDialog.Ask(this,action.Title,action.Confirmation)) return;
             if (!app.Coordinator.TryEnter()) { status.Text="Un'altra operazione è in corso."; return; }
-            running=true; run.Enabled=false; CloseAction.Enabled=false; progress.Visible=true;
+            try {app.LocalOperations.Authorize(action);} catch(InvalidOperationException ex) {status.Text=ex.Message;return;}
+            running=true; run.Enabled=false; CloseAction.Enabled=action.IsDiagnostic; progress.Visible=true;
+            cancellation=new CancellationTokenSource();cancel.Enabled=action.IsDiagnostic;read.Enabled=false;
             output.Clear(); status.Text="Operazione in corso. Attendi il completamento."; status.ForeColor=Theme.Accent;
             app.History.Add("AVVIO · " + action.Title); outputTimer.Start();
             try
             {
-                await Task.Run(delegate {
+                StepResult result=await Task.Run(delegate {
                     if (!action.Applicable) throw new NotSupportedException("Funzione non applicabile a questo sistema.");
                     if (action.Unavailable!=null)
                     { string reason=action.Unavailable(); if (reason!=null) throw new InvalidOperationException(reason); }
                     if (action.RequiresElevation)
-                        LocalPrivilege.Execute(action.Id,Enqueue);
-                    else if (action.Id=="printer.purge") LocalPrivilege.ExecuteAudited(action,Enqueue);
-                    else action.Execute(Enqueue);
+                        return LocalPrivilege.Execute(action.Id,Enqueue,cancellation.Token);
+                    return app.LocalOperations.Execute(action,Enqueue,cancellation.Token);
                 });
+                app.LocalOperations.Observe(action,result);
                 if (action.Restart!=null) Enqueue(action.Restart);
-                Enqueue("Operazione terminata. Leggi il riepilogo sopra per l'esito dello strumento.");
-                status.Text="Esecuzione terminata · leggi il risultato.";
-                app.History.Add("TERMINATA · " + action.Title);
+                Enqueue(result.State+" · "+result.Summary);
+                if(result.Data!=null) Enqueue(result.Data.ToString());
+                status.Text=result.Summary;
+                if(result.State!=StepState.Success) status.ForeColor=Theme.Warning;
+                app.History.Add((result.State==StepState.Success ? "TERMINATA" : String.IsNullOrEmpty(result.ErrorCode) ? result.State.ToString() : "ERRORE")+" · "+action.Title);
             }
             catch (Exception ex)
             {
+                if(!action.IsDiagnostic) app.LocalOperations.Observe(action,new StepResult {ActionId=action.Id,Target=Environment.MachineName,State=StepState.Unverified});
                 Enqueue("ERRORE: " + ex.Message); status.Text="Operazione incompleta o non riuscita."; status.ForeColor=Theme.Warning;
                 app.History.Add("ERRORE · " + action.Title + " · " + ex.Message);
             }
             finally
             {
                 outputTimer.Stop(); FlushOutput(); running=false; app.Coordinator.Leave();
-                progress.Visible=false; CloseAction.Enabled=true; run.Enabled=true;
+                progress.Visible=false; CloseAction.Enabled=true; run.Enabled=true;cancel.Enabled=false;read.Enabled=true;
+                cancellation.Dispose();cancellation=null;
+                if(closeAfterCancellation) Close();
             }
+        }
+        private async Task ReadState()
+        {
+            if(running || checking || !app.Coordinator.TryEnter()) return;
+            running=true;reading=true;read.Enabled=false;run.Enabled=false;CloseAction.Enabled=true;outputTimer.Start();
+            cancellation=new CancellationTokenSource();cancel.Visible=true;cancel.Enabled=true;
+            try {
+                StepResult result=await Task.Run(()=>action.RequiresElevation ? LocalPrivilege.Execute(action.Id,Enqueue,cancellation.Token,true) : app.LocalOperations.Read(action,Enqueue,cancellation.Token));
+                app.LocalOperations.Observe(action,result,true);Enqueue(result.Summary);if(result.Data!=null) Enqueue(result.Data.ToString());status.Text=result.Summary;
+                app.History.Add("RILETTURA · "+action.Title+" · "+result.State);
+            } catch(Exception ex) {Enqueue(ex.Message);status.Text="Rilettura incompleta.";}
+            finally {outputTimer.Stop();FlushOutput();running=false;reading=false;app.Coordinator.Leave();read.Enabled=true;run.Enabled=true;CloseAction.Enabled=true;cancel.Enabled=false;cancel.Visible=action.IsDiagnostic;cancellation.Dispose();cancellation=null;if(closeAfterCancellation) Close();}
         }
         private void Enqueue(string line)
         {
@@ -115,7 +140,7 @@ namespace OnlyTweakWindows
             output.Text=combined.Read();
         }
         protected override void OnFormClosing(FormClosingEventArgs e)
-        { if (running || checking) e.Cancel=true; base.OnFormClosing(e); }
+        { if (running || checking) {e.Cancel=true;if(running && (action.IsDiagnostic || reading) && cancellation!=null) {closeAfterCancellation=true;cancellation.Cancel();}} base.OnFormClosing(e); }
         protected override void Dispose(bool disposing)
         { if (disposing && outputTimer!=null) outputTimer.Dispose(); base.Dispose(disposing); }
     }

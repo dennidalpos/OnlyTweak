@@ -17,6 +17,7 @@ namespace OnlyTweakWindows
         [STAThread]
         private static int Main(string[] args)
         {
+            if(args.Length>1 && args[0]=="--native-fixture") return NativeFixture(args);
             if (WorkerHost.TryRun(args)) return 0;
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
@@ -242,6 +243,8 @@ namespace OnlyTweakWindows
         }
         private static void UiTestCases()
         {
+            DirectoryUiTests();
+            AppClosureUiTests();
             Test("UI: apertura diretta senza finestre intermedie",delegate {
                 AppServices app=TestApp(); int executed=0,count=Application.OpenForms.Count; string status="";
                 ActionSpec action=new ActionSpec("test.launch","Proprietà simulate","Test","Simulazione",delegate(Action<string> log) { executed++; log("apertura simulata"); }) { OpensWindow=true };
@@ -259,7 +262,7 @@ namespace OnlyTweakWindows
             });
             Test("UI: l'operazione parte senza un secondo clic Esegui",delegate {
                 AppServices app=TestApp(); bool executed=false;
-                using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.auto","Test automatico","Simulazione","Test",delegate(Action<string> log) { executed=true; }),true))
+                using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.auto","Test automatico","Simulazione","Test",delegate(Action<string> log) { executed=true; }) {IsDiagnostic=true},true))
                 {
                     form.ShowInTaskbar=false; form.Show();
                     PumpUntil(delegate { return executed&&!app.Coordinator.IsBusy; });
@@ -269,7 +272,7 @@ namespace OnlyTweakWindows
             });
             Test("UI: annulla conferma non avvia l'azione",delegate {
                 AppServices app=TestApp(); bool executed=false;
-                ActionSpec action=new ActionSpec("test.cancel","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed=true; }) { Confirmation="Conferma di test, nessuna modifica reale." };
+                ActionSpec action=new ActionSpec("test.cancel","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed=true; }) { Confirmation="Conferma di test, nessuna modifica reale.",Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true}) };
                 using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
                 {
                     timer.Tick+=delegate {
@@ -287,7 +290,7 @@ namespace OnlyTweakWindows
             });
             Test("UI: una sola conferma e partenza immediata",delegate {
                 AppServices app=TestApp(); int executed=0,confirmations=0;
-                ActionSpec action=new ActionSpec("test.confirm","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed++; }) { Confirmation="Conferma di test, nessuna modifica reale." };
+                ActionSpec action=new ActionSpec("test.confirm","Conferma simulata","Simulazione","Test",delegate(Action<string> log) { executed++; }) { Confirmation="Conferma di test, nessuna modifica reale.",Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true}) };
                 using (System.Windows.Forms.Timer timer=new System.Windows.Forms.Timer { Interval=20 })
                 {
                     timer.Tick+=delegate {
@@ -410,7 +413,7 @@ namespace OnlyTweakWindows
                 AppServices app=TestApp();
                 using (ManualResetEvent release=new ManualResetEvent(false))
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.wait","Test simulato","Nessun intervento Windows.","Simulazione",
-                    delegate(Action<string> log) { log("output simulato"); release.WaitOne(3000); })))
+                    delegate(Action<string> log) { log("output simulato"); release.WaitOne(3000); }) {Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true})}))
                 {
                     form.ShowInTaskbar=false; form.Show(); Application.DoEvents();
                     Button run=Descendants(form).OfType<Button>().First(b=>b.Text=="&Esegui");
@@ -426,7 +429,7 @@ namespace OnlyTweakWindows
             Test("UI: errore simulato riabilita controlli e libera il gate",delegate {
                 AppServices app=TestApp();
                 using (OperationDialog form=new OperationDialog(app,new ActionSpec("test.error","Errore simulato","Nessun intervento Windows.","Simulazione",
-                    delegate(Action<string> log) { throw new IOException("errore controllato"); })))
+                    delegate(Action<string> log) { throw new IOException("errore controllato"); }) {Observe=(log,token)=>new LocalObservation(true,true,new {Fixture=true})}))
                 {
                     form.ShowInTaskbar=false; form.Show(); Application.DoEvents();
                     Button run=Descendants(form).OfType<Button>().First(b=>b.Text=="&Esegui"); run.PerformClick();

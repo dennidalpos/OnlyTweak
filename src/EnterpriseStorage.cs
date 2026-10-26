@@ -86,6 +86,7 @@ namespace OnlyTweakWindows
                 target=request.ActionId.StartsWith("rsat.",StringComparison.Ordinal) || request.ActionId=="endpoint.securechannel" ?
                     Environment.MachineName : request.Target, identity, phase,
                 objectGuid=request.Parameters.TryGetValue("objectGuid",out string id) ? id : null,
+                localResource=request.ActionId=="printer.purge" ? request.Parameters.GetValueOrDefault("printer") : null,
                 outcome=result?.State.ToString(), errorCode=result?.ErrorCode };
             string path=Path.Combine(folder,DateTime.UtcNow.ToString("yyyy-MM-dd")+".jsonl");
             if (File.Exists(path) && (File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0) throw new IOException("Audit reindirizzato.");

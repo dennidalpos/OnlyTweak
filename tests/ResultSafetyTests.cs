@@ -36,7 +36,7 @@ namespace OnlyTweakWindows
             });
             Test("risultati: payload per azione e letture legittimamente vuote",()=> {
                 OperationRequest search=Request("ad.search");
-                Assert(OperationResultContract.Read(ResultPayload(new {Rows=Array.Empty<object>(),Page=0,HasMore=false,LimitReached=false}),search).State==StepState.Success,"Ricerca vuota rifiutata.");
+                Assert(OperationResultContract.Read(ResultPayload(new {Server=search.Target,Rows=Array.Empty<object>(),Page=0,HasMore=false,LimitReached=false}),search).State==StepState.Success,"Ricerca vuota rifiutata.");
                 foreach (string id in EnterpriseCatalog.Actions.Select(a=>a.Id)) {
                     bool rejected=false;
                     try { OperationResultContract.Read(ResultPayload(new {}),Request(id)); } catch (FormatException) { rejected=true; }

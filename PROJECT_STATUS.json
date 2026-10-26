@@ -102,233 +102,6 @@
         "Rimuovere solo chiavi vuote create dall'app nella sessione, preservando chiavi inizialmente vuote e dati/chiavi estranei aggiunti in seguito.",
         "Regressioni con fake e suite obbligatorie superate; nessuna prova modificante sulla postazione."
       ]
-    },
-    {
-      "id": "OT-AUDIT-14",
-      "title": "Conservare le letture indipendenti quando non esistono eventi corrispondenti",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "domain.auth, domain.sysvol ed endpoint.health raccolgono più sottosistemi in un unico scriptblock con ErrorActionPreference=Stop. Get-WinEvent senza corrispondenze genera un errore che interrompe la costruzione del risultato, perdendo anche dati indipendenti già raccolti.",
-      "evidence": [
-        "scripts/enterprise/Operations.ps1:3,192-205,309-324,357-369 e catch finale.",
-        "Fixture endpoint.health con CIM/servizi/hotfix disponibili e solo Get-WinEvent simulato con NoMatchingEventsFound: State=Inconclusive, AuthenticationVerified=False, Data=[], ErrorCode=NoMatchingEventsFound,Get-WinEvent. artifacts/audit-2026-10-25/AuditProbes.cs e audit-probes.log.",
-        "Analisi statica conferma lo stesso accoppiamento nei rami domain.auth e domain.sysvol; questi due rami non riprodotti separatamente. L'assenza di eventi non dimostra salute né indisponibilità delle altre letture.",
-        "Fonte API PowerShell 5.1: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent?view=powershell-5.1 ."
-      ],
-      "impact": "Un target senza eventi nel periodo selezionato può restituire una diagnosi globale inconcludente priva di OS, servizi e aggiornamenti disponibili; errori opzionali nascondono evidenze utili.",
-      "scope": [
-        "scripts/enterprise/Operations.ps1: raccolte eventi e gestione parziale",
-        "scripts/enterprise/OnlyTweakEndpoint.psm1: coerenza evidenze esposte",
-        "tests/EnterpriseTests.cs"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Distinguere zero eventi, accesso negato, log/provider assente e timeout; conservare dati indipendenti con stato/errore per sottocontrollo.",
-        "Definire l'esito complessivo senza trasformare assenza di eventi in prova di salute.",
-        "Fixture su tutti e tre i rami con eventi presenti/assenti e guasti selettivi; suite obbligatorie verdi."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-15",
-      "title": "Allineare il DC realmente interrogato alla destinazione registrata nei risultati",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "La UI permette di selezionare dc2, ma ad.search e session.authenticate usano Profile.DomainController (dc1); il bridge attribuisce StepResult.Target al Request.Target selezionato. La nota di bind menziona dc1, mentre intestazione e report indicano dc2.",
-      "evidence": [
-        "src/EnterpriseDialog.cs:39,241-244; src/PowerShellBridge.cs:38-39; scripts/enterprise/Operations.ps1:27-34,175-177,250-269.",
-        "Fixture ad.search con Target=dc2.corp.example e Profile.DomainController=dc1.corp.example: mock Get-ADUser registra Server=dc1; State=Success e result.Target=dc2. artifacts/audit-2026-10-25/AuditProbes.cs e audit-probes.log.",
-        "Nessuna modifica AD o interrogazione di dominio reale; le modifiche utente restano vincolate al DC del profilo dal validatore. Rilievo limitato all'attribuzione/lettura, non a una scrittura sul DC errato."
-      ],
-      "impact": "Lockout e stato account possono essere interpretati come letti su un DC diverso, rendendo ambigui confronti, diagnosi e report.",
-      "scope": [
-        "src/EnterpriseDialog.cs: selettore e richieste AD",
-        "scripts/enterprise/Operations.ps1: ad.search/session.authenticate",
-        "src/PowerShellBridge.cs: target del risultato",
-        "tests/EnterpriseTests.cs"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Scegliere un comportamento coerente: interrogare il target selezionato e validarne il dominio, oppure vincolare esplicitamente la UI al DC del profilo per quelle azioni.",
-        "Risultati, evidenze e report identificano il DC effettivo; nessuna intestazione contraddittoria.",
-        "Fixture con due DC del profilo e target non-DC; criteri di scrittura GUID/DC/DN invariati, suite obbligatorie verdi."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-16",
-      "title": "Rendere utilizzabili le schede aziendali alla dimensione minima consentita",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "EnterpriseDialog eredita MinimumSize=660x540 ma combina barre AutoSize, schede alte 310 e output percentuale senza scorrimento dell'insieme. Al ridimensionamento le barre occupano quasi tutto lo spazio e nascondono schede/comandi.",
-      "evidence": [
-        "src/Theme.cs:254-257; src/EnterpriseDialog.cs:41-48,69 e costruzione delle barre delle sei schede.",
-        "Probe UI reale alla Size=660x540, ClientSize=638x484, DeviceDpi=144: pulsanti Cerca, Sblocca, Avvia diagnosi e altri comandi risultano con rettangolo visibile vuoto dopo intersezione con gli antenati. Screenshot ispezionato: artifacts/audit-2026-10-25/audit-enterprise-minimum.png; geometrie in audit-probes.log.",
-        "tests/Tests.cs:456-511 renderizza le dimensioni iniziali e verifica solo ClientSize.Width>500, senza contenimento alla dimensione minima. Nessuna prova multi-monitor effettuata; OT-VM-02 resta distinto."
-      ],
-      "impact": "Alla dimensione ammessa dall'app le funzioni aziendali diventano invisibili e non utilizzabili col mouse; non si tratta soltanto di testo abbreviato.",
-      "scope": [
-        "src/EnterpriseDialog.cs: layout/barre/tab/output",
-        "src/Theme.cs: dimensioni minime pertinenti",
-        "tests/Tests.cs: layout aziendale"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Adeguare layout, scorrimento o minimo effettivo alle dimensioni disponibili, conservando comandi, griglia e risultati raggiungibili.",
-        "Regressioni di visibilità/contenimento alla dimensione minima e su desktop piccoli; ispezionare tutte le sei schede e l'editor.",
-        "Build e suite obbligatorie verdi; proseguire separatamente la matrice DPI fisica e cambio monitor di OT-VM-02."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-18",
-      "title": "Bloccare listener WinRM esistenti incompatibili con la predisposizione richiesta",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "Apply valida il certificato richiesto ma riutilizza qualunque listener con Transport corrispondente e Address=*, senza verificarne certificato effettivo, porta, stato o compatibilità. Il conflitto non blocca le successive modifiche a servizio, modulo, endpoint e firewall.",
-      "evidence": [
-        "scripts/enterprise/Provision-Remoting.ps1:142-154,165-172,183-195; docs/ENTERPRISE.md:57-63 richiede conflitti bloccanti e HTTPS con certificato valido.",
-        "Fixture Windows PowerShell 5.1 sullo script reale, API di sistema/PKI/storage simulate: certificato richiesto A*40, listener HTTPS esistente con B*40 -> Phase=Applied, CreatedListener=False. artifacts/audit-2026-10-25/provision-probe.ps1 e audit-provision.log.",
-        "La fixture non certifica connessioni TLS reali; conferma l'assenza del confronto richiesto nel flusso Apply. Non modificato WinRM/firewall/certificati della postazione.",
-        "Fonte configurazione listener: https://learn.microsoft.com/en-us/windows/win32/winrm/installation-and-configuration-for-windows-remote-management ."
-      ],
-      "impact": "Apply può terminare come applicato lasciando un listener diverso da quello richiesto e un firewall incoerente con la porta effettiva; il client conserva la validazione TLS e può rifiutare la connessione.",
-      "scope": [
-        "scripts/enterprise/Provision-Remoting.ps1: Inspect/preflight/Apply",
-        "tests/EnterpriseTests.cs: listener preesistenti",
-        "docs/ENTERPRISE.md ove necessario"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Ispezionare listener preesistenti prima di qualsiasi scrittura e definire i criteri di riuso compatibile (certificato effettivo, nome, porta, stato e trasporto).",
-        "Conflitti producono diagnosi bloccante senza sostituzioni implicite, snapshot di nuova applicazione o modifiche collaterali.",
-        "Fixture riuso compatibile, certificato/porta incompatibili e listener disabilitato; WhatIf senza scritture, poi laboratorio in OT-ENT-LAB-01."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-19",
-      "title": "Completare il ciclo Apply-Undo-Apply conservando lo storico dei checkpoint",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "Undo conserva state.json marcandolo Restored, ma Apply rifiuta qualsiasi state.json esistente e Undo rifiuta uno snapshot già ripristinato. Dopo un ripristino riuscito manca un percorso supportato per applicare nuovamente la configurazione.",
-      "evidence": [
-        "scripts/enterprise/Provision-Remoting.ps1:85,122-127; src/RemoteProvisioning.cs: Instructions, passi 4-8.",
-        "Fixture sul flusso effettivo con storage e API modificanti simulate: Apply -> Phase=Applied; Undo -> Restored=True e StatePresent=True; nuova Apply -> SnapshotAlreadyPresentInspectOrUndoFirst. artifacts/audit-2026-10-25/provision-probe.ps1 e audit-provision.log.",
-        "Nessun checkpoint di produzione cancellato; il recupero manuale delle applicazioni Partial rimane un caso distinto da un Undo riuscito."
-      ],
-      "impact": "Un normale riutilizzo o una nuova predisposizione dopo rollback richiedono manipolare manualmente il checkpoint, senza procedura o conservazione verificata.",
-      "scope": [
-        "scripts/enterprise/Provision-Remoting.ps1: gestione state/checkpoint",
-        "src/RemoteProvisioning.cs: istruzioni esportate",
-        "tests/EnterpriseTests.cs"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Prevedere un ciclo successivo dopo Undo verificato, preservando checkpoint/storico e identità macchina.",
-        "Continuare a bloccare snapshot attivi, Partial, manomessi o di un'altra macchina; nessuna cancellazione indiscriminata di stato/trascrizioni.",
-        "Fixture Apply-Undo-Apply, Undo ripetuto e recupero Partial, con WhatIf non modificante; suite obbligatorie verdi, poi laboratorio."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-20",
-      "title": "Aggiungere timeout e annullamento alle diagnostiche locali rimaste sul percorso ActionSpec",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "La migrazione aziendale non comprende tutto il percorso locale: ProcessService.Run attende WaitForExit() senza limite, ActionSpec non trasporta un token/timeout e OperationDialog impedisce la chiusura durante qualsiasi azione, anche diagnostica. Il timeout del nuovo PowerShellBridge non protegge queste esecuzioni.",
-      "evidence": [
-        "src/ProcessService.cs:32-58; src/Core.cs:9-22; src/OperationDialog.cs:70-95,118; src/ActionCatalog.cs:41-45,65-74 e Command.",
-        "Analisi statica confermata: network.ipconfig usa il percorso locale senza timeout; sfc.verify/dism.scan passano anche per LocalPrivilege.Execute/RunAuthorized, senza token diagnostico. Nessuna dichiarazione di blocco realmente osservato degli strumenti Windows.",
-        "tests/Tests.cs:408-423 copre una fixture che termina per proprio WaitOne(3000), e conferma la chiusura bloccata; non testa timeout/annullamento del processo locale.",
-        "Fonte .NET 10: https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.process.waitforexit?view=net-10.0 documenta l'attesa indefinita dell'overload senza argomenti."
-      ],
-      "impact": "Una diagnostica locale bloccata può mantenere occupati finestra e coordinatore senza uscita applicativa guidata. Le riparazioni modificanti devono continuare a non essere terminate forzatamente.",
-      "scope": [
-        "src/Core.cs: classificazione ActionSpec",
-        "src/ProcessService.cs: processi diagnostici",
-        "src/OperationDialog.cs",
-        "src/WindowsCredentials.cs: worker locale",
-        "tests/Tests.cs"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Distinguere diagnostiche e interventi; timeout e annullamento solo per diagnostiche, propagati fino al processo/worker corretto.",
-        "UI restituisce controllo con esito sconosciuto/annullato e audit pertinente; nessun kill generico di SFC/DISM modificanti.",
-        "Fixture processi innocui che terminano, superano timeout e vengono annullati; verificare drenaggio output e assenza di figli residui; suite obbligatorie verdi."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-21",
-      "title": "Allineare esiti, rilettura e retry degli interventi locali conservati al modello aziendale",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "Rete/Manutenzione/Stampanti usano ancora ActionSpec e worker locale distinti da EnterpriseExecutor. RunAuthorized assegna Success se il delegate void ritorna; ExecuteAudited fa lo stesso per printer.purge. Non eseguono il percorso endpoint.verify/SessionSafety. Netsh/SFC/DISM e richiesta di purge possono così produrre audit Success senza una rilettura strutturata dell'effetto.",
-      "evidence": [
-        "src/OperationDialog.cs:85-89; src/WindowsCredentials.cs:89-97,112-140; src/ProcessService.cs:48-56; src/PrinterService.cs:62-74; confronto scripts/enterprise/Operations.ps1:423-439 e src/SessionSafety.cs.",
-        "Analisi statica verificata sui percorsi realmente richiamati dalle card: network.winsock/network.tcpip/sfc.repair/dism.repair -> LocalPrivilege.RunAuthorized, non azioni enterprise endpoint.* che conservano Verified=False/Unverified.",
-        "ProcessService.Run distingue errori/3010 ma restituisce void e avverte che il codice SFC non descrive ogni caso; il chiamante scrive comunque Success. Il purge registra una richiesta inviata e avverte che lavori in stampa possono proseguire, senza rilettura.",
-        "Nessuna prova modificante reale eseguita; effetti e recupero restano in OT-VM-03. Non viene riaperto OT-AUDIT-10, che riguarda il limite dell'output già corretto.",
-        "2026-10-25: prerequisiti OT-AUDIT-12, OT-AUDIT-13 completati e verificati localmente nel lotto P1 (build, suite 91/0 e CI locale 69/0). Schede complete nello storico SecondBrain OnlyTweak/tracker.md; evidenze artifacts/p1-2026-10-25. Qualifica reale resta distinta e non chiusa."
-      ],
-      "impact": "Stati audit e blocco delle ripetizioni dipendono dal punto di ingresso usato per lo stesso tipo di intervento. I messaggi invitano a leggere il riepilogo, ma manca l'integrazione strutturata delle garanzie dichiarate.",
-      "scope": [
-        "src/WindowsCredentials.cs: LocalPrivilege",
-        "src/OperationDialog.cs e src/ActionCatalog.cs",
-        "src/ProcessService.cs/PrinterService.cs: risultati",
-        "src/SessionTransport.cs/SessionSafety.cs: integrazione locale",
-        "tests/EnterpriseTests.cs/tests/Tests.cs"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Trasportare un risultato strutturato anche per le azioni locali conservate, distinguendo richiesta accettata, esecuzione completata ed effetto verificato.",
-        "Aggiungere riletture pertinenti e gestione dell'esito incerto/retry nella sessione, preservando audit preventivo, conferma elevata e nessun riavvio automatico.",
-        "Fixture per SFC/netsh con effetto non accertato, 3010, purge parziale e audit finale fallito; non trasformare l'incertezza in Success. Suite obbligatorie verdi, poi OT-VM-03."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-22",
-      "title": "Gestire il vecchio binario del banco 1.2 rimasto tra gli artefatti locali",
-      "priority": "P3",
-      "status": "open_confirmed",
-      "problem": "artifacts/OnlyTweakWindows.Tests.exe della versione 1.2.0.0 è ancora presente fuori dal percorso del banco .NET 10 corrente. Non è usato dagli script attuali, ma può essere scambiato per un test del codice 2.0.",
-      "evidence": [
-        "Inventario locale 2026-10-25: artifacts/OnlyTweakWindows.Tests.exe, 271872 byte, FileVersion/ProductVersion 1.2.0.0, AssemblyName OnlyTweakWindows.Tests Version=1.2.0.0; LastWriteTime 2026-10-24 10:25:52.",
-        "test.cmd:4-6 e tests/OnlyTweakWindows.Tests.csproj:16 usano artifacts/tests/Release/net10.0-windows/OnlyTweakWindows.Tests.exe; ricerca dei riferimenti versionati non trova l'eseguibile nella radice artifacts.",
-        "Residuo ignorato preesistente conservato nell'audit con modifica del solo tracker; log, render storici e pacchetti delivery documentati non sono stati considerati eliminabili."
-      ],
-      "impact": "Possibile attribuzione errata di risultati vecchi all'applicazione corrente; nessuna evidenza che la suite ufficiale invochi il vecchio binario.",
-      "scope": [
-        "artifacts/OnlyTweakWindows.Tests.exe: solo copia locale obsoleta",
-        "eventuale pulizia mirata degli artefatti del banco"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Verificare che non esista lavoro unico o uso esterno del binario, predisporre copia di recupero fuori checkout e rimuovere o classificare esplicitamente il solo residuo confermato.",
-        "Preservare log, render e pacchetti ufficiali/storici; nessuna pulizia ricorsiva generalizzata di artifacts/dist.",
-        "Verificare riferimenti e git status --ignored dopo la gestione; nessuna modifica al codice necessaria."
-      ]
-    },
-    {
-      "id": "OT-AUDIT-23",
-      "title": "Conservare l'errore nativo gpresult nella diagnostica GPO",
-      "priority": "P2",
-      "status": "open_confirmed",
-      "problem": "endpoint.gpo raccoglie gpresult /scope computer /r con Out-String ma non conserva LASTEXITCODE e non modifica lo stato globale in caso di errore nativo. Il payload Endpoint/Versions è strutturalmente valido: il nuovo contratto JSON non può dedurre il fallimento dal testo.",
-      "evidence": [
-        "Residuo confermato il 2026-10-25 durante il lotto P1, non incluso automaticamente nel lotto. scripts/enterprise/Operations.ps1: endpoint.gpo; scripts/enterprise/OnlyTweakEndpoint.psm1: Kind=gpo; src/OperationResultContract.cs: HasActionData(endpoint.gpo).",
-        "Fixture sullo script effettivo corrente: richiesta fissa endpoint.gpo; remoting, CIM, bind AD e gpresult interamente simulati. LASTEXITCODE=5, stdout='Fixture gpresult failed, exit 5' -> State=Success, AuthenticationVerified=True, ErrorCode='', Data.Endpoint.Result contiene il messaggio e Data.Versions=[]. Evidenze artifacts/p1-2026-10-25/residual-native-gpo.fixture.ps1 e residual-native-gpo.json.",
-        "Il ramo WinRM standard è riprodotto; il ramo JEA Kind=gpo conserva lo stesso pattern nativo non classificato per analisi statica, ma richiede una regressione dedicata. Nessun gpresult, accesso AD o collegamento remoto reale eseguito.",
-        "Distinto da OT-AUDIT-13 completato: quello riguarda endpoint.verify e lo sblocco retry, ora protetti. Distinto da OT-AUDIT-14: errori/assenza eventi e perdita di letture indipendenti."
-      ],
-      "impact": "Il report può presentare una raccolta GPO riuscita quando gpresult è fallito, senza codice nativo utilizzabile per interpretare l'esito. Nessun effetto modificante osservato.",
-      "scope": [
-        "scripts/enterprise/Operations.ps1: endpoint.gpo",
-        "scripts/enterprise/OnlyTweakEndpoint.psm1: Kind=gpo",
-        "tests: regressioni della diagnostica GPO",
-        "docs/ENTERPRISE.md: risultati parziali"
-      ],
-      "dependencies": [],
-      "completion_criteria": [
-        "Trasportare e classificare codice nativo/output della raccolta gpresult sia standard sia JEA, senza parser dipendenti dalla lingua.",
-        "Un sottocontrollo necessario fallito o privo di risultato non produce Success globale; preservare RSOP/versioni indipendenti con i relativi stati e limiti.",
-        "Fixture per codice 0/nonzero/assente, output vuoto e RSOP presente/assente; suite obbligatorie verdi. Qualifica reale GPO resta in OT-ENT-LAB-01."
-      ]
     }
   ],
   "todo_user_required": [
@@ -344,7 +117,8 @@
         "In questo audit build in fixture riuscita, suite completa 73/0 e comando CI 51/0 sulla postazione Windows 11; test dei profili OS simulati.",
         "Reference assembly 4.7.2 assenti già verificati nel turno precedente; nessuna VM fornita/usata in questo audit.",
         "2026-10-24: migrazione autorizzata a .NET 10 autonomo, UI asInvoker e worker elevati. Il requisito Framework 4.7.2 e i tweak HKCU sono superati; evidenze precedenti conservate come storico. Build e fixture locali non sostituiscono VM pulite.",
-        "Audit 2026-10-25, a46ab29: .NET 10 verificato nel codice corrente; build isolata e suite 83/0, comando CI 61/0. Nessuna VM pulita, UAC con altro account o portabilita certificata; i riferimenti Framework 4.7.2 sopra sono storico superato. Evidenze correnti in artifacts/audit-2026-10-25/README.txt."
+        "Audit 2026-10-25, a46ab29: .NET 10 verificato nel codice corrente; build isolata e suite 83/0, comando CI 61/0. Nessuna VM pulita, UAC con altro account o portabilita certificata; i riferimenti Framework 4.7.2 sopra sono storico superato. Evidenze correnti in artifacts/audit-2026-10-25/README.txt.",
+        "2026-10-26: chiusura applicativa verificata senza prove VM su richiesta utente. I test su VM/domini e le qualifiche ambientali restano fuori perimetro e non sono dichiarati superati. Nessuna distribuzione o nuova verifica reale aggiunta."
       ],
       "impact": "Portabilità minima e attribuzione delle azioni in UAC multiutente non certificabili dai test locali; gate prima di una consegna dichiarata validata su tutti i target.",
       "scope": [
@@ -372,7 +146,9 @@
         "tests/Tests.cs usa form.Scale per 100/150/200%, non cambio DPI reale.",
         "Audit attuale: suite UI verde e probe delle finestre principali alla dimensione minima senza pulsanti oltre il contenitore; nessuna prova fisica multi-monitor.",
         "2026-10-24: render 2.0 sei schede aziendali, profilo e home al 100/150/200%, UI test simulati nel loop Windows Forms; resta richiesta prova DPI fisica.",
-        "Audit 2026-10-25: difetto di layout aziendale confermato alla Size minima 660x540, DeviceDpi=144, tracciato separatamente come OT-AUDIT-16. Non chiude la matrice DPI fisica/cambio monitor/tooltip. Risolvere il difetto locale prima della qualifica finale."
+        "Audit 2026-10-25: difetto di layout aziendale confermato alla Size minima 660x540, DeviceDpi=144, tracciato separatamente come OT-AUDIT-16. Non chiude la matrice DPI fisica/cambio monitor/tooltip. Risolvere il difetto locale prima della qualifica finale.",
+        "2026-10-26: chiusura applicativa verificata senza prove VM su richiesta utente. I test su VM/domini e le qualifiche ambientali restano fuori perimetro e non sono dichiarati superati. Nessuna distribuzione o nuova verifica reale aggiunta.",
+        "Prerequisiti applicativi completati localmente e rimossi dalle dipendenze: OT-AUDIT-16. Schede ed evidenze nello storico SecondBrain e artifacts/app-close-2026-10-25; suite 108/0 e CI locale 83/0."
       ],
       "impact": "Possibili difetti di leggibilità, clipping, focus o tooltip sui target ancora non esclusi; nessun nuovo difetto DPI affermato.",
       "scope": [
@@ -381,8 +157,7 @@
         "Focus e icone titolo/taskbar"
       ],
       "dependencies": [
-        "Desktop di prova e monitor/ambiente capace di cambiare realmente DPI; accesso interattivo",
-        "OT-AUDIT-16"
+        "Desktop di prova e monitor/ambiente capace di cambiare realmente DPI; accesso interattivo"
       ],
       "completion_criteria": [
         "Documentare la matrice DPI reale con screenshot e navigazione tastiera, distinguendo scala simulata e DPI effettivo.",
@@ -402,7 +177,9 @@
         "Il nuovo controllo disponibilità Explorer è corretto e verificato localmente; non equivale alla prova di riavvio shell.",
         "2026-10-24: shell restart/tweak rimossi; conservati stampa, SFC/DISM e rete. Aggiunti worker elevati con audit e canale sicuro solo sul membro locale. Nessuna prova modificante reale.",
         "Audit 2026-10-25: OT-AUDIT-13 conferma che una verifica nativa fallita puo sbloccare il retry; OT-AUDIT-21 documenta il percorso locale ActionSpec ancora privo degli stessi esiti/riletture strutturati. Nessuna prova modificante reale. Shell restart e tweak restano rimossi, senza riproporli nei criteri.",
-        "2026-10-25: prerequisiti OT-AUDIT-13 completati e verificati localmente nel lotto P1 (build, suite 91/0 e CI locale 69/0). Schede complete nello storico SecondBrain OnlyTweak/tracker.md; evidenze artifacts/p1-2026-10-25. Qualifica reale resta distinta e non chiusa."
+        "2026-10-25: prerequisiti OT-AUDIT-13 completati e verificati localmente nel lotto P1 (build, suite 91/0 e CI locale 69/0). Schede complete nello storico SecondBrain OnlyTweak/tracker.md; evidenze artifacts/p1-2026-10-25. Qualifica reale resta distinta e non chiusa.",
+        "2026-10-26: chiusura applicativa verificata senza prove VM su richiesta utente. I test su VM/domini e le qualifiche ambientali restano fuori perimetro e non sono dichiarati superati. Nessuna distribuzione o nuova verifica reale aggiunta.",
+        "Prerequisiti applicativi completati localmente e rimossi dalle dipendenze: OT-AUDIT-21. Schede ed evidenze nello storico SecondBrain e artifacts/app-close-2026-10-25; suite 108/0 e CI locale 83/0."
       ],
       "impact": "Non verificati effetti, recupero e messaggi nelle condizioni reali di guasto; non è un bug applicativo già dimostrato.",
       "scope": [
@@ -412,8 +189,7 @@
       ],
       "dependencies": [
         "VM sacrificabile con snapshot e dati/coda campione; collegamento e credenziali di prova",
-        "OT-VM-01 per avvio e attribuzione utente sulla relativa immagine",
-        "OT-AUDIT-21"
+        "OT-VM-01 per avvio e attribuzione utente sulla relativa immagine"
       ],
       "completion_criteria": [
         "Salvare stato prima/dopo e verificare recupero tramite snapshot.",
@@ -432,7 +208,8 @@
         "Suite corrente conferma API di sola lettura, filtri OS e fallback con fake; smoke test reale riuscito solo sul sistema locale.",
         "OT-AUDIT-08/09 sono difetti confermati separati; questa voce resta una verifica ambientale, non una duplicazione delle correzioni.",
         "2026-10-24: OT-AUDIT-08/09 corretti localmente con fixture e suite 83/0; protezioni ancora esclusivamente di lettura. Qualificazione provider/destinazioni resta aperta.",
-        "Audit 2026-10-25: regressioni OT-AUDIT-08/09 presenti e suite 83/0; nessun motivo di riapertura. Sono ancora necessarie le matrici reali dei provider e delle destinazioni. Nessuna modifica alle protezioni."
+        "Audit 2026-10-25: regressioni OT-AUDIT-08/09 presenti e suite 83/0; nessun motivo di riapertura. Sono ancora necessarie le matrici reali dei provider e delle destinazioni. Nessuna modifica alle protezioni.",
+        "2026-10-26: chiusura applicativa verificata senza prove VM su richiesta utente. I test su VM/domini e le qualifiche ambientali restano fuori perimetro e non sono dichiarati superati. Nessuna distribuzione o nuova verifica reale aggiunta."
       ],
       "impact": "Possibili letture sconosciute, differenze dei provider e reindirizzamenti ancora da caratterizzare; nessuna scrittura alle protezioni autorizzata.",
       "scope": [
@@ -462,7 +239,11 @@
         "Audit 2026-10-25 sul commit a46ab291df07802ecea19e6300985a55649c4194: build isolata riuscita, suite completa 83/0 e CI locale 61/0, audit advisory NuGet exit 0 senza segnalazioni per i pacchetti enumerati. Otto scenari mirati dimostrano nuovi difetti OT-AUDIT-12..19; OT-AUDIT-20/21 sono confermati per analisi statica e OT-AUDIT-22 per inventario. Nessuna connessione AD/DFSR/WinRM reale, nuova CI remota o qualifica di laboratorio. Rapporti/probe in artifacts/audit-2026-10-25/README.txt; i PASS dimostrativi non indicano correzioni.",
         "2026-10-25: prerequisiti OT-AUDIT-12, OT-AUDIT-13 completati e verificati localmente nel lotto P1 (build, suite 91/0 e CI locale 69/0). Schede complete nello storico SecondBrain OnlyTweak/tracker.md; evidenze artifacts/p1-2026-10-25. Qualifica reale resta distinta e non chiusa.",
         "2026-10-25: modulo JEA e contratto endpoint.verify aggiornati; qualifica deve usare il modulo firmato revisionato. Le configurazioni preesistenti non sono state aggiornate automaticamente e restano soggette ai conflitti/recupero ancora aperti in OT-AUDIT-18/19.",
-        "Checkpoint cambio sessione 2026-10-25: salvataggio Git dei sorgenti richiesto su master di dennidalpos/OnlyTweak (pubblico), senza distribuzione binaria. Lotto P1 OT-AUDIT-12/13/17 completato e verificato (build senza avvisi, suite completa 91/0, comando CI locale 69/0 e audit NuGet senza advisory sui pacchetti enumerati); schede chiuse nello storico SecondBrain. Restano nove autonomi 14/15/16/18/19/20/21/22/23 e sette gate ambientali. Riprendere da OT-AUDIT-14/15, includendo il residuo GPO 23 nei successivi lotti secondo priorita; non riaprire i P1 o anticipare laboratorio/firma/pilota. Revisione salvata e stato CI remoto nel dossier; identificare il commit con git log."
+        "Checkpoint cambio sessione 2026-10-25: salvataggio Git dei sorgenti richiesto su master di dennidalpos/OnlyTweak (pubblico), senza distribuzione binaria. Lotto P1 OT-AUDIT-12/13/17 completato e verificato (build senza avvisi, suite completa 91/0, comando CI locale 69/0 e audit NuGet senza advisory sui pacchetti enumerati); schede chiuse nello storico SecondBrain. Restano nove autonomi 14/15/16/18/19/20/21/22/23 e sette gate ambientali. Riprendere da OT-AUDIT-14/15, includendo il residuo GPO 23 nei successivi lotti secondo priorita; non riaprire i P1 o anticipare laboratorio/firma/pilota. Revisione salvata e stato CI remoto nel dossier; identificare il commit con git log.",
+        "2026-10-25: prerequisiti OT-AUDIT-14/15 completati e verificati localmente (build, suite completa 101/0, CI locale 78/0 e audit NuGet). Schede chiuse nello storico SecondBrain, evidenze artifacts/lot-14-15-2026-10-25. Modulo JEA aggiornato richiesto; nessuna distribuzione implicita o qualifica reale aggiunta. Restano i prerequisiti 18/19/23 e gli ambienti previsti.",
+        "2026-10-26: chiusura applicativa verificata senza prove VM su richiesta utente. I test su VM/domini e le qualifiche ambientali restano fuori perimetro e non sono dichiarati superati. Nessuna distribuzione o nuova verifica reale aggiunta.",
+        "Prerequisiti applicativi completati localmente e rimossi dalle dipendenze: OT-AUDIT-18, OT-AUDIT-19, OT-AUDIT-23. Schede ed evidenze nello storico SecondBrain e artifacts/app-close-2026-10-25; suite 108/0 e CI locale 83/0.",
+        "Checkpoint cambio sessione 2026-10-26: autorizzati commit e push dei sorgenti sul principale master di dennidalpos/OnlyTweak (pubblico). Chiusura applicativa verificata: zero task applicativi aperti, sette gate ambientali separati, suite completa 108/0 e CI locale 83/0. Identificare il commit salvato con git log e tracker SecondBrain. Richiesta utente confermata: nessun test VM e nessuna nuova qualifica ambientale da avviare automaticamente; questo salvataggio non autorizza distribuzione EXE, firma o pilota."
       ],
       "impact": "Gate prima di presentare le funzioni come validate per l’uso su infrastrutture aziendali.",
       "scope": [
@@ -474,12 +255,7 @@
       ],
       "dependencies": [
         "VM sacrificabili e snapshot, reti isolate, account delegati campione, PKI di test",
-        "OT-VM-01 per qualifica host",
-        "OT-AUDIT-14",
-        "OT-AUDIT-15",
-        "OT-AUDIT-18",
-        "OT-AUDIT-19",
-        "OT-AUDIT-23"
+        "OT-VM-01 per qualifica host"
       ],
       "completion_criteria": [
         "Confrontare risultati con strumenti Microsoft e registrare identità/target/versioni.",
@@ -499,7 +275,8 @@
         "2026-10-24, cambio sessione: EXE locale 2.0.0 non firmato, circa 111 MiB; sorgenti/lock/configurazione saranno inclusi nel salvataggio Git. dist, artifacts e certificati restano fuori dal commit. Firma e qualificazione policy rimangono da eseguire.",
         "Audit 2026-10-25: EXE locale NotSigned e 0 certificati CodeSigning in CurrentUser/My, verificati in lettura; nessuna verifica di altri store/provider. OT-AUDIT-17 conferma il mancato legame fra gate e risorse effettive: con firme soltanto simulate Valid il gate accetta EXE e sorgente divergenti. Correggere il gate prima di dichiarare qualificata la consegna; nessuna firma autentica prodotta.",
         "2026-10-25: prerequisiti OT-AUDIT-17 completati e verificati localmente nel lotto P1 (build, suite 91/0 e CI locale 69/0). Schede complete nello storico SecondBrain OnlyTweak/tracker.md; evidenze artifacts/p1-2026-10-25. Qualifica reale resta distinta e non chiusa.",
-        "2026-10-25: gate locale corretto in OT-AUDIT-17 e verificato con firme simulate e rifiuto di risorse non firmate. EXE e tre script incorporati NotSigned; 0 certificati CodeSigning CurrentUser/My. Nessuna catena/certificato/policy aziendale qualificata; stato waiting_user_certificate mantenuto."
+        "2026-10-25: gate locale corretto in OT-AUDIT-17 e verificato con firme simulate e rifiuto di risorse non firmate. EXE e tre script incorporati NotSigned; 0 certificati CodeSigning CurrentUser/My. Nessuna catena/certificato/policy aziendale qualificata; stato waiting_user_certificate mantenuto.",
+        "2026-10-26: chiusura applicativa verificata senza prove VM su richiesta utente. I test su VM/domini e le qualifiche ambientali restano fuori perimetro e non sono dichiarati superati. Nessuna distribuzione o nuova verifica reale aggiunta."
       ],
       "impact": "Firma, fiducia editore e compatibilità con allowlist aziendali non certificate.",
       "scope": [
@@ -527,7 +304,8 @@
         "2026-10-24: modifiche soltanto locali, nessun commit, push o pubblicazione. Manuale in docs/ENTERPRISE.md.",
         "2026-10-24, cambio sessione: autorizzati commit e push dei sorgenti sul branch principale; questa autorizzazione non avvia distribuzione, release binaria o pilota. Riprendere il pilota soltanto dopo laboratorio e firma con ambiente/autorizzazione dedicati.",
         "Audit 2026-10-25: nessun ambiente pilota o distribuzione utilizzato; laboratorio e firma restano gate aperti, con nuovi difetti locali registrati. L autorizzazione storica di commit/push non viene riutilizzata per questo audit: nessun commit, push o pubblicazione eseguito.",
-        "2026-10-25, cambio sessione: commit e push dei sorgenti su branch principale esplicitamente richiesti. Tale salvataggio non autorizza distribuzione dell EXE, release binaria o pilota; prerequisiti laboratorio e firma restano aperti."
+        "2026-10-25, cambio sessione: commit e push dei sorgenti su branch principale esplicitamente richiesti. Tale salvataggio non autorizza distribuzione dell EXE, release binaria o pilota; prerequisiti laboratorio e firma restano aperti.",
+        "2026-10-26: chiusura applicativa verificata senza prove VM su richiesta utente. I test su VM/domini e le qualifiche ambientali restano fuori perimetro e non sono dichiarati superati. Nessuna distribuzione o nuova verifica reale aggiunta."
       ],
       "impact": "Usabilità operativa, deleghe e recupero su ambiente cliente ancora da qualificare.",
       "scope": [

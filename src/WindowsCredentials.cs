@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
 using System.Windows.Forms;
+using System.Threading;
 
 namespace OnlyTweakWindows
 {
@@ -86,16 +87,6 @@ namespace OnlyTweakWindows
     }
     internal static class LocalPrivilege
     {
-        internal static void ExecuteAudited(ActionSpec action,Action<string> log)
-        {
-            OperationRequest request=new OperationRequest {Profile=TechnicianProfile(),ActionId=action.Id,
-                Target=Environment.MachineName,Confirmed=true};
-            FileOperationAudit audit=new FileOperationAudit();
-            audit.Record(request,EnvironmentInfo.Account,"requested");
-            StepResult result=new StepResult {State=StepState.Unverified};
-            try { action.Execute(log); result.State=StepState.Success; }
-            finally { audit.Record(request,EnvironmentInfo.Account,"finished",result); }
-        }
         public static bool IsAdministrator {
             get { using (WindowsIdentity identity=WindowsIdentity.GetCurrent())
                 return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator); }
@@ -104,12 +95,15 @@ namespace OnlyTweakWindows
             Id=new Guid("89870428-5153-4967-8712-44ea3fa32904"),Customer="Postazione tecnico",
             Domain="local.invalid",DomainController="technician.local.invalid",Targets=new[] {"technician.local.invalid"}
         };
-        public static void Execute(string id,Action<string> log)
+        public static StepResult Execute(string id,Action<string> log,CancellationToken cancellation=default,bool readOnly=false)
         {
-            using (CustomerSession session=CustomerSession.Start(TechnicianProfile(),false,true).GetAwaiter().GetResult())
-                log(session.ExecuteLocal(id).GetAwaiter().GetResult());
+            using (CustomerSession session=CustomerSession.Start(TechnicianProfile(),false,true).GetAwaiter().GetResult()) {
+                StepResult result=session.ExecuteLocal(id,readOnly,cancellation).GetAwaiter().GetResult();
+                foreach(string line in result.Evidence) log(line);
+                return result;
+            }
         }
-        internal static StepResult RunAuthorized(string id)
+        internal static StepResult RunAuthorized(string id,CancellationToken cancellation=default,bool readOnly=false)
         {
             if (!IsAdministrator) throw new InvalidOperationException("Elevazione locale richiesta.");
             string[] allowed={"spool.restart","spool.clean","network.dns","network.winsock","network.tcpip",
@@ -120,21 +114,11 @@ namespace OnlyTweakWindows
             foreach (MenuDefinition menu in new[] {app.Catalog.Network,app.Catalog.Maintenance,app.Catalog.Spool})
                 foreach (ActionSpec candidate in menu.AllActions()) if (candidate.Id==id) action=candidate;
             if (action==null || !action.Applicable) throw new InvalidOperationException("Componente non disponibile.");
-            StepResult result=new StepResult {OperationId=Guid.NewGuid(),ActionId=id,Target=Environment.MachineName,
-                Identity=EnvironmentInfo.Account,Started=DateTimeOffset.UtcNow,State=StepState.Cancelled,Summary="Operazione annullata."};
-            if (!WorkerHost.ConfirmOnSta(action.Title,action.Confirmation??action.Description)) return result;
-            OperationRequest request=new OperationRequest {OperationId=result.OperationId,Profile=TechnicianProfile(),ActionId=id,Target=result.Target,Confirmed=true};
-            FileOperationAudit audit=new FileOperationAudit();
-            audit.Record(request,result.Identity,"requested");
-            BoundedText output=new BoundedText();
-            try {
-                if (action.Unavailable!=null) { string reason=action.Unavailable(); if (reason!=null) throw new InvalidOperationException(reason); }
-                action.Execute(line=>output.Append(line+Environment.NewLine));
-                result.State=StepState.Success; result.Summary="Esecuzione terminata; leggere il riepilogo dello strumento.";
-            } catch (Exception ex) { result.State=StepState.Unverified; result.Summary="Operazione incompleta o non verificata."; result.ErrorCode=ex.GetType().Name; }
-            result.Evidence=new[] {output.Read()}; result.Truncated=output.Truncated; result.Finished=DateTimeOffset.UtcNow;
-            audit.Record(request,result.Identity,"finished",result);
-            return result;
+            if(readOnly) return app.LocalOperations.Read(action,delegate{},cancellation);
+            if(!action.IsDiagnostic && !WorkerHost.ConfirmOnSta(action.Title,action.Confirmation??action.Description))
+                return new StepResult {ActionId=id,Target=Environment.MachineName,State=StepState.Cancelled,Summary="Operazione annullata."};
+            return app.LocalOperations.Execute(action,delegate{},cancellation);
+
         }
     }
 }

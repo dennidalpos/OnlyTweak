@@ -45,7 +45,9 @@ namespace OnlyTweakWindows
             directory.ColumnHeadersDefaultCellStyle.ForeColor=Theme.Text;
             TableLayoutPanel layout=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=4};
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute,310)); layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute,310)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute,240));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            layout.Dock=DockStyle.Top; layout.AutoSize=true;
             profileBar.Controls.Add(profiles);
             profileBar.Controls.Add(Theme.Button("Nuovo",delegate { EditProfile(true); }));
             profileBar.Controls.Add(Theme.Button("Modifica",delegate { EditProfile(false); }));
@@ -55,13 +57,28 @@ namespace OnlyTweakWindows
             profileBar.Controls.Add(Theme.Button("Disconnetti",delegate { Disconnect(); }));
             FlowLayoutPanel context=Bar(); context.Controls.Add(Theme.Label("Destinazione",Theme.Muted)); context.Controls.Add(targets); context.Controls.Add(identity);
             layout.Controls.Add(profileBar,0,0); layout.Controls.Add(context,0,1); layout.Controls.Add(tabs,0,2); layout.Controls.Add(output,0,3);
-            Content.Controls.Add(layout);
+            Panel viewport=new Panel {Dock=DockStyle.Fill,AutoScroll=true};
+            viewport.Controls.Add(layout); Content.Controls.Add(viewport);
             BuildProcedures(); BuildTechnician(); BuildDirectory(); BuildDfs(); BuildEndpoint(); BuildProvisioning();
+            foreach(TabPage tab in tabs.TabPages) {
+                Control[] controls=tab.Controls.Cast<Control>().OrderBy(c=>c is FlowLayoutPanel ? 0 : c is Label ? 2 : 1).ToArray();
+                tab.Controls.Clear();
+                TableLayoutPanel page=new TableLayoutPanel {Dock=DockStyle.Top,AutoSize=true,ColumnCount=1,RowCount=controls.Length};
+                page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+                for(int i=0;i<controls.Length;i++) {
+                    Control child=controls[i]; child.Dock=DockStyle.Fill;
+                    if(child is ListBox || child is DataGridView) page.RowStyles.Add(new RowStyle(SizeType.Absolute,220));
+                    else page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                    page.Controls.Add(child,0,i);
+                }
+                tab.AutoScroll=true; tab.Controls.Add(page);
+            }
             if (technician) tabs.SelectedIndex=1;
             cancel=Theme.Button("Annulla diagnosi",delegate { cancellation?.Cancel(); }); cancel.Enabled=false; Footer.Controls.Add(cancel);
             Footer.Controls.Add(Theme.Button("Esporta JSON",delegate { Export(false); }));
             Footer.Controls.Add(Theme.Button("Esporta HTML",delegate { Export(true); }));
             profiles.SelectedIndexChanged+=delegate { Disconnect(); RefreshTargets(); };
+            targets.SelectedIndexChanged+=delegate { page=0; directory.Rows.Clear(); directory.ClearSelection(); };
             try { if (loadProfiles) environments.AddRange(ProfileStore.Load()); RefreshProfiles(null); }
             catch (Exception ex) { SetFeedback("Archivio profili non caricato: "+ex.Message); }
             FormClosing+=delegate(object sender,FormClosingEventArgs e) { if (busy) { e.Cancel=true; SetFeedback("Attendi l'esito. Le modifiche non vengono terminate forzatamente."); } };
