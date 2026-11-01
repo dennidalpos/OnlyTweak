@@ -96,3 +96,7 @@ La build attuale è **non firmata**, destinata alla qualificazione in laboratori
 La fonte delle attività è [tracker SecondBrain](../SecondBrain/02-areas/products/OnlyTweak/tracker.json): **zero task applicativi aperti** dopo la chiusura verificata di OT-AUDIT-16/18/19/20/21/22/23. Schede originali, criteri ed esiti sono conservati nello storico del tracker SecondBrain OnlyTweak, insieme ai lotti precedenti. I sette gate preesistenti OT-VM-01..04 e OT-ENT-LAB-01/SIGN-01/PILOT-01 e il nuovo OT-VM-TWEAK-01 restano separati e non dichiarati superati: i test VM sono esclusi da questa chiusura per scelta dell'utente. Nessun nuovo lotto ambientale viene avviato automaticamente. Le correzioni OT-AUDIT-08/09/10 e la rimozione OT-AUDIT-11 rimangono storico; il salvataggio dei sorgenti non equivale a distribuzione o validazione in produzione.
 
 Verifica del lotto navigazione/tweak: 121 test desktop e 91 test CI locale superati, zero fallimenti. [Rapporto](../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-navigation-tweaks/report.md).
+
+## Licenza
+
+Software proprietario, tutti i diritti riservati (vedi [LICENSE](LICENSE)). Le dipendenze di terze parti mantengono le proprie licenze.
