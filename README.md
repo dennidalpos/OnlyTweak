@@ -1,102 +1,63 @@
-# OnlyTweakWindows 2.0
+# OnlyTweakWindows
 
-Toolkit portatile per tecnici e amministratori Windows aziendali. Interfaccia italiana Windows Forms, profili cliente separati, diagnostica AD e postazioni, interventi guidati e preparazione RSAT.
+Portable toolkit for technicians and administrators of Windows enterprise environments: Active Directory and workstation diagnostics, guided interventions, per-customer profiles and RSAT setup. Windows Forms app with an Italian interface, delivered as a single self-contained x64 executable (.NET 10 embedded, no runtime to install).
 
-**Stato: chiusura applicativa con verifiche locali.** Per scelta dell'utente non vengono eseguiti test su VM o domini reali. Build e fixture non equivalgono a qualifica ambientale: firma, Windows puliti, WinRM/JEA e pilota restano separati in [tracker SecondBrain](../SecondBrain/02-areas/products/OnlyTweak/tracker.json). Nessuna pubblicazione automatica.
+> **Status:** verified locally with fixtures and simulated domains only. No tests against real domains or clean Windows VMs have been run, and the current build is **unsigned**, intended for lab qualification. Build and fixture results do not replace environment qualification.
 
-## Primo utilizzo
+## Features
 
-Distribuire soltanto **dist/OnlyTweakWindows.exe**, autonomo x64 con .NET 10 incorporato e senza runtime separato da installare. Circa 111 MiB nella build locale; il bundle può estrarre librerie native nella cache privata Windows. La UI parte senza UAC obbligatorio; le operazioni locali privilegiate usano un processo elevato distinto.
+- **Technician workstation**: check Windows PowerShell 5.1, modules and consoles; inventory and selectively install RSAT components (AD DS/LDS, GPO, DNS, DFS, DHCP) from the corporate source or a local FoD folder, leaving WSUS/Windows Update policies untouched.
+- **Customer environments**: separate profile and session per customer, with DNS domain, explicit domain controller and allowed FQDN targets; connect with the current identity or session-only network credentials.
+- **Active Directory**: paged search of users, groups and computers, object comparison across DCs, account status, unlock, enable/disable and password reset for individual ordinary users, always against the explicitly selected DC.
+- **Common problems**: domain/DC, DNS, time and authentication, AD replication, GPO, SYSVOL and workstation health, with partial results kept when a sub-check fails.
+- **DFS and replication**: AD replication across partitions and partners, SMB namespaces and targets, DFSR backlog samples, SYSVOL/NETLOGON.
+- **Workstation interventions**: computer policy refresh, DNS cache, spooler, domain secure channel, network reset, SFC/DISM, with reads before and after plus audit.
+- **Local tweaks**: classic context menu on Windows 11, file extensions, hidden items and Explorer start location; each change shows a preview, asks for confirmation, writes only to HKCU and can be undone from a persistent checkpoint.
+- **Network diagnostics**: ping, DNS A/AAAA/CNAME, TCP port test, connections and PIDs, routing and WinHTTP proxy; targets are validated and commands have a 60 s timeout and cancellation.
+- **Remote preparation**: export Inspect/WhatIf/Apply/Undo scripts, GPO instructions and a JEA module; nothing is configured remotely by default.
+- **Reports**: voluntary JSON/HTML export after previewing content and destination.
 
-1. Aprire **Postazione tecnico** e verificare Windows PowerShell 5.1, moduli e console.
-2. Inventariare RSAT e installare solo AD DS/LDS, GPO, DNS, DFS o DHCP necessari. Origine aziendale predefinita oppure cartella FoD locale compatibile; policy WSUS/Windows Update invariate.
-3. Aprire **Ambienti aziendali**, creare il cliente con dominio DNS, DC esplicito e destinazioni FQDN consentite.
-4. Connettere l'identità corrente oppure acquisire credenziali di rete per la sola sessione dal dialogo Windows. L'avvio del processo non valida la password: controllare l'autenticazione sul target.
-5. Selezionare destinazione e procedura, leggere evidenze e limiti prima degli interventi.
-6. Esportare volontariamente JSON/HTML dopo aver controllato anteprima e destinazione.
+## Safety model
 
-Stampa, rete, manutenzione locale, strumenti Windows e letture delle protezioni restano disponibili. La navigazione usa una sola finestra: sezioni, conferme, editor, parametri, risultati e cronologia sono pagine interne. La freccia **Indietro** e **Alt+Sinistra** tornano alla pagina precedente conservandone lo stato. Durante una diagnosi Indietro richiede l'annullamento e ne attende la conclusione; durante una modifica occorre attendere l'esito. I dialoghi Windows per credenziali/file/cartelle e gli strumenti esterni mantengono le proprie finestre. Le sessioni cliente rimangono aperte fino a disconnessione esplicita, cambio profilo o chiusura dell'app.
+- Closed catalog of operations: no free shell, no downloaded scripts, no bypass of ExecutionPolicy, App Control or AppLocker.
+- Changes require confirmation, a pre-change audit and a re-read of the result; uncertain outcomes call for a re-read before retrying.
+- Windows and AD ACLs and delegations remain the authorization boundary; use delegated accounts and suitable privileged workstations.
+- No telemetry. Reports and audit files contain enterprise data (identities, names, addresses, paths) and must be handled per the customer's policy.
 
-## Tweak e diagnostiche locali
+## Compatibility
 
-**Tweak Windows** comprende menu contestuale classico su Windows 11, visualizzazione delle estensioni, elementi nascosti e apertura di Esplora file su Questo PC o Home/Accesso rapido. Ogni intervento presenta stato, anteprima e conferma, scrive soltanto HKCU dell'utente desktop verificato e rilegge il valore. I file protetti di sistema e le protezioni Windows restano invariati. Il menu classico è un workaround non ufficiale: il valore nel registro non dimostra l'effetto visivo su ogni build.
+- Technician host: Windows 10 (build 17763 or later) and Windows 11, x64 Intel/AMD. Servers, ARM64 and x86 are not supported by the app.
+- Remote servers: Windows Server 2019, 2022 and 2025 (2016 to be qualified separately). WinRM uses Kerberos, optionally HTTPS; there is no automatic fallback to CredSSP, Basic, unencrypted traffic or wildcard TrustedHosts.
 
-**Ripristina precedente** usa checkpoint persistenti in `%LOCALAPPDATA%\OnlyTweak\Tweaks`, associati a macchina e SID, con tipo e valore originali, eventuale assenza e proprietà delle chiavi create. Un errore prima/durante la scrittura mantiene il checkpoint incompleto e blocca interventi automatici; modifiche esterne o checkpoint alterati richiedono revisione. ACL e checksum proteggono accesso e integrità accidentale, senza costituire uno storico immutabile contro lo stesso utente o un amministratore. Nessun riavvio automatico di Explorer: quando necessario disconnettersi. I checkpoint delle versioni 1.x non vengono importati automaticamente.
+## Build and test
 
-In **Rete → Diagnostica tecnica** sono disponibili ping (quattro richieste), query DNS A/AAAA/CNAME, test di una porta TCP, connessioni/PID, routing e proxy WinHTTP. **Strumenti Windows** aggiunge identità/gruppi e criteri utente applicati (`gpresult /r /scope user`). Target FQDN e porte sono validati; le procedure hanno timeout di 60 secondi, annullamento e output limitato. Un test negativo è distinto da una lettura incompleta e non dimostra un guasto generale. Le diagnosi usano l'identità locale dell'app; i profili cliente non forniscono credenziali a questi comandi. Windows PowerShell 5.1 e i singoli cmdlet sono verificati al momento dell'uso, senza bypass delle policy.
+Requirements: .NET 10 SDK, PowerShell 7.4+ (`pwsh` on `PATH`), Windows x64 and NuGet access.
 
-## Funzioni aziendali
+```bat
+build.cmd
+test.cmd --artifact --ui --read-only --render
+```
 
-| Area | Funzioni |
-|---|---|
-| Problemi comuni | Dominio/DC, DNS, orario/autenticazione, replica AD, GPO, SYSVOL, salute postazione. |
-| Tecnico e RSAT | Inventario moduli/componenti/policy, installazione selettiva, console Microsoft. |
-| Active Directory | Ricerca paginata utenti/gruppi/computer, confronto oggetto tra DC, stato account, sblocco, abilitazione/disabilitazione, reset password di singoli utenti ordinari. |
-| DFS e replica | Replica AD su tutte le partizioni/partner, namespace/target SMB, campioni direzionali backlog DFSR, SYSVOL/NETLOGON. |
-| Interventi postazione | Criteri computer, cache DNS, spooler, canale sicuro membri, reset rete, SFC/DISM; letture prima/dopo e audit. |
-| Predisposizione remota | Esportazione script Inspect/WhatIf/Apply/Undo, istruzioni GPO e modulo JEA. Nessuna configurazione remota implicita. |
+`build.cmd` publishes `dist/OnlyTweakWindows.exe` and records a hashed receipt in `artifacts/build-evidence/publish.json`. The test bench uses fixtures and never contacts real AD; `--ui` and `--render` need an interactive desktop. To prepare a delivery bundle with a manifest of hashes, packages and Authenticode status:
 
-Le console esterne mantengono identità e ciclo di vita propri. Non ereditano le credenziali temporanee del worker: per queste usare una sessione Windows amministrativa dedicata al cliente.
+```powershell
+pwsh -NoProfile -File scripts/prepare-release.ps1
+```
 
-Ricerca AD e verifica identità/dominio interrogano il **DC selezionato**, verificandone identità e dominio prima delle query. Risultati e report indicano il server effettivo; non viene usato automaticamente il DC del profilo come alternativa. Cambiare destinazione svuota la ricerca e la selezione precedenti. Le scritture sugli utenti rimangono vincolate al DC esplicito del profilo.
+The repository contains a CI workflow, but GitHub Actions are disabled: build and test locally.
 
-Diagnostica autenticazione, SYSVOL e salute postazione conservano le letture indipendenti quando un sottocontrollo fallisce. `Checks` distingue raccolta completata, vuota, non applicabile, negata, indisponibile, scaduta o fallita. Zero eventi non dimostra salute; una raccolta parziale resta inconcludente, mentre un problema esplicitamente osservato rimane segnalato. WinRM standard e JEA usano lo stesso contratto: aggiornare il modulo JEA tramite il canale amministrativo approvato, senza predisposizione o fallback impliciti.
+## Documentation
 
-Le pagine aziendali e i risultati rimangono raggiungibili tramite scorrimento anche alla dimensione minima. Le diagnostiche locali, comprese SFC verifica e DISM analisi, hanno timeout e **Annulla diagnosi**; le riparazioni attendono il completamento e non vengono terminate forzatamente. Per gli interventi, richiesta accettata, esecuzione conclusa ed effetto osservato sono distinti: un reset o un codice 3010 non dimostrano il risultato finale. Dopo un esito incerto usare **Rileggi stato** prima di ripetere. La coda stampante viene riletta, senza attestare l'arresto fisico di una stampa.
+Documentation is written in Italian.
 
-La predisposizione blocca listener incompatibili prima delle scritture. Dopo un Undo verificato, Apply conserva il precedente checkpoint nella cartella History; checkpoint attivi, parziali, legacy o alterati richiedono revisione manuale, senza cancellazioni automatiche. La diagnostica GPO conserva codice nativo gpresult, RSOP e versioni disponibili anche in caso di lettura parziale.
+- [Full guide](docs/GUIDE.it.md): first use, local tweaks, enterprise functions, security, compatibility, build and delivery.
+- [Technical documentation and Microsoft sources](docs/ENTERPRISE.md)
+- [UI/UX history](docs/UI-UX.md)
 
-## Sicurezza e dati
+## Security
 
-- Processi/sessioni separati per cliente, target espliciti e catalogo chiuso; niente shell libera, script scaricati o aggiramento ExecutionPolicy/App Control/AppLocker.
-- Diagnostica con timeout/annullamento; modifiche con conferma, audit preventivo e verifica. Nessun riavvio automatico o arresto forzato generico delle riparazioni.
-- Esito incerto: rilettura prima di ripetere la modifica nella sessione. Dopo perdita completa della sessione rileggere esplicitamente prima di riprovare.
-- AD: GUID/DC/DN espliciti, OU utenti ordinari revisionate, gruppi privilegiati noti e account protetti/con SPN esclusi. Il responsabile deve escludere anche servizi senza SPN e ruoli privilegiati personalizzati dalle OU ammesse.
-- ACL e deleghe Windows/AD restano il confine delle autorizzazioni. Usare account delegati e PAW adeguate, evitando credenziali Tier 0 sui normali PC di assistenza.
-- Profili in LOCALAPPDATA/OnlyTweak/profiles.json; audit in LOCALAPPDATA/OnlyTweak/audit/id-profilo, ACL utente/SYSTEM, nessuna password. L'audit locale non è immutabile né sostituisce i log centrali.
-- Password nuove protette con DPAPI nel trasporto locale; buffer nativi azzerati appena possibile. Nessun salvataggio automatico negli appunti o nei report. WinForms può lasciare copie temporanee nella memoria gestita.
-- Report e output contengono dati aziendali: identità, nomi, indirizzi e percorsi. Nessuna telemetria automatica. Conservazione/eliminazione secondo policy del cliente.
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
-Pulizia spooler solo SPL/SHD al primo livello del percorso standard verificato: niente ricorsione, rimozione driver o stampanti. Protezioni Windows esclusivamente in lettura.
+## License
 
-## Compatibilità
-
-Host tecnico Windows 10 dalla build 17763 e Windows 11 x64 Intel/AMD. Server, ARM64 e x86 esclusi dall'app. RSAT per le edizioni qualificate e verificato per componente. La qualificazione aziendale riguarda Windows 11 supportati e Windows 10 aziendali esplicitamente coperti da LTSC/ESU: avvio tecnico e supporto Microsoft sono distinti.
-
-Server remoti previsti 2019/2022/2025; Server 2016 da qualificare separatamente. Richiesti rete/VPN, DNS, moduli e deleghe. WinRM con Kerberos, opzionalmente HTTPS con certificato valido; nessun fallback automatico a CredSSP, Basic, traffico non cifrato o TrustedHosts wildcard.
-
-La riparazione del canale sicuro è soltanto locale, con UAC: avviare OnlyTweak sul membro interessato con un account delegato appropriato. Non viene esposta tramite WinRM/JEA per evitare il secondo salto. Le GPO utente richiedono raccolta dalla sessione dell'utente interessato. Il conteggio totale DFSR rimane nell'evidenza Verbose originale quando manca un dato numerico indipendente dalla lingua.
-
-## Build e verifiche
-
-Sviluppo: SDK .NET 10, PowerShell 7.4 o successivo (`pwsh` in PATH), Windows x64, accesso NuGet per la dipendenza esplicita Microsoft System.ServiceProcess.ServiceController. Runtime/librerie inclusi nell'EXE; PowerShell 7 serve ai comandi di build/consegna e alle relative fixture, non all'app distribuita.
-
-    build.cmd
-    test.cmd --artifact --ui --read-only --render
-
-La build pubblica l'EXE autonomo in dist e registra una ricevuta con hash in artifacts/build-evidence/publish.json. I metadati compilati nell'EXE identificano sorgenti, script, assets e runtime pack effettivamente risolti. Il banco di test .NET 10 usa fixture per dominio e modifiche; non contatta AD reali. Il flag --read-only aggiunge letture locali; --ui e --render richiedono desktop. Render in artifacts/ui: i campioni scalati non certificano DPI fisici. Render 1.x preesistenti sono storici.
-
-CI su Windows Server con SDK .NET 10 e test.cmd --artifact --read-only. I push sul branch principale avviano il workflow; lo stato remoto è consultabile in [GitHub Actions](https://github.com/dennidalpos/OnlyTweak/actions). Non sostituisce laboratorio AD o Windows client puliti.
-
-Cronologia delle verifiche locali e dei lotti precedenti: [storico conservato](../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/README.md). I gate ambientali restano aperti; nessuna VM o distribuzione avviata.
-
-## Consegna
-
-    pwsh -NoProfile -File scripts/prepare-release.ps1
-
-Prepara copia locale e manifest v2 con hash, pacchetti risolti alla compilazione (inclusi strumenti di build), runtime pack e stato Authenticode. Verifica ricevuta, sorgenti/assets correnti e byte degli script del bundle; EXE precedente, sorgente firmato dopo la build o assets cambiati richiedono una nuova build. `-RequireSigned` controlla le firme dell'EXE e degli script effettivamente incorporati, senza ricodificarli. Firma opzionale con certificato aziendale e percorso esplicito SignTool; usare questa procedura anche per aggiornare la ricevuta dopo la firma. Una firma esterna che cambia l'EXE invalida la vecchia ricevuta.
-
-Firmare ps1/psm1 **prima** di build.cmd. La modalità di sviluppo `OnlyTweakWindows.exe --release-inspect` restituisce su stdout soltanto metadati e risorse incorporate, senza UI, profili o operazioni sul sistema; non certifica la compatibilità dell'app su quel sistema. Le policy possono bloccare script non approvati: l'app lo segnala senza aggirarle.
-
-La build attuale è **non firmata**, destinata alla qualificazione in laboratorio. Documentazione tecnica e fonti Microsoft: [docs/ENTERPRISE.md](docs/ENTERPRISE.md). Storico UI: [docs/UI-UX.md](docs/UI-UX.md). Gate residui: [tracker SecondBrain](../SecondBrain/02-areas/products/OnlyTweak/tracker.json).
-
-
-## Ripresa nella prossima sessione
-
-La fonte delle attività è [tracker SecondBrain](../SecondBrain/02-areas/products/OnlyTweak/tracker.json): **zero task applicativi aperti** dopo la chiusura verificata di OT-AUDIT-16/18/19/20/21/22/23. Schede originali, criteri ed esiti sono conservati nello storico del tracker SecondBrain OnlyTweak, insieme ai lotti precedenti. I sette gate preesistenti OT-VM-01..04 e OT-ENT-LAB-01/SIGN-01/PILOT-01 e il nuovo OT-VM-TWEAK-01 restano separati e non dichiarati superati: i test VM sono esclusi da questa chiusura per scelta dell'utente. Nessun nuovo lotto ambientale viene avviato automaticamente. Le correzioni OT-AUDIT-08/09/10 e la rimozione OT-AUDIT-11 rimangono storico; il salvataggio dei sorgenti non equivale a distribuzione o validazione in produzione.
-
-Verifica del lotto navigazione/tweak: 121 test desktop e 91 test CI locale superati, zero fallimenti. [Rapporto](../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-navigation-tweaks/report.md).
-
-## Licenza
-
-Software proprietario, tutti i diritti riservati (vedi [LICENSE](LICENSE)). Le dipendenze di terze parti mantengono le proprie licenze.
+Proprietary, all rights reserved. See [LICENSE](LICENSE). Third-party dependencies keep their own licenses.
