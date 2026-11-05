@@ -12,56 +12,56 @@ Fixture UI con message loop reale e operazioni simulate; render in artifacts/ui 
 
 ## Storico UI 1.2.0 (non descrive le funzionalità correnti)
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ### Revisione UI/UX — 1.2.0
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Stato storico e audit — 24 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Contrasto e banco UI — 19 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Conferme con richiamo di avviso — 19 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Stati verificabili — 19 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Meno testo e icone delle aree — 18 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Correzioni di layout del 18 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Aggiornamento del 16 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Revisione precedente — 1.1.0
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Percorsi abbreviati
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Gerarchia e colori
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Verifica
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
 
 ## Icona e profili Windows 10/11 — 19 ottobre 2026
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+Sezione storica trasferita: copia conservata nell'archivio privato del manutentore; non distribuita con il repository.
