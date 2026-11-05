@@ -26,7 +26,7 @@
     <Compile Include="src/**/*.cs" />
     <EmbeddedResource Include="assets/OnlyTweak.ico" LogicalName="OnlyTweak.Icon" />
     <EmbeddedResource Include="scripts/enterprise/*.ps*" LogicalName="OnlyTweak.%(Filename)%(Extension)" />
-    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.14" />
   </ItemGroup>
   <Target Name="OnlyTweakBuildEvidence" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveReferences">
     <PropertyGroup>
