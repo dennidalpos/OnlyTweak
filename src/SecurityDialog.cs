@@ -40,7 +40,7 @@ namespace OnlyTweakWindows
             if (!app.Coordinator.TryEnter()) { SetFeedback("Attendi il completamento dell'operazione in corso."); return; }
             loading=true; refresh.Enabled=false;
             foreach (SecurityPane pane in panes) pane.SetBusy();
-            SetFeedback("Lettura protezioni e criteriâ€¦");
+            SetFeedback("Lettura protezioni e criteri…");
             try
             {
                 List<SecurityStatus> states=await Task.Run(delegate {
