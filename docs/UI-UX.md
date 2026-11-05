@@ -1,67 +1,23 @@
-# UI/UX OnlyTweak 2.0
+# UI behavior and qualification
 
-## Stato corrente — 26 ottobre 2026
+[Preserved Italian history](UI-UX.it.md) · [User guide](GUIDE.md)
 
-Una sola finestra Windows Forms ospita pagine UserControl. Home con otto sezioni, intestazione con freccia Indietro (nascosta nella home), scorciatoia Alt+Sinistra e titolo aggiornato. Le sei sezioni aziendali sono sottopagine di un indice; controlli, selezioni, filtri, scorrimento e risultati sopravvivono al ritorno. Il percorso Postazione tecnico apre direttamente Tecnico e RSAT. La sessione cliente rimane esplicita e persistente fino a disconnessione, cambio profilo o chiusura.
+The current Windows Forms interface uses one window containing UserControl pages. Home exposes eight sections; an internal enterprise index leads to the enterprise pages. Back/Alt+Left preserves page controls, selection, filters, scroll position and results. The technician route opens Technician/RSAT directly.
 
-Conferme, editor profilo, nuova password, parametri diagnostici, output, anteprime e cronologia usano la stessa navigazione. Conferme con Annulla predefinito e campi sensibili svuotati al termine. Modifiche non salvate richiedono conferma prima di lasciare l'editor. Indietro annulla e attende le diagnosi annullabili; durante le modifiche il ritorno è bloccato. Ritornare a una pagina non riesegue azioni. Credenziali Windows, selezione file/cartelle e strumenti di sistema mantengono i dialoghi nativi.
+Customer sessions remain explicit until disconnect, profile change or application close. Native credentials/file/folder dialogs and external system tools retain their own windows and identities.
 
-Tweak Windows mostra stato, quattro personalizzazioni HKCU, anteprima/conferma e ripristino persistente. Diagnostiche tecniche in Rete e Strumenti Windows con input tipizzati e risultati distinti per test negativo, lettura incompleta e indisponibilità. Protezioni Windows esclusivamente in lettura.
+## State and confirmation
 
-Fixture UI con message loop reale e operazioni simulate; render in artifacts/ui per Windows 10/11 e fattori 100/150/200%. Comprendono home, indice e pagine aziendali, conferme, editor, tweak e parametri diagnostici. I fattori simulati non certificano DPI fisici; la qualificazione reale rimane OT-VM-02. Render storici 1.x e precedenti evidenze restano consultabili senza essere dichiarati aggiornati.
+Profile editors, password entry, action confirmation, parameters, output, previews and history use the internal navigation. Cancel is the default confirmation action. Sensitive fields are cleared when their use ends. Unsaved edits ask before leaving.
 
-## Storico UI 1.2.0 (non descrive le funzionalità correnti)
+Back cancels cancellable diagnostics and waits for completion. Modifying actions block navigation until their outcome. Returning to a page never reruns an operation.
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+The tweak page shows the four HKCU options, current state, preview/confirmation and persistent restore. Network/Windows technical diagnostics use typed inputs and separate negative, incomplete and unavailable outcomes. Windows protection settings remain read-only.
 
-### Revisione UI/UX — 1.2.0
+## Evidence and limits
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+The UI fixture bench uses a real message loop with simulated operations. Its renders cover home, enterprise pages, confirmations, editors, tweaks and diagnostic parameters, including simulated 100/150/200% scaling. Those outputs are fixtures, not screenshots proving operation on every Windows build or physical monitor.
 
-## Stato storico e audit — 24 ottobre 2026
+Real interactive/DPI qualification remains OT-VM-02; local tweak/diagnostic VM qualification remains OT-VM-TWEAK-01. The archived 1.x renders and dated Italian notes describe their own revision only. Do not present them as current UI captures or infer live test success from a render.
 
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Contrasto e banco UI — 19 ottobre 2026
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Conferme con richiamo di avviso — 19 ottobre 2026
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Stati verificabili — 19 ottobre 2026
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Meno testo e icone delle aree — 18 ottobre 2026
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Correzioni di layout del 18 ottobre 2026
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Aggiornamento del 16 ottobre 2026
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Revisione precedente — 1.1.0
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Percorsi abbreviati
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Gerarchia e colori
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Verifica
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
-
-## Icona e profili Windows 10/11 — 19 ottobre 2026
-
-Sezione storica trasferita: [copia consultabile](../../SecondBrain/02-areas/products/OnlyTweak/history/2026-10-26-residual-lot/imported/docs/UI-UX.md).
+No new screenshots or fabricated interface images are added by this documentation update.

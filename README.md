@@ -48,11 +48,11 @@ The repository contains a CI workflow, but GitHub Actions are disabled: build an
 
 ## Documentation
 
-Documentation is written in Italian.
+Maintained guides are in English; Italian reference and historical pages are preserved.
 
-- [Full guide](docs/GUIDE.it.md): first use, local tweaks, enterprise functions, security, compatibility, build and delivery.
+- [Full guide](docs/GUIDE.md): first use, local tweaks, enterprise functions, security, compatibility, build and delivery.
 - [Technical documentation and Microsoft sources](docs/ENTERPRISE.md)
-- [UI/UX history](docs/UI-UX.md)
+- [UI behavior and qualification](docs/UI-UX.md)
 
 ## Security
 
