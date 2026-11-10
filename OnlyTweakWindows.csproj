@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>embedded</DebugType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>assets/OnlyTweak.ico</ApplicationIcon>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <BaseOutputPath>artifacts/build/</BaseOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+    <EmbeddedResource Include="assets/OnlyTweak.ico" LogicalName="OnlyTweak.Icon" />
+    <EmbeddedResource Include="scripts/enterprise/*.ps*" LogicalName="OnlyTweak.%(Filename)%(Extension)" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.14" />
+  </ItemGroup>
+  <Target Name="OnlyTweakBuildEvidence" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveReferences">
+    <PropertyGroup>
+      <OnlyTweakEvidencePath>$(IntermediateOutputPath)OnlyTweak.BuildEvidence.json</OnlyTweakEvidencePath>
+    </PropertyGroup>
+    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildProjectDirectory)/scripts/write-build-evidence.ps1&quot; -AssetsPath &quot;$(ProjectAssetsFile)&quot; -OutputPath &quot;$(OnlyTweakEvidencePath)&quot; -RuntimePackList &quot;@(RuntimePackAsset-&gt;'%(NuGetPackageId)@%(NuGetPackageVersion)'-&gt;Distinct(), ';')&quot; -TargetFramework &quot;$(TargetFramework)&quot; -RuntimeIdentifier &quot;$(RuntimeIdentifier)&quot; -SelfContained &quot;$(SelfContained)&quot;" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(OnlyTweakEvidencePath)" LogicalName="OnlyTweak.BuildEvidence.json" />
+    </ItemGroup>
+  </Target>
+</Project>
