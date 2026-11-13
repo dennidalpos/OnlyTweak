@@ -109,7 +109,6 @@ namespace OnlyTweakWindows
                 diagnostics.Actions.Add(LocalDiagnostics.Entry(app,entry.Item1,entry.Item2,entry.Item3));
             Network.Children.Add(diagnostics);
             Tools.Actions.Add(LocalDiagnostics.Entry(app,"local.identity","Identità e gruppi","Account, gruppi e privilegi dell'app."));
-            Tools.Actions.Add(LocalDiagnostics.Entry(app,"local.gpo","Criteri utente applicati","Riepilogo gpresult per l'utente dell'app."));
             ApplySummaries();
             foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools }) menu.Prune();
         }

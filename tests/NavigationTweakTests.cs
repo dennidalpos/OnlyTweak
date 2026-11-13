@@ -47,8 +47,8 @@ namespace OnlyTweakWindows
                 service.Apply("launch",null,Ignore);
                 Assert(store.Read(RegistryTweakService.ExplorerPath,"Foreign").ValueExists,"Valore estraneo rimosso.");
             }));
-            Test("tweak: quattro opzioni, tipi originali e COM personalizzata",()=> WithTweaks((store,service,reopen,folder)=> {
-                Assert(service.Definitions.Length==4,"Catalogo Windows 11 incompleto.");
+            Test("tweak: catalogo privato, tipi originali e COM personalizzata",()=> WithTweaks((store,service,reopen,folder)=> {
+                Assert(service.Definitions.Length==11,"Catalogo Windows 11 incompleto.");
                 store.Set(RegistryTweakService.ExplorerPath,"LaunchTo",new[]{"custom","value"},RegistryValueKind.MultiString);
                 service.Apply("launch",true,Ignore);reopen().Apply("launch",null,Ignore);
                 Assert(((string[])store.Read(RegistryTweakService.ExplorerPath,"LaunchTo").Data).SequenceEqual(new[]{"custom","value"}),"Tipo originale perso.");
@@ -111,8 +111,8 @@ namespace OnlyTweakWindows
                             [pscustomobject]@{TcpTestSucceeded=(!$global:negative);RemoteAddress='192.0.2.1';SourceAddress='192.0.2.2'}
                         }
                         """;
-                    var request=new OperationRequest {Profile=LocalPrivilege.TechnicianProfile(),ActionId=id,Target="fixture.example.com",Parameters=new() {["port"]="443",["recordType"]="A"}};
-                    var definition=new ActionDefinition(id,"Fixture",ActionRisk.ReadOnly,false,false,timeout,"");
+                    var request=new OperationRequest {ActionId=id,Target="fixture.example.com",Parameters=new() {["port"]="443",["recordType"]="A"}};
+                    var definition=new ActionDefinition(id,"Fixture",ActionRisk.ReadOnly,false,timeout);
                     return new PowerShellBridge(mocks+EmbeddedScripts.Read("LocalDiagnostics.ps1"),"LocalDiagnostics.ps1").ExecuteAsync(request,definition,CancellationToken.None).GetAwaiter().GetResult();
                 }
                 Assert(Run("local.dns").State==StepState.Success,"DNS valido rifiutato.");
@@ -125,28 +125,8 @@ namespace OnlyTweakWindows
         }
         private static void NavigationTests()
         {
-            Test("navigazione: password svuotata e consegnata una sola volta",()=> {
-                using var host=new MainForm(TestApp());ShowPage(host);
-                using var entry=new PasswordEntry();var pending=host.Navigation.PresentAsync(entry);
-                var fields=Descendants(entry).OfType<TextBox>().ToArray();
-                foreach(var field in fields) field.Text="fixture-only-secret";
-                Descendants(entry).OfType<Button>().Single(b=>b.Text=="Usa password").PerformClick();Await(pending);
-                string secret=entry.TakePassword();
-                Assert(pending.Result==DialogResult.OK && !String.IsNullOrEmpty(secret) && !secret.Contains("fixture-only-secret"),"Password protetta persa o in chiaro.");
-                Assert(fields.All(f=>f.TextLength==0) && entry.TakePassword()==null,"Password conservata nei controlli o consegnata due volte.");
-                ClosePage(host);
-            });
-            Test("navigazione: stato aziendale e feedback nella sottopagina corrente",()=> {
-                var app=TestApp();using var host=new MainForm(app);ShowPage(host);
-                var workspace=new EnterpriseDialog(false,false) {Persistent=true};host.Navigation.Push(workspace);
-                var directory=workspace.Sections.ElementAt(2);workspace.OpenSection(directory);
-                var search=Descendants(directory).OfType<TextBox>().Single();search.Text="fixture";
-                Descendants(directory).OfType<Button>().Single(b=>b.Text=="Cerca").PerformClick();
-                PumpUntil(()=>Descendants(host.Navigation.Current).OfType<Label>().Any(l=>l.Text.Contains("Connetti prima")));
-                Await(host.Navigation.BackAsync());workspace.OpenSection(directory);
-                Assert(search.Text=="fixture" && host.Navigation.Current.BackButton.Visible,"Stato o navigazione aziendale persi.");
-                ClosePage(host);
-            });
+
+
             Test("navigazione: finestra unica, ritorno e conservazione parametri",()=> {
                 var app=TestApp();using var host=new MainForm(app);ShowPage(host);int count=Application.OpenForms.Count;
                 host.Navigation.Push(new MenuDialog(app,app.Catalog.Network));
@@ -157,18 +137,7 @@ namespace OnlyTweakWindows
                 Assert(Application.OpenForms.Count==count,"Aperta una seconda finestra applicativa.");
                 Await(host.Navigation.BackAsync());Await(host.Navigation.BackAsync());Assert(host.Navigation.Depth==1 && !host.Navigation.Current.BackButton.Visible,"Home o freccia incoerente.");ClosePage(host);
             });
-            Test("navigazione: editor sporco conferma internamente e annulla mantiene stato",()=> {
-                var app=TestApp();using var host=new MainForm(app);ShowPage(host);
-                host.Navigation.Push(new ProfileEditor(EnterpriseProfile()));var editor=host.Navigation.Current;
-                Descendants(editor).OfType<TextBox>().First().Text="Modificato";
-                var back=host.Navigation.BackAsync();PumpUntil(()=>host.Navigation.Current is ConfirmDialog);
-                Assert(!back.IsCompleted,"Editor abbandonato senza conferma.");
-                Descendants(host.Navigation.Current).OfType<Button>().Single(b=>b.Text=="&Annulla").PerformClick();Await(back);
-                Assert(ReferenceEquals(host.Navigation.Current,editor),"Annulla ha perso l'editor.");
-                back=host.Navigation.BackAsync();PumpUntil(()=>host.Navigation.Current is ConfirmDialog);
-                Descendants(host.Navigation.Current).OfType<Button>().Single(b=>b.Text=="&Conferma").PerformClick();Await(back);
-                Assert(host.Navigation.Depth==1,"Editor non abbandonato.");ClosePage(host);
-            });
+
             Test("navigazione: Indietro annulla diagnosi e attende rilascio",()=> {
                 var app=TestApp();using var host=new MainForm(app);ShowPage(host);
                 var action=new ActionSpec("fixture.cancel","Fixture","Fixture","Fixture",_=>{}) {IsDiagnostic=true,ExecuteResult=(log,token)=> {token.WaitHandle.WaitOne(4000);token.ThrowIfCancellationRequested();return new StepResult {State=StepState.Success};}};
@@ -190,13 +159,14 @@ namespace OnlyTweakWindows
         private readonly Dictionary<string,Dictionary<string,(object Value,RegistryValueKind Kind)>> keys=new(StringComparer.OrdinalIgnoreCase);
         internal bool FailWrite;
         internal int Writes;
+        internal int FailAt;
         public RegistryValueState Read(string path,string name) {
             var result=new RegistryValueState {KeyExists=keys.ContainsKey(path)};
             if(keys.TryGetValue(path,out var values) && values.TryGetValue(name,out var value)) {result.ValueExists=true;result.Kind=value.Kind;result.Data=value.Value;}
             return result;
         }
         public void Set(string path,string name,object data,RegistryValueKind kind) {
-            if(FailWrite) throw new IOException("fixture write failed");Writes++;
+            if(FailWrite || FailAt>0 && Writes+1==FailAt) throw new IOException("fixture write failed");Writes++;
             for(string current=path;current.Length>0;) {if(!keys.ContainsKey(current)) keys.Add(current,new(StringComparer.OrdinalIgnoreCase));int index=current.LastIndexOf('\\');if(index<0) break;current=current[..index];}
             keys[path][name]=(data,kind);
         }

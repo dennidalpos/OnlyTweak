@@ -19,7 +19,7 @@
     <Compile Include="../src/**/*.cs" />
     <Compile Include="*.cs" />
     <EmbeddedResource Include="../assets/OnlyTweak.ico" LogicalName="OnlyTweak.Icon" />
-    <EmbeddedResource Include="../scripts/enterprise/*.ps*" LogicalName="OnlyTweak.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../scripts/local/*.ps*" LogicalName="OnlyTweak.%(Filename)%(Extension)" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.13" />
   </ItemGroup>
 </Project>

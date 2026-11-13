@@ -21,7 +21,7 @@ namespace OnlyTweakWindows
     }
     internal static class LocalDiagnostics
     {
-        internal static readonly string[] Ids={"local.ping","local.dns","local.tcp","local.connections","local.routes","local.proxy","local.identity","local.gpo"};
+        internal static readonly string[] Ids={"local.ping","local.dns","local.tcp","local.connections","local.routes","local.proxy","local.identity"};
         internal static (string File,string[] Arguments) Native(DiagnosticRequest request)
         {
             request.Validate();
@@ -31,7 +31,6 @@ namespace OnlyTweakWindows
                 "local.routes"=>("route.exe",new[]{"print"}),
                 "local.proxy"=>("netsh.exe",new[]{"winhttp","show","proxy"}),
                 "local.identity"=>("whoami.exe",new[]{"/all"}),
-                "local.gpo"=>("gpresult.exe",new[]{"/r","/scope","user"}),
                 _=>throw new ArgumentException("Procedura nativa non prevista.")
             };
         }
@@ -46,9 +45,9 @@ namespace OnlyTweakWindows
             };
             action.ExecuteResult=(log,token)=> {
                 if(powershell) {
-                    OperationRequest wire=new() {Profile=LocalPrivilege.TechnicianProfile(),ActionId=request.Id,Target=request.Target};
+                    OperationRequest wire=new() {ActionId=request.Id,Target=request.Target};
                     wire.Parameters["port"]=request.Port.ToString(CultureInfo.InvariantCulture);wire.Parameters["recordType"]=request.RecordType;
-                    var definition=new ActionDefinition(request.Id,title,ActionRisk.ReadOnly,false,false,60,"",Array.Empty<string>());
+                    var definition=new ActionDefinition(request.Id,title,ActionRisk.ReadOnly,false,60);
                     StepResult result=new PowerShellBridge(embeddedName:"LocalDiagnostics.ps1").ExecuteAsync(wire,definition,token).GetAwaiter().GetResult();
                     log(result.Summary);if(result.Data!=null) log(result.Data.ToString());return result;
                 }

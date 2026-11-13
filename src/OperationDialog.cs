@@ -95,6 +95,7 @@ namespace OnlyTweakWindows
                     return app.LocalOperations.Execute(action,Enqueue,cancellation.Token);
                 });
                 app.LocalOperations.Observe(action,result);
+                app.LastResult=result;
                 if (action.Restart!=null) Enqueue(action.Restart);
                 Enqueue(result.State+" · "+result.Summary);
                 if(result.Data!=null) Enqueue(result.Data.ToString());

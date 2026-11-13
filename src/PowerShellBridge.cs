@@ -27,8 +27,8 @@ namespace OnlyTweakWindows
     internal sealed class PowerShellBridge
     {
         private readonly string scriptOverride,embeddedName;
-        internal PowerShellBridge(string scriptOverride=null,string embeddedName="Operations.ps1") {
-            if(embeddedName is not ("Operations.ps1" or "LocalDiagnostics.ps1")) throw new ArgumentException("Procedura non consentita.");
+        internal PowerShellBridge(string scriptOverride=null,string embeddedName="LocalDiagnostics.ps1") {
+            if(embeddedName is not ("LocalDiagnostics.ps1" or "LocalRemoting.ps1")) throw new ArgumentException("Procedura non consentita.");
             this.scriptOverride=scriptOverride;this.embeddedName=embeddedName;
         }
         private static async Task Drain(StreamReader reader,BoundedText output)
@@ -40,7 +40,7 @@ namespace OnlyTweakWindows
         public async Task<StepResult> ExecuteAsync(OperationRequest request,ActionDefinition action,CancellationToken cancellation)
         {
             StepResult result=new StepResult {OperationId=request.OperationId,ActionId=action.Id,
-                ProfileId=request.Profile.Id,Target=action.Elevated || action.Id=="technician.inspect" ? Environment.MachineName : request.Target,Started=DateTimeOffset.UtcNow};
+                Target=request.Target,Started=DateTimeOffset.UtcNow};
             string folder=Path.Combine(Path.GetTempPath(),"OnlyTweak-"+Guid.NewGuid().ToString("N"));
             SecureFiles.EnsureDirectory(folder);
             string script=Path.Combine(folder,embeddedName);
@@ -113,48 +113,6 @@ namespace OnlyTweakWindows
                 if (File.Exists(script)) File.Delete(script);
                 if (Directory.Exists(folder)) Directory.Delete(folder,false);
             }
-        }
-    }
-    internal sealed class EnterpriseExecutor
-    {
-        private readonly IOperationAudit audit;
-        private readonly Func<OperationRequest,ActionDefinition,CancellationToken,Task<StepResult>> run;
-        internal EnterpriseExecutor(IOperationAudit audit=null,
-            Func<OperationRequest,ActionDefinition,CancellationToken,Task<StepResult>> run=null)
-        { this.audit=audit??new FileOperationAudit(); this.run=run??new PowerShellBridge().ExecuteAsync; }
-        public async Task<StepResult> ExecuteAsync(OperationRequest request,string identity,CancellationToken cancellation)
-        {
-            ActionDefinition action=EnterpriseCatalog.Get(request.ActionId);
-            action.Validate(request);
-            if (action.IsChange) audit.Record(request,identity,"requested"); // fail closed before invoking anything
-            StepResult result;
-            try { result=await run(request,action,cancellation).ConfigureAwait(false); }
-            catch (OperationCanceledException)
-            {
-                result=new StepResult {OperationId=request.OperationId,ProfileId=request.Profile.Id,ActionId=action.Id,
-                    Target=request.Target,Started=DateTimeOffset.UtcNow,Finished=DateTimeOffset.UtcNow,
-                    State=action.IsChange ? StepState.Unverified : StepState.Cancelled,
-                    Summary=action.IsChange ? "Intervento non verificato: rileggere lo stato." : "Diagnostica annullata prima dell'avvio.",
-                    ErrorCode="OperationCancelled"};
-            }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException ||
-                ex is InvalidOperationException || ex is FormatException || ex is System.ComponentModel.Win32Exception)
-            {
-                result=new StepResult {OperationId=request.OperationId,ProfileId=request.Profile.Id,ActionId=action.Id,
-                    Target=request.Target,Started=DateTimeOffset.UtcNow,Finished=DateTimeOffset.UtcNow,
-                    State=action.IsChange ? StepState.Unverified : StepState.Unavailable,
-                    Summary="Esecuzione non verificabile. Non ripetere modifiche senza rileggere lo stato.",ErrorCode=ex.GetType().Name};
-            }
-            result.Identity=identity;
-            if (action.AuthenticationRequired && !result.AuthenticationVerified && result.State==StepState.Success) {
-                result.State=action.IsChange ? StepState.Unverified : StepState.Inconclusive;
-                result.Summary="Autenticazione target non verificata: nessuna conclusione positiva.";
-            }
-            if (action.IsChange)
-                try { audit.Record(request,identity,"finished",result); }
-                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
-                { result.State=StepState.Unverified; result.Summary="Audit finale non disponibile: verifica manuale richiesta."; }
-            return result;
         }
     }
 }

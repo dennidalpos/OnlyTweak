@@ -54,12 +54,12 @@ namespace OnlyTweakWindows
                     // Signature statuses are simulated. This proves the gate logic, not Authenticode qualification.
                     ReleasePowerShell(mock+prepare);
                     using (JsonDocument manifest=JsonDocument.Parse(File.ReadAllText(Path.Combine(delivery,"manifest.json"))))
-                        Assert(manifest.RootElement.GetProperty("embeddedScripts").GetArrayLength()==4,"Firme risorse non inventariate.");
+                        Assert(manifest.RootElement.GetProperty("embeddedScripts").GetArrayLength()==2,"Firme risorse non inventariate.");
                     void Reject(string script,string expected) {
                         string output=ReleasePowerShell(mock+"try { "+script+"; throw 'GateAcceptedInvalidFixture' } catch { if ($_.Exception.Message -notlike "+PsLiteral("*"+expected+"*")+") { throw }; 'REJECTED' }");
                         Assert(output.Contains("REJECTED",StringComparison.Ordinal),"Gate non fallito.");
                     }
-                    string sourcePath=Path.Combine(fixture,"scripts/enterprise/Operations.ps1"); byte[] original=File.ReadAllBytes(sourcePath);
+                    string sourcePath=Path.Combine(fixture,"scripts/local/LocalDiagnostics.ps1"); byte[] original=File.ReadAllBytes(sourcePath);
                     File.AppendAllText(sourcePath,"\r\n# source signed/changed after publish\r\n");
                     Reject(prepare,"Sorgente diverso"); File.WriteAllBytes(sourcePath,original);
                     string assetsPath=Path.Combine(fixture,"obj/project.assets.json"); original=File.ReadAllBytes(assetsPath);

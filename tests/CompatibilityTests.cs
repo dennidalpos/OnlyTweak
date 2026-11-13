@@ -13,7 +13,9 @@ namespace OnlyTweakWindows
         private static AppServices TestApp(ISecurityBackend backend=null,int build=26100,string edition="Professional",FeatureAvailability availability=null)
         {
             OsProfile os=availability==null ? TestProfile(build,edition) : availability.OS;
-            return new AppServices(backend??new FakeSecurityBackend(),os,availability??new FeatureAvailability(os,name=>true,target=>true),new FakeAudit());
+            return new AppServices(backend??new FakeSecurityBackend(),os,availability??new FeatureAvailability(os,name=>true,target=>true),new FakeAudit(),
+                new TweakRegistry(),new FakePreferences(),new FakeAwake(),"Utente demo",()=>new[]{new LocalInterface(12,"LAN demo")},
+                Path.Combine(Directory.GetCurrentDirectory(),"artifacts","ui-fixture-checkpoints",Guid.NewGuid().ToString("N")));
         }
         private static void CompatibilityTests()
         {
@@ -41,7 +43,7 @@ namespace OnlyTweakWindows
                 FeatureAvailability availability=new FeatureAvailability(TestProfile(19045,"Core"),name=>name!="sfc.exe" && name!="dism.exe" && name!="cleanmgr.exe" && name!="netplwiz.exe",target=>target!="ms-settings:storagesense");
                 AppServices app=TestApp(availability:availability);
                 Assert(!app.Catalog.Maintenance.AllActions().Any() && app.Catalog.Maintenance.Children.Count==0,"Sezione vuota rimasta.");
-                Assert(app.Catalog.Tools.AllActions().Count()==13,"Strumenti richiesti rimossi.");
+                Assert(app.Catalog.Tools.AllActions().Count()==12,"Strumenti richiesti rimossi.");
                 Assert(app.Catalog.Tools.Actions.Single(a=>a.Id=="tools.apps").Title=="App e funzionalità","Etichetta Windows 10 errata.");
             });
             Test("catalogo: rileva Explorer nella cartella Windows",delegate {

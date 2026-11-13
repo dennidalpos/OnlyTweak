@@ -44,6 +44,7 @@ namespace OnlyTweakWindows
     {
         public readonly OperationCoordinator Coordinator = new OperationCoordinator();
         public readonly SessionHistory History = new SessionHistory();
+        internal StepResult LastResult;
         public readonly ProcessService Processes = new ProcessService();
         public readonly LocalOperationExecutor LocalOperations;
         public readonly PrinterService Printers = new PrinterService();
@@ -53,15 +54,24 @@ namespace OnlyTweakWindows
         public readonly RegistryTweakService Tweaks;
         public readonly OsProfile OS;
         public readonly FeatureAvailability Availability;
+        public readonly UserPreferences Preferences;
+        public readonly AwakeService Awake;
+        internal readonly string DisplayIdentity;
+        internal readonly Func<LocalInterface[]> RemotingInterfaces;
         public AppServices() : this(new WindowsSecurityBackend()) { }
         internal AppServices(ISecurityBackend security) : this(security,EnvironmentInfo.Profile,null) { }
-        internal AppServices(ISecurityBackend security,OsProfile os,FeatureAvailability availability,IOperationAudit localAudit=null)
+        internal AppServices(ISecurityBackend security,OsProfile os,FeatureAvailability availability,IOperationAudit localAudit=null,
+            IRegistryStore registry=null,IPreferenceBackend preferences=null,IAwakeBackend awake=null,string displayIdentity=null,Func<LocalInterface[]> remotingInterfaces=null,string tweakFolder=null)
         {
             LocalOperations=new LocalOperationExecutor(localAudit);
             OS=os;
             Availability=availability??new FeatureAvailability(os,name=>Processes.FileUnavailable(name)==null,target=>Processes.TargetUnavailable(target)==null);
             Security=new SecurityService(security);
-            Tweaks=new RegistryTweakService(new WindowsRegistryStore(),os);
+            Tweaks=new RegistryTweakService(registry??new WindowsRegistryStore(),os,tweakFolder);
+            Preferences=new UserPreferences(preferences??new WindowsPreferenceBackend());
+            Awake=new AwakeService(awake??new WindowsAwakeBackend());
+            DisplayIdentity=displayIdentity??EnvironmentInfo.Account;
+            RemotingInterfaces=remotingInterfaces??LocalRemoting.Interfaces;
             Spool = new SpoolService(new WindowsSpoolBackend());
             Catalog = new ActionCatalog(this);
         }

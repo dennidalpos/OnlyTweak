@@ -2,7 +2,7 @@
 Set-StrictMode -Version 3
 function Get-OnlyTweakSourceFiles([string]$Root) {
     $files=@(Get-ChildItem -LiteralPath (Join-Path $Root 'src') -Filter '*.cs' -File -Recurse)
-    $files+=@(Get-ChildItem -LiteralPath (Join-Path $Root 'scripts\enterprise') -File | Where-Object Extension -in '.ps1','.psm1')
+    $files+=@(Get-ChildItem -LiteralPath (Join-Path $Root 'scripts\local') -File | Where-Object Extension -in '.ps1','.psm1')
     foreach ($name in @('OnlyTweakWindows.csproj','app.manifest','packages.lock.json','global.json','assets/OnlyTweak.ico',
         'build.cmd','scripts/write-build-evidence.ps1','scripts/ReleaseEvidence.psm1','scripts/prepare-release.ps1')) {
         $files+=Get-Item -LiteralPath (Join-Path $Root $name)
@@ -42,14 +42,14 @@ function Assert-OnlyTweakBuild([string]$Root,$Evidence) {
     if ((Get-FileHash -LiteralPath (Join-Path $Root 'obj/project.assets.json') -Algorithm SHA256).Hash -cne $metadata.AssetsSha256) {
         throw 'Assets diversi dalla build: ricompilare.'
     }
-    $expected=@('Operations.ps1','Provision-Remoting.ps1','OnlyTweakEndpoint.psm1','LocalDiagnostics.ps1')
+    $expected=@('LocalDiagnostics.ps1','LocalRemoting.ps1')
     if (@($Evidence.Scripts).Count -ne $expected.Count) { throw 'Risorse script incomplete.' }
     foreach ($name in $expected) {
         $script=@($Evidence.Scripts | Where-Object Name -CEQ $name)
         if ($script.Count -ne 1) { throw 'Risorsa script assente/duplicata.' }
         $bytes=[Convert]::FromBase64String($script[0].Content)
         $hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))
-        $source=@($current | Where-Object Name -CEQ ('scripts/enterprise/'+$name))
+        $source=@($current | Where-Object Name -CEQ ('scripts/local/'+$name))
         if ($hash -cne $script[0].Sha256 -or $hash -cne $source[0].Sha256) { throw ('Risorsa incorporata diversa dal sorgente: '+$name) }
     }
 }

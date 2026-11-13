@@ -17,8 +17,6 @@ namespace OnlyTweakWindows
     internal sealed class WorkerMessage
     {
         public string Kind { get; set; } = "";
-        public OperationRequest Request { get; set; }
-        public EnvironmentProfile Profile { get; set; }
         public StepResult Result { get; set; }
         public string Identity { get; set; } = "";
         public string LocalAction { get; set; } = "";
@@ -50,20 +48,18 @@ namespace OnlyTweakWindows
         }
         public void Dispose() { stream.Dispose(); writes.Dispose(); }
     }
-    internal sealed class CustomerSession : IDisposable
+    internal sealed class ElevatedSession : IDisposable
     {
         private NamedPipeServerStream server;
         private PipeChannel channel;
         private Process process;
         private readonly SemaphoreSlim gate=new SemaphoreSlim(1,1);
-        public EnvironmentProfile Profile { get; private set; }
         public string Identity { get; private set; }
         public bool Elevated { get; private set; }
         private bool disposed;
-        public static async Task<CustomerSession> Start(EnvironmentProfile profile,bool alternate,bool elevated=false,IntPtr owner=default)
+        public static async Task<ElevatedSession> Start()
         {
-            profile.Validate();
-            CustomerSession session=new CustomerSession {Profile=profile.Copy(),Elevated=elevated};
+            ElevatedSession session=new ElevatedSession {Elevated=true};
             string pipe="OnlyTweak-"+Guid.NewGuid().ToString("N");
             PipeSecurity security=new PipeSecurity();
             security.SetAccessRuleProtection(true,false);
@@ -76,19 +72,17 @@ namespace OnlyTweakWindows
             try
             {
                 string executable=Environment.ProcessPath;
-                string args="--worker "+pipe+" "+Environment.ProcessId+" "+(elevated ? "local" : "network");
+                string args="--worker "+pipe+" "+Environment.ProcessId+" "+"local";
                 string identity=EnvironmentInfo.Account;
-                if (alternate) session.process=WindowsCredentials.Start(executable,args,owner,out identity);
-                else session.process=Process.Start(new ProcessStartInfo(executable,args) {
-                    UseShellExecute=elevated,Verb=elevated ? "runas" : "",CreateNoWindow=!elevated,
-                    WorkingDirectory=Path.GetDirectoryName(executable)
+                session.process=Process.Start(new ProcessStartInfo(executable,args) {
+                    UseShellExecute=true,Verb="runas",WorkingDirectory=Path.GetDirectoryName(executable)
                 });
                 using (CancellationTokenSource timeout=new CancellationTokenSource(TimeSpan.FromSeconds(45)))
                     await session.server.WaitForConnectionAsync(timeout.Token);
                 if (!GetNamedPipeClientProcessId(session.server.SafePipeHandle,out uint client) || client!=session.process.Id)
                     throw new IOException("Processo sessione non riconosciuto.");
                 session.channel=new PipeChannel(session.server);
-                await session.channel.Send(new WorkerMessage {Kind="bind",Profile=session.Profile,Identity=identity});
+                await session.channel.Send(new WorkerMessage {Kind="bind",Identity=identity});
                 using (CancellationTokenSource timeout=new CancellationTokenSource(TimeSpan.FromSeconds(15))) {
                     WorkerMessage ready=await session.channel.Receive(timeout.Token);
                     if (ready.Kind!="ready") throw new IOException("Sessione non inizializzata.");
@@ -98,29 +92,13 @@ namespace OnlyTweakWindows
             }
             catch { session.Dispose(); throw; }
         }
-        public async Task<StepResult> Execute(OperationRequest request,CancellationToken token=default)
-        {
-            if (disposed) throw new ObjectDisposedException(nameof(CustomerSession));
-            if (Wire.Write(request.Profile)!=Wire.Write(Profile)) throw new InvalidOperationException("Il profilo è cambiato: riconnetti la sessione.");
-            await gate.WaitAsync(token);
-            try
-            {
-                await channel.Send(new WorkerMessage {Kind="execute",Request=request});
-                using (token.Register(()=> { if (!EnterpriseCatalog.Get(request.ActionId).IsChange) _=Cancel(); }))
-                {
-                    WorkerMessage response=await channel.Receive();
-                    if (response.Kind!="result" || response.Result==null || response.Result.OperationId!=request.OperationId)
-                        throw new IOException("Risposta sessione non valida.");
-                    return response.Result;
-                }
-            }
-            finally { gate.Release(); }
-        }
         private async Task Cancel()
         { try { await channel.Send(new WorkerMessage {Kind="cancel"}); } catch (IOException) { } catch (ObjectDisposedException) { } }
         public async Task<StepResult> ExecuteLocal(string actionId,bool readOnly=false,CancellationToken cancellation=default)
         {
             if (!Elevated) throw new InvalidOperationException("Sessione locale elevata richiesta.");
+            await gate.WaitAsync(cancellation);
+            try {
             bool diagnostic=readOnly || LocalOperationExecutor.IsDiagnostic(actionId);
             if(diagnostic) cancellation.ThrowIfCancellationRequested();
             await channel.Send(new WorkerMessage {Kind="local",LocalAction=actionId,LocalReadOnly=readOnly,LocalConfirmed=!readOnly && !diagnostic});
@@ -129,6 +107,7 @@ namespace OnlyTweakWindows
                 if (response.Kind!="result" || response.Result==null || response.Result.ActionId!=actionId) throw new IOException("Risposta locale non valida.");
                 return response.Result;
             }
+            } finally {gate.Release();}
         }
         public void Dispose()
         {
@@ -145,7 +124,7 @@ namespace OnlyTweakWindows
         {
             if (args.Length==0 || args[0]!="--worker") return false;
             if (args.Length!=4 || !args[1].StartsWith("OnlyTweak-",StringComparison.Ordinal) ||
-                !Int32.TryParse(args[2],out int parent) || (args[3]!="network" && args[3]!="local"))
+                !Int32.TryParse(args[2],out int parent) || args[3]!="local")
                 throw new ArgumentException("Avvio worker non valido.");
             Run(args[1],parent,args[3]=="local").GetAwaiter().GetResult();
             return true;
@@ -164,15 +143,12 @@ namespace OnlyTweakWindows
                 using (PipeChannel channel=new PipeChannel(pipe))
                 {
                     WorkerMessage bind=await channel.Receive().ConfigureAwait(false);
-                    if (bind.Kind!="bind" || bind.Profile==null) throw new IOException("Profilo sessione mancante.");
-                    bind.Profile.Validate();
-                    string profile=Wire.Write(bind.Profile);
-                    string identity="Locale: "+EnvironmentInfo.Account+"; rete dichiarata: "+bind.Identity;
+                    if (bind.Kind!="bind") throw new IOException("Inizializzazione worker mancante.");
+                    string identity=EnvironmentInfo.Account;
                     await channel.Send(new WorkerMessage {Kind="ready",Identity=identity}).ConfigureAwait(false);
                     Task active=null;
                     CancellationTokenSource cancellation=null;
                     bool change=false;
-                    SessionSafety safety=new SessionSafety();
                     try
                     {
                         while (true)
@@ -198,38 +174,7 @@ namespace OnlyTweakWindows
                                 });
                                 continue;
                             }
-                            if (message.Kind!="execute" || message.Request==null || Wire.Write(message.Request.Profile)!=profile)
-                                throw new IOException("Richiesta estranea alla sessione.");
-                            ActionDefinition action=EnterpriseCatalog.Get(message.Request.ActionId);
-                            action.Validate(message.Request);
-                            try { safety.Authorize(message.Request); }
-                            catch (InvalidOperationException) {
-                                await channel.Send(new WorkerMessage {Kind="result",Result=new StepResult {
-                                    OperationId=message.Request.OperationId,ProfileId=bind.Profile.Id,ActionId=action.Id,
-                                    Target=message.Request.Target,Identity=identity,State=StepState.Unverified,
-                                    Summary="Rileggi prima lo stato: l'intervento precedente non è verificato.",ErrorCode="ReadBeforeRetryRequired"}});
-                                continue;
-                            }
-                            if (action.Elevated!=elevated) throw new InvalidOperationException("Tipo di worker non valido per questa operazione.");
-                            change=action.IsChange;
-                            if (elevated && change && !message.Request.Confirmed)
-                            {
-                                await channel.Send(new WorkerMessage {Kind="result",Result=new StepResult {
-                                    OperationId=message.Request.OperationId,ProfileId=bind.Profile.Id,ActionId=action.Id,State=StepState.Cancelled,
-                                    Target=message.Request.Target,Identity=identity,Summary="Operazione annullata." }}).ConfigureAwait(false);
-                                continue;
-                            }
-                            CancellationToken token=cancellation.Token;
-                            active=Task.Run(async ()=> {
-                                StepResult result;
-                                try { result=await new EnterpriseExecutor().ExecuteAsync(message.Request,identity,token).ConfigureAwait(false); }
-                                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException || ex is InvalidOperationException)
-                                { result=new StepResult {OperationId=message.Request.OperationId,ProfileId=bind.Profile.Id,ActionId=action.Id,
-                                    Target=message.Request.Target,Identity=identity,State=action.IsChange ? StepState.Unverified : StepState.Unavailable,
-                                    Summary="Operazione non verificata: audit o prerequisiti non disponibili.",ErrorCode=ex.GetType().Name}; }
-                                safety.Observe(message.Request,result);
-                                await channel.Send(new WorkerMessage {Kind="result",Result=result}).ConfigureAwait(false);
-                            });
+                            throw new IOException("Messaggio non consentito al worker locale.");
                         }
                     }
                     catch (IOException) { if (!change) cancellation?.Cancel(); }
@@ -240,12 +185,6 @@ namespace OnlyTweakWindows
                 }
             }
         }
-        internal static string Preview(OperationRequest request) =>
-            "Cliente: "+request.Profile.Customer+"\nDominio: "+request.Profile.Domain+"\nTarget: "+
-            (EnterpriseCatalog.Get(request.ActionId).Elevated ? Environment.MachineName+" (computer locale)" : request.Target)+
-            "\nOperazione: "+EnterpriseCatalog.Get(request.ActionId).Title+
-            "\n"+String.Join("\n",request.Parameters.Select(p=>p.Key+": "+p.Value))+
-            "\nLa modifica può interrompere servizi o connessioni. Nessun riavvio automatico.";
         [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]
         private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe,out uint processId);
     }

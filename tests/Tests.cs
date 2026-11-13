@@ -17,13 +17,13 @@ namespace OnlyTweakWindows
         [STAThread]
         private static int Main(string[] args)
         {
-            if(args.Length>1 && args[0]=="--native-fixture") return NativeFixture(args);
+
             if (WorkerHost.TryRun(args)) return 0;
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if(args.Contains("--features")) {NewFeatureTests();if(args.Contains("--ui")) UiTests();if(args.Contains("--render")) Render();Console.WriteLine("RISULTATO: "+passed+" superati, "+failed+" falliti.");return failed==0 ? 0 : 1;}
-            NewFeatureTests(); EnterpriseTests(); SpoolTests(); OtherTests(); SecurityTests(); CompatibilityTests();
+            NewFeatureTests(); ConsumerTests(); SpoolTests(); OtherTests(); SecurityTests(); CompatibilityTests();
             if (args.Contains("--render")) Test("render UI senza esecuzione azioni",Render);
             if (args.Contains("--read-only")) Test("servizi reali: sole letture",ReadOnlySmoke);
             if (args.Contains("--artifact")) Test("EXE: architettura, manifest e dipendenze",VerifyArtifact);
@@ -134,7 +134,7 @@ namespace OnlyTweakWindows
             Test("catalogo: azioni e identificatori univoci",delegate {
                 AppServices app=TestApp(); HashSet<string> ids=new HashSet<string>();
                 foreach (MenuDefinition menu in new[] { app.Catalog.Network,app.Catalog.Maintenance,app.Catalog.Tools,app.Catalog.Spool }) ValidateMenu(menu,ids);
-                Assert(ids.Count==35,"Catalogo incompleto: attese 35 azioni, trovate " + ids.Count + ".");
+                Assert(ids.Count==34,"Catalogo incompleto: attese 34 azioni, trovate " + ids.Count + ".");
                 Assert(ids.Contains("tools.computer") && ids.Contains("tools.programs") && !ids.Contains("accounts.close") && !ids.Contains("accounts.portal"),"Collegamenti mancanti.");
             });
             Test("catalogo: righe brevi, glifi e testo completo conservato",delegate {
@@ -244,8 +244,7 @@ namespace OnlyTweakWindows
         }
         private static void UiTestCases()
         {
-            NavigationTests(); DirectoryUiTests();
-            AppClosureUiTests();
+            NavigationTests(); ConsumerUiTests();
             Test("UI: apertura diretta senza finestre intermedie",delegate {
                 AppServices app=TestApp(); int executed=0,count=Application.OpenForms.Count; string status="";
                 ActionSpec action=new ActionSpec("test.launch","Proprietà simulate","Test","Simulazione",delegate(Action<string> log) { executed++; log("apertura simulata"); }) { OpensWindow=true };
@@ -376,7 +375,7 @@ namespace OnlyTweakWindows
                 using (MainForm form=new MainForm(app))
                 {
                     Assert(Descendants(form).OfType<Label>().Any(l=>l.Text.StartsWith("ONLYTWEAK",StringComparison.Ordinal)),"Eyebrow assente nella home.");
-                    Assert(Descendants(form).OfType<DarkButton>().Count(b=>b.Glyph!=null && b.GlyphColor==Theme.Accent)==8,"Tessere home senza icona.");
+                    Assert(Descendants(form).OfType<DarkButton>().Count(b=>b.Glyph!=null && b.GlyphColor==Theme.Accent)==6,"Tessere home senza icona.");
                 }
                 using (MenuDialog form=new MenuDialog(app,app.Catalog.Spool))
                 {
@@ -473,7 +472,7 @@ namespace OnlyTweakWindows
                     new HomePage(app),new MenuDialog(app,app.Catalog.Network),new ConfirmDialog("Svuota tutte le code locali",app.Catalog.Spool.Actions[2].Confirmation),
                     new PrinterDialog(app,false),new MenuDialog(app,app.Catalog.Network),new MenuDialog(app,app.Catalog.Network.Children[1]),
                     new MenuDialog(app,app.Catalog.Maintenance.Children[0]),new OperationDialog(app,app.Catalog.Spool.Actions[2]),new MenuDialog(app,app.Catalog.Tools),
-                    new EnterpriseDialog(false,false),new ProfileEditor(EnterpriseProfile()),
+                    new GamingPage(app),new AdvancedPage(app),new RemotingPage(app),new AwakePage(app),
                     new TextDialog("Output di esempio",String.Join("\n",Enumerable.Range(1,80).Select(i=>"Riga di esempio "+i+"  "+new string('x',125)).ToArray())),
                     protections,new MenuDialog(app,app.Catalog.Spool),new TweakPage(app),new DiagnosticParametersPage(app,app.Catalog.Network.AllActions().Single(a=>a.Id=="local.tcp"))
                 };
@@ -502,11 +501,14 @@ namespace OnlyTweakWindows
                         foreach (StackPanel panel in Descendants(form).OfType<StackPanel>()) panel.ScrollTo(0);
                         form.Update();
                         CaptureForm(form,Path.Combine(folder,String.Format("{0:00}-{1:0}.png",i,scale*100)));
-                        if (form is EnterpriseDialog enterprise) {
-                            foreach(var section in enterprise.Sections.ToArray()) {
-                                enterprise.OpenSection(section);Application.DoEvents();
-                                CaptureForm(enterprise.Navigation.Current,Path.Combine(folder,"enterprise-"+section.Text.Replace(" ","-")+"-"+(scale*100).ToString("0")+".png"));
-                                var back=enterprise.Navigation.BackAsync();PumpUntil(()=>back.IsCompleted);back.GetAwaiter().GetResult();
+                        if(form is GamingPage) {
+                            var selector=Descendants(form).OfType<ComboBox>().Single(c=>c.AccessibleName=="Livello gaming");
+                            foreach(int level in new[]{1,2}) {
+                                selector.SelectedIndex=level;Application.DoEvents();form.PerformLayout();
+                                foreach(StackPanel panel in Descendants(form).OfType<StackPanel>()) {panel.PerformLayout();panel.ScrollTo(0);}
+                                CaptureForm(form,Path.Combine(folder,"gaming-level-"+(level+1)+"-"+(scale*100).ToString("0")+".png"));
+                                foreach(StackPanel panel in Descendants(form).OfType<StackPanel>()) panel.ScrollTo(Int32.MaxValue);
+                                CaptureForm(form,Path.Combine(folder,"gaming-level-"+(level+1)+"-bottom-"+(scale*100).ToString("0")+".png"));
                             }
                         }
                         if (form is SecurityDialog || (form is MenuDialog && i==11))
@@ -518,7 +520,6 @@ namespace OnlyTweakWindows
                     }
                 }
             }
-            RenderProfiles(folder);
             Console.WriteLine("Rendering: " + folder);
         }
         private static void CaptureForm(Control source,string path)

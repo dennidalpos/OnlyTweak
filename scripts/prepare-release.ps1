@@ -30,7 +30,7 @@ if ($CertificateThumbprint) {
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'artifacts/build-evidence/publish.json') -Encoding utf8
 }
 $signature=Get-AuthenticodeSignature -LiteralPath $exe
-if ($RequireSigned -and $signature.Status -ne 'Valid') { throw 'Firma valida obbligatoria per la consegna aziendale.' }
+if ($RequireSigned -and $signature.Status -ne 'Valid') { throw 'Firma valida obbligatoria per la consegna firmata.' }
 $build=Get-OnlyTweakPublishedBuild $root
 $folder=Join-Path $root 'artifacts\delivery\2.0.0'
 [void][IO.Directory]::CreateDirectory($folder)
@@ -40,7 +40,7 @@ $manifest=[ordered]@{
     authenticodeStatus="$($signature.Status)"; runtimeTarget='net10.0-windows/win-x64'; selfContained=$true
     runtimePacks=@($build.Evidence.Metadata.RuntimePacks); dependencies=@($build.Evidence.Metadata.Dependencies)
     embeddedScripts=$scriptSignatures; buildEvidenceSha256=$build.EvidenceSha256; buildEvidence=$build.Evidence.Metadata
-    qualification='Local build/tests only. Domain lab, OS matrix, signing and customer pilot tracked separately.'
+    qualification='Local fixtures/UI/read-only checks only. Real tweak writes, WinRM connectivity, OS matrix, physical DPI and signing require separate qualification.'
 }
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $folder 'manifest.json') -Encoding utf8
 Copy-Item -LiteralPath $exe -Destination (Join-Path $folder 'OnlyTweakWindows.exe') -Force

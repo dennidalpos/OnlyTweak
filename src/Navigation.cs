@@ -11,8 +11,10 @@ namespace OnlyTweakWindows
     {
         internal NavigationService Navigation { get; }
         private bool closing,approved;
+        private readonly AppServices app;
         internal MainForm(AppServices app,DarkPage initial=null)
         {
+            this.app=app;
             Text="OnlyTweakWindows"; Icon=AppIcon.Value; BackColor=Theme.Background;
             Font=new Font("Segoe UI",10F); AutoScaleDimensions=new SizeF(96,96); AutoScaleMode=AutoScaleMode.Dpi;
             ClientSize=new Size(960,760); MinimumSize=new Size(660,540); StartPosition=FormStartPosition.CenterScreen;
@@ -43,7 +45,7 @@ namespace OnlyTweakWindows
             if(keyData==(Keys.Alt|Keys.Left)) {_=Navigation.BackAsync();return true;}
             return base.ProcessCmdKey(ref msg,keyData);
         }
-        protected override void Dispose(bool disposing) {if(disposing) Navigation?.Dispose();base.Dispose(disposing);}
+        protected override void Dispose(bool disposing) {if(disposing) {Navigation?.Dispose();app.Awake.Dispose();}base.Dispose(disposing);}
     }
 
     internal sealed class NavigationService : IDisposable
@@ -55,7 +57,6 @@ namespace OnlyTweakWindows
         private readonly Dictionary<DarkPage,Control> focused=new();
         private readonly HashSet<DarkPage> leaving=new HashSet<DarkPage>();
         private readonly Dictionary<DarkPage,TaskCompletionSource<DialogResult>> presentations=new();
-        private EnterpriseDialog enterprise;
         internal DarkPage Current => stack[^1];
         internal int Depth => stack.Count;
         internal MainForm Window => host;
@@ -91,12 +92,6 @@ namespace OnlyTweakWindows
             var completion=new TaskCompletionSource<DialogResult>(TaskCreationOptions.RunContinuationsAsynchronously);
             presentations.Add(page,completion);Add(page);return completion.Task;
         }
-        internal void OpenEnterprise(bool technician)
-        {
-            enterprise??=new EnterpriseDialog {Persistent=true};
-            enterprise.ShowIndex(technician);Push(enterprise);
-            if(technician) enterprise.OpenSection(enterprise.Sections.ElementAt(1));
-        }
         internal async Task BackAsync()
         {
             DarkPage page=Current;
@@ -112,7 +107,7 @@ namespace OnlyTweakWindows
         }
         internal async Task<bool> CanCloseAsync()
         {
-            // Includes retained customer workspaces; no worker is lost behind another page.
+            // Includes retained pages; no worker is lost behind another page.
             foreach(DarkPage page in stack.AsEnumerable().Reverse().Concat(retained).Distinct().ToArray())
                 if(!await page.CanLeaveAsync(true)) return false;
             return true;

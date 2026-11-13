@@ -1,6 +1,10 @@
+# Historical enterprise edition â€” retired
+
+Preserved reference. These capabilities are not part of the current private-PC utility.
+
 # Enterprise architecture and qualification
 
-[Preserved Italian technical reference](ENTERPRISE.it.md) · [User guide](GUIDE.md)
+[Preserved Italian technical reference](../ENTERPRISE.it.md) Â· [User guide](../GUIDE.md)
 
 ## Processes and contracts
 
@@ -58,4 +62,4 @@ Machine-bound schema-2 checkpoints record generations/hashes under ProgramData w
 
 Sign scripts before building for AllSigned/App Control environments. Fixtures and local readonly checks do not qualify domain/DFS infrastructure, clean client machines, physical DPI, real printers, signed policy or enterprise pilot. Keep OT-ENT-LAB/OT-ENT-SIGN/OT-ENT-PILOT and host-VM tasks open until their specific evidence exists.
 
-The retained Italian reference preserves dated source consultations and prior technical receipts. They are not a fresh validation of every Microsoft policy/version. Current sources are the [project](../OnlyTweakWindows.csproj), [enterprise scripts](../scripts/enterprise/), [tests](../tests/) and their pinned dependencies.
+The retained Italian reference preserves dated source consultations and prior technical receipts. They are not a fresh validation of every Microsoft policy/version. Current sources are the [project](../../OnlyTweakWindows.csproj), enterprise scripts (`scripts/enterprise/`, retired), [tests](../../tests/) and their pinned dependencies.

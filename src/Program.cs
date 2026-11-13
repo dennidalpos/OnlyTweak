@@ -7,7 +7,7 @@ using System.Windows.Forms;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("windows10.0.17763")]
 [assembly: AssemblyTitle("OnlyTweakWindows")]
-[assembly: AssemblyDescription("Diagnostica e amministrazione aziendale Windows")]
+[assembly: AssemblyDescription("Personalizzazione e manutenzione del PC Windows")]
 [assembly: AssemblyProduct("OnlyTweakWindows")]
 [assembly: AssemblyVersion("2.0.0.0")]
 [assembly: AssemblyFileVersion("2.0.0.0")]

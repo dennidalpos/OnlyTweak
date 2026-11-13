@@ -9,28 +9,26 @@ namespace OnlyTweakWindows
 {
     internal sealed class HomePage : DarkPage
     {
-        public HomePage(AppServices app) : base("OnlyTweakWindows","Diagnostica di dominio e assistenza alle postazioni aziendali.")
+        public HomePage(AppServices app) : base("OnlyTweakWindows","Personalizza, configura e mantieni il tuo PC Windows.")
         {
             ClientSize=new Size(960,760);
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
-            stack.Controls.Add(Theme.Label(app.OS.Summary+"\n"+EnvironmentInfo.Account+"  ·  "+(LocalPrivilege.IsAdministrator ? "Amministratore locale" : "Utente standard"),Theme.Muted));
+            stack.Controls.Add(Theme.Label(app.OS.Summary+"\n"+app.DisplayIdentity+"  ·  "+(LocalPrivilege.IsAdministrator ? "Amministratore locale" : "Utente standard"),Theme.Muted));
             // Quattro righe da 88: le schede restano alte almeno quanto Theme.Card e la nota finale resta visibile al 100%.
             TableLayoutPanel grid=new TableLayoutPanel { Height=4*88,ColumnCount=2,RowCount=4,BackColor=Theme.Background,Margin=new Padding(0,10,0,14) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
             for (int i=0;i<4;i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,25F));
-            AddTile(grid,"Ambienti aziendali","Clienti, dominio, procedure e azioni help desk",Glyphs.Network,delegate { Navigation.OpenEnterprise(false); });
-            AddTile(grid,"Postazione tecnico","Prerequisiti, RSAT e predisposizione remota",Glyphs.Settings,delegate { Navigation.OpenEnterprise(true); });
-            if (app.Availability.File("winspool.drv")) AddTile(grid,"Stampanti","Stampanti, code e spooler",Glyphs.Print,delegate { Navigation.Push(new PrinterDialog(app)); });
+            AddTile(grid,"Personalizzazione","Desktop, Esplora file e comodità",Glyphs.Settings,delegate { Navigation.Push(new TweakPage(app)); });
+            AddTile(grid,"Gaming","Configurazione guidata a tre livelli",Glyphs.Apps,delegate { Navigation.Push(new GamingPage(app)); });
             if (app.Catalog.Network.AllActions().Any()) AddTile(grid,"Rete","Indirizzi, DNS e ripristino",Glyphs.Network,delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Network)); });
             if (app.Catalog.Maintenance.AllActions().Any()) AddTile(grid,"Manutenzione","Integrità Windows e spazio su disco",Glyphs.Repair,delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Maintenance)); });
-            if (app.Security.AvailableDefinitions(app.Availability).Any()) AddTile(grid,"Compatibilità e protezioni","Blocchi app, memoria e driver",Glyphs.Shield,delegate { Navigation.Push(new SecurityDialog(app)); });
-            AddTile(grid,"Tweak Windows","Esplora file e menu classico",Glyphs.Settings,delegate { Navigation.Push(new TweakPage(app)); });
-            Button tools=app.Catalog.Tools.AllActions().Any() ? AddTile(grid,"Strumenti Windows","Gestione computer, dispositivi e servizi",Glyphs.Apps,delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Tools)); }) : null;
+            if (app.Availability.File("winspool.drv")) AddTile(grid,"Stampanti","Stampanti, code e spooler",Glyphs.Print,delegate { Navigation.Push(new PrinterDialog(app)); });
+            Button tools=AddTile(grid,"Strumenti avanzati","Strumenti locali, WinRM e protezioni",Glyphs.Settings,delegate { Navigation.Push(new AdvancedPage(app)); });
             if (tools!=null && grid.Controls.Count%2==1) { grid.SetColumnSpan(tools,2); tools.Margin=new Padding(0,0,0,10); }
             grid.RowCount=Math.Max(1,(grid.Controls.Count+1)/2); grid.Height=grid.RowCount*88;
             grid.RowStyles.Clear(); for (int row=0;row<grid.RowCount;row++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,100F/grid.RowCount));
             stack.Controls.Add(grid);
-            Label note=Theme.Label("Seleziona cliente, identità e destinazione prima delle operazioni aziendali.\nElevazione richiesta soltanto per le operazioni locali che la richiedono.",Theme.Muted);
+            Label note=Theme.Label("Leggi anteprima e limiti prima di applicare una modifica.\nElevazione richiesta soltanto per le operazioni locali che la richiedono.",Theme.Muted);
             stack.Controls.Add(note);
             Footer.Controls.Add(Theme.Button("Cronologia",delegate { Navigation.Push(new TextDialog("Cronologia della sessione",app.History.Read(),Glyphs.History)); }));
         }
@@ -62,6 +60,12 @@ namespace OnlyTweakWindows
                 Label section=Theme.Section(child.Title,child.Glyph);
                 if (!String.IsNullOrEmpty(child.Detail)) { section.AccessibleDescription=child.Detail; Tips.SetToolTip(section,child.Detail); }
                 stack.Controls.Add(section); AddActions(stack,app,child);
+            }
+        }
+        internal static void AddLocalActions(StackPanel stack,DarkPage page,AppServices app,MenuDefinition menu) {
+            var status=Theme.Label("",Theme.Muted);stack.Controls.Add(status);
+            foreach(var action in menu.AllActions().Where(a=>a.Applicable)) {
+                var selected=action;stack.Controls.Add(ActionCard(action,async delegate {await ActionDispatcher.Invoke(page,app,selected,text=>status.Text=text);},page.Tips));
             }
         }
         private void AddActions(StackPanel stack,AppServices app,MenuDefinition menu)

@@ -49,7 +49,12 @@ namespace OnlyTweakWindows
         [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern IntPtr SendMessageTimeout(IntPtr hwnd,uint msg,IntPtr wParam,string lParam,uint flags,uint timeout,out UIntPtr result);
         [DllImport("shell32.dll")] private static extern void SHChangeNotify(uint eventId,uint flags,IntPtr first,IntPtr second);
     }
-    internal sealed record TweakDefinition(string Id,string Title,string Path,string Name,RegistryValueKind Kind,object Enabled,object Disabled,string On,string Off);
+    internal sealed record TweakDefinition(string Id,string Title,string Path,string Name,RegistryValueKind Kind,object Enabled,object Disabled,string On,string Off,string[] OtherPaths=null) {
+        internal string[] Paths=>new[]{Path}.Concat(OtherPaths??Array.Empty<string>()).ToArray();
+        internal string Source=>Id.StartsWith("desktop.",StringComparison.Ordinal) ?
+            "https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-desktop-icons-in-windows" :
+            "https://support.microsoft.com/en-us/windows/experience/fileexplorer/file-explorer-in-windows";
+    }
     internal sealed class StoredRegistryValue
     {
         public bool KeyExists {get;set;}
@@ -75,6 +80,8 @@ namespace OnlyTweakWindows
         public string Phase {get;set;}
         public StoredRegistryValue Original {get;set;}
         public StoredRegistryValue Last {get;set;}
+        public StoredRegistryValue[] AdditionalOriginal {get;set;}=Array.Empty<StoredRegistryValue>();
+        public StoredRegistryValue[] AdditionalLast {get;set;}=Array.Empty<StoredRegistryValue>();
         public string[] CreatedKeys {get;set;}=Array.Empty<string>();
     }
     internal sealed record CheckpointEnvelope(string Content,string Sha256);
@@ -96,6 +103,17 @@ namespace OnlyTweakWindows
             definitions.Add(new("extensions","Estensioni dei file",ExplorerPath,"HideFileExt",RegistryValueKind.DWord,0,1,"Mostra estensioni","Nascondi estensioni"));
             definitions.Add(new("hidden","File e cartelle nascosti",ExplorerPath,"Hidden",RegistryValueKind.DWord,1,2,"Mostra nascosti","Nascondi nascosti"));
             definitions.Add(new("launch","Apertura Esplora file",ExplorerPath,"LaunchTo",RegistryValueKind.DWord,1,2,"Questo PC","Home / Accesso rapido"));
+            definitions.Add(new("checkboxes","Caselle di selezione",ExplorerPath,"AutoCheckSelect",RegistryValueKind.DWord,1,0,"Mostra caselle","Nascondi caselle"));
+            definitions.Add(new("fullpath","Percorso completo nel titolo",@"Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState","FullPath",RegistryValueKind.DWord,1,0,"Mostra percorso","Nascondi percorso"));
+            const string desktop=@"Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\";
+            foreach(var icon in new[] {
+                ("thispc","Questo PC","{20D04FE0-3AEA-1069-A2D8-08002B30309D}"),
+                ("recycle","Cestino","{645FF040-5081-101B-9F08-00AA002F954E}"),
+                ("network","Rete","{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}"),
+                ("userfiles","File utente","{59031a47-3f72-44a7-89c5-5595fe6b30ee}"),
+                ("control","Pannello di controllo","{5399E694-6CE5-4D6C-8FCE-1D8870FDCBA0}")})
+                definitions.Add(new("desktop."+icon.Item1,icon.Item2,desktop+"NewStartPanel",icon.Item3,RegistryValueKind.DWord,0,1,
+                    "Mostra icona","Nascondi icona",new[]{desktop+"ClassicStartMenu"}));
             Definitions=definitions.ToArray();
         }
         private TweakDefinition Get(string id) => Definitions.SingleOrDefault(d=>d.Id==id)??throw new ArgumentException("Tweak non disponibile.");
@@ -114,9 +132,12 @@ namespace OnlyTweakWindows
             TweakDefinition definition=Get(id);
             if(checkpoint.SchemaVersion!=1 || checkpoint.Machine!=machine || checkpoint.Sid!=sid || checkpoint.Id!=id ||
                 checkpoint.Original==null || checkpoint.Last==null || checkpoint.CreatedKeys==null ||
-                checkpoint.CreatedKeys.Any(k=>!definition.Path.Equals(k,StringComparison.OrdinalIgnoreCase) && !definition.Path.StartsWith(k+"\\",StringComparison.OrdinalIgnoreCase)) ||
+                checkpoint.CreatedKeys.Any(k=>!definition.Paths.Any(p=>p.Equals(k,StringComparison.OrdinalIgnoreCase) || p.StartsWith(k+"\\",StringComparison.OrdinalIgnoreCase))) ||
                 checkpoint.CreatedKeys.Any(k=>k.Length<"Software\\".Length)) throw new FormatException("Checkpoint estraneo o non valido.");
-            if(checkpoint.Original.Exists) _=checkpoint.Original.Value();
+            if(checkpoint.AdditionalOriginal==null || checkpoint.AdditionalLast==null || checkpoint.AdditionalOriginal.Length!=definition.Paths.Length-1 ||
+                checkpoint.AdditionalLast.Length!=definition.Paths.Length-1 || checkpoint.AdditionalOriginal.Any(v=>v==null) || checkpoint.AdditionalLast.Any(v=>v==null))
+                throw new FormatException("Checkpoint composto non valido.");
+            foreach(var value in new[]{checkpoint.Original,checkpoint.Last}.Concat(checkpoint.AdditionalOriginal).Concat(checkpoint.AdditionalLast)) if(value.Exists) _=value.Value();
             if(checkpoint.Phase is not ("Applied" or "Restored")) throw new InvalidOperationException("Checkpoint incompleto: recupero manuale richiesto.");
             return checkpoint;
         }
@@ -135,6 +156,7 @@ namespace OnlyTweakWindows
         internal string Describe(string id)
         {
             var definition=Get(id);var current=store.Read(definition.Path,definition.Name);
+            if(definition.Paths.Skip(1).Any(p=>!StoredRegistryValue.Capture(current).Matches(store.Read(p,definition.Name)))) return "Configurazione mista: valori desktop differenti.";
             if(!current.ValueExists) return "Valore assente: comportamento predefinito di Windows.";
             if(current.Kind==definition.Kind && Equals(current.Data,definition.Enabled)) return id=="classic" ? "Tweak presente nel registro; effetto visivo da verificare." : definition.On;
             if(definition.Disabled!=null && current.Kind==definition.Kind && Equals(current.Data,definition.Disabled)) return definition.Off;
@@ -143,7 +165,7 @@ namespace OnlyTweakWindows
         internal string Preview(string id,bool? enabled)
         {
             var definition=Get(id);var checkpoint=Load(id);
-            return "Account desktop corrente · HKCU\\"+definition.Path+"\nValore: "+(definition.Name.Length==0 ? "(Predefinito)" : definition.Name)+
+            return "Account desktop corrente Â· HKCU\\"+definition.Path+"\nValore: "+(definition.Name.Length==0 ? "(Predefinito)" : definition.Name)+
                 "\nStato: "+Describe(id)+"\nRichiesta: "+(enabled.HasValue ? enabled.Value ? definition.On : definition.Off : checkpoint==null ? "Nessun checkpoint disponibile" : "Ripristina precedente")+
                 (id=="classic" ? "\nTweak non ufficiale, dipendente dalla build. La verifica riguarda soltanto il registro." : "")+
                 "\nPotrebbe essere necessario disconnettersi. Nessun riavvio automatico di Explorer.";
@@ -153,28 +175,35 @@ namespace OnlyTweakWindows
             authorize();var definition=Get(id);SecureFiles.EnsureDirectory(folder);
             string leasePath=Path.Combine(folder,"checkpoint.lock");if(File.Exists(leasePath)) CheckPlain(leasePath);
             using var lease=new FileStream(leasePath,FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
-            var current=store.Read(definition.Path,definition.Name);var checkpoint=Load(id);
-            if(checkpoint!=null && !checkpoint.Last.Matches(current)) throw new InvalidOperationException("Modifica esterna: operazione bloccata.");
-            if(id=="classic" && current.ValueExists && (current.Kind!=RegistryValueKind.String || !Equals(current.Data,"")))
+            var paths=definition.Paths;var current=paths.Select(p=>store.Read(p,definition.Name)).ToArray();var checkpoint=Load(id);
+            if(checkpoint!=null && !new[]{checkpoint.Last}.Concat(checkpoint.AdditionalLast).Zip(current).All(v=>v.First.Matches(v.Second)))
+                throw new InvalidOperationException("Modifica esterna: operazione bloccata.");
+            if(id=="classic" && current[0].ValueExists && (current[0].Kind!=RegistryValueKind.String || !Equals(current[0].Data,"")))
                 throw new InvalidOperationException("Registrazione COM personalizzata: operazione bloccata.");
-            if(enabled==null && checkpoint==null) throw new InvalidOperationException("Nessun checkpoint disponibile.");
-            if(enabled.HasValue && (checkpoint==null || checkpoint.Phase=="Restored")) {
+            if(!enabled.HasValue && checkpoint==null) throw new InvalidOperationException("Nessun checkpoint disponibile.");
+            if(checkpoint==null) {
                 var missing=new List<string>();
-                for(string path=definition.Path;path.Contains('\\') && !store.Read(path,definition.Name).KeyExists;path=path[..path.LastIndexOf('\\')]) missing.Add(path);
-                checkpoint=new TweakCheckpoint {Machine=machine,Sid=sid,Id=id,Original=StoredRegistryValue.Capture(current),CreatedKeys=missing.ToArray()};
+                foreach(string path in paths) for(string key=path;key.StartsWith(@"Software\",StringComparison.OrdinalIgnoreCase);) {
+                    if(!store.Read(key,"").KeyExists) missing.Add(key);
+                    int slash=key.LastIndexOf('\\');if(slash<0) break;key=key[..slash];
+                }
+                checkpoint=new TweakCheckpoint {Machine=machine,Sid=sid,Id=id,Original=StoredRegistryValue.Capture(current[0]),
+                    AdditionalOriginal=current.Skip(1).Select(StoredRegistryValue.Capture).ToArray(),CreatedKeys=missing.Distinct(StringComparer.OrdinalIgnoreCase).ToArray()};
             }
-            StoredRegistryValue expected=enabled.HasValue ? StoredRegistryValue.Capture(new RegistryValueState {
-                KeyExists=true,ValueExists=enabled.Value || definition.Disabled!=null,Kind=definition.Kind,Data=enabled.Value ? definition.Enabled : definition.Disabled}) : checkpoint.Original;
-            checkpoint.Phase="Pending";checkpoint.Last=expected;Save(checkpoint); // Recovery must exist before writing HKCU.
-            authorize(); // Recheck desktop ownership immediately before the write.
-            if(!StoredRegistryValue.Capture(current).Matches(store.Read(definition.Path,definition.Name))) throw new InvalidOperationException("Modifica concorrente del registro.");
-            if(expected.Exists) store.Set(definition.Path,definition.Name,expected.Value(),expected.Kind);
-            else store.DeleteValue(definition.Path,definition.Name);
-            if(!expected.Matches(store.Read(definition.Path,definition.Name))) throw new IOException("Rilettura del registro divergente.");
-            if(!expected.Exists) {
+            StoredRegistryValue[] originals=new[]{checkpoint.Original}.Concat(checkpoint.AdditionalOriginal).ToArray();
+            StoredRegistryValue Desired(int index) => !enabled.HasValue ? originals[index] : StoredRegistryValue.Capture(new RegistryValueState {
+                ValueExists=enabled.Value || definition.Disabled!=null,Kind=definition.Kind,Data=enabled.Value ? definition.Enabled : definition.Disabled});
+            var desired=Enumerable.Range(0,paths.Length).Select(Desired).ToArray();
+            checkpoint.Last=desired[0];checkpoint.AdditionalLast=desired.Skip(1).ToArray();checkpoint.Phase=enabled.HasValue ? "Applying" : "Restoring";Save(checkpoint);
+            for(int i=0;i<paths.Length;i++) {
+                if(desired[i].Exists) store.Set(paths[i],definition.Name,desired[i].Value(),desired[i].Kind);
+                else store.DeleteValue(paths[i],definition.Name);
+                if(!desired[i].Matches(store.Read(paths[i],definition.Name))) throw new IOException("Rilettura non coerente: checkpoint incompleto.");
+            }
+            if(!enabled.HasValue) {
                 var others=Definitions.Where(d=>d.Id!=id).Select(d=>Load(d.Id)).Where(c=>c!=null).ToArray();
                 foreach(string key in checkpoint.CreatedKeys.Concat(others.SelectMany(c=>c.CreatedKeys)).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(k=>k.Length)) {
-                    bool shared=others.Any(c=>c.Phase=="Applied" && c.Last.Exists && Get(c.Id).Path.StartsWith(key,StringComparison.OrdinalIgnoreCase));
+                    bool shared=others.Any(c=>c.Phase=="Applied" && Get(c.Id).Paths.Any(p=>p.StartsWith(key,StringComparison.OrdinalIgnoreCase)));
                     if(!shared) store.DeleteKeyIfEmpty(key);
                 }
                 foreach(var prior in others) {
@@ -189,11 +218,11 @@ namespace OnlyTweakWindows
         internal ActionSpec Action(string id,bool? enabled)
         {
             var definition=Get(id);string title=enabled.HasValue ? enabled.Value ? definition.On : definition.Off : "Ripristina precedente";
-            var action=new ActionSpec("tweak."+id+"."+(enabled?.ToString()??"restore"),title,Preview(id,enabled),"Utente desktop corrente · HKCU",log=>Apply(id,enabled,log)) {Confirmation=Preview(id,enabled)};
+            var action=new ActionSpec("tweak."+id+"."+(enabled?.ToString()??"restore"),title,Preview(id,enabled),"Utente desktop corrente Â· HKCU",log=>Apply(id,enabled,log)) {Confirmation=Preview(id,enabled)};
             action.Observe=(log,token)=> {
-                var value=store.Read(definition.Path,definition.Name);var checkpoint=Load(id);
-                bool? satisfied=checkpoint==null ? null : checkpoint.Last.Matches(value);
-                return new LocalObservation(true,satisfied,StoredRegistryValue.Capture(value));
+                var values=definition.Paths.Select(p=>store.Read(p,definition.Name)).ToArray();var checkpoint=Load(id);
+                bool? satisfied=checkpoint==null ? null : new[]{checkpoint.Last}.Concat(checkpoint.AdditionalLast).Zip(values).All(v=>v.First.Matches(v.Second));
+                return new LocalObservation(true,satisfied,values.Select(StoredRegistryValue.Capture).ToArray());
             };
             return action;
         }
@@ -202,17 +231,25 @@ namespace OnlyTweakWindows
     {
         private readonly List<Action> refreshers=new();
         internal override void ResumePage() {foreach(var refresh in refreshers) refresh();}
-        internal TweakPage(AppServices app) : base("Tweak Windows","Personalizzazioni dell'utente desktop corrente, con recupero persistente.",Glyphs.Settings,null)
+        internal TweakPage(AppServices app) : base("Personalizzazione","Personalizzazioni dell'utente desktop corrente, con recupero persistente.",Glyphs.Settings,null)
         {
             StackPanel stack=new();Content.Controls.Add(stack);
-            foreach(var definition in app.Tweaks.Definitions) {
+            stack.Controls.Add(Theme.Button("ComoditÃ  e mantieni sveglio",delegate {Navigation.Push(new ConveniencePage(app));}));
+            foreach(var definition in app.Tweaks.Definitions.OrderBy(d=>d.Id.StartsWith("desktop.") ? 0 : 1)) {
                 stack.Controls.Add(Theme.Section(definition.Title,Glyphs.Settings));
+                stack.Controls.Add(Theme.Label("Utente corrente Â· senza elevazione Â· eventuale disconnessione\n"+
+                    "Fonte: "+(definition.Id.StartsWith("desktop.") ? "Microsoft Â· Icone desktop" : definition.Id=="classic" ? "Workaround registro non ufficiale" : "Impostazioni Esplora file"),Theme.Muted));
                 Label state=Theme.Label("",Theme.Muted);stack.Controls.Add(state);
                 void Refresh() {try {state.Text=app.Tweaks.Describe(definition.Id);} catch(Exception ex) {state.Text="Stato sconosciuto: "+ex.Message;}}
                 refreshers.Add(Refresh);Refresh();
+                stack.Controls.Add(Theme.Button("Fonte e dettagli",delegate {
+                    Navigation.Push(new TextDialog(definition.Title,"Fonte sulla funzione Windows:\n"+definition.Source+
+                        "\n\nLa scrittura diretta del registro richiede verifica sulla build in uso; la fonte non certifica il workaround.\n"+
+                        "Ambito: utente corrente. Potrebbe essere necessaria la disconnessione."));
+                }));
                 if(definition.Id=="classic") stack.Controls.Add(Theme.Label("Tweak non ufficiale: l'effetto dipende dalla build Windows 11.",Theme.Warning));
                 foreach(bool? enabled in new bool?[] {true,false,null}) {
-                    bool? choice=enabled;string title=choice.HasValue ? choice.Value ? definition.On : definition.Off : "Ripristina precedente";
+                    bool? choice=enabled;string title=choice.HasValue ? "Applica Â· "+(choice.Value ? definition.On : definition.Off) : "Ripristina precedente";
                     stack.Controls.Add(Theme.Button(title,async delegate {
                         try {await OperationDialog.Open(this,app,app.Tweaks.Action(definition.Id,choice));}
                         catch(Exception ex) {SetFeedback(ex.Message);}

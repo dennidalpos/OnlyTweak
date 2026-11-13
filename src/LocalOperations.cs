@@ -12,7 +12,7 @@ namespace OnlyTweakWindows
         private readonly IOperationAudit audit;
         private readonly HashSet<string> uncertain=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         internal LocalOperationExecutor(IOperationAudit audit=null) { this.audit=audit??new FileOperationAudit(); }
-        internal static bool IsDiagnostic(string id) => Array.IndexOf(LocalDiagnostics.Ids,id)>=0 || id is "spool.status" or "network.info" or "network.ipconfig" or "sfc.verify" or "dism.scan";
+        internal static bool IsDiagnostic(string id) => Array.IndexOf(LocalDiagnostics.Ids,id)>=0 || id is "spool.status" or "network.info" or "network.ipconfig" or "sfc.verify" or "dism.scan" or "winrm.inspect";
         private static string Key(ActionSpec action) => action.Id+"|"+action.Scope;
         internal void Authorize(ActionSpec action) {
             if(!action.IsDiagnostic && uncertain.Contains(Key(action))) throw new InvalidOperationException("Esito incerto: usa Rileggi stato prima di ripetere l'intervento.");
@@ -41,7 +41,7 @@ namespace OnlyTweakWindows
         {
             Authorize(action);
             StepResult result=NewResult(action);
-            OperationRequest request=new OperationRequest {OperationId=result.OperationId,Profile=LocalPrivilege.TechnicianProfile(),ActionId=action.Id,Target=result.Target,Confirmed=true};
+            OperationRequest request=new OperationRequest {OperationId=result.OperationId,ActionId=action.Id,Target=result.Target,Confirmed=true};
             if(action.Id=="printer.purge") request.Parameters["printer"]=action.Scope;
             BoundedText output=new BoundedText();
             void Write(string line) { output.Append((line??"")+Environment.NewLine);log(line); }
@@ -82,7 +82,7 @@ namespace OnlyTweakWindows
             }
             return result;
         }
-        private static StepResult NewResult(ActionSpec action) => new StepResult {OperationId=Guid.NewGuid(),ProfileId=LocalPrivilege.TechnicianProfile().Id,
+        private static StepResult NewResult(ActionSpec action) => new StepResult {OperationId=Guid.NewGuid(),
             ActionId=action.Id,Target=Environment.MachineName,Identity=EnvironmentInfo.Account,Started=DateTimeOffset.UtcNow,State=StepState.Unverified};
     }
 }

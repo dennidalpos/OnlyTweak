@@ -88,7 +88,7 @@ Prepara copia locale e manifest v2 con hash, pacchetti risolti alla compilazione
 
 Firmare ps1/psm1 **prima** di build.cmd. La modalità di sviluppo `OnlyTweakWindows.exe --release-inspect` restituisce su stdout soltanto metadati e risorse incorporate, senza UI, profili o operazioni sul sistema; non certifica la compatibilità dell'app su quel sistema. Le policy possono bloccare script non approvati: l'app lo segnala senza aggirarle.
 
-La build attuale è **non firmata**, destinata alla qualificazione in laboratorio. Documentazione tecnica e fonti Microsoft: [docs/ENTERPRISE.md](ENTERPRISE.md). Storico UI: [docs/UI-UX.md](UI-UX.md). Gate residui: tracker del progetto (non pubblicato).
+La build attuale è **non firmata**, destinata alla qualificazione in laboratorio. Documentazione tecnica e fonti Microsoft: [documentazione enterprise storica](history/ENTERPRISE-2026-11-13.md). Storico UI: [docs/UI-UX.md](UI-UX.md). Gate residui: tracker del progetto (non pubblicato).
 
 
 ## Licenza

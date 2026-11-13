@@ -1,68 +1,63 @@
 # OnlyTweak user guide
 
-[Italian reference](GUIDE.it.md)
+OnlyTweak is a portable utility for your own Windows PC. The UI is in Italian. Start with the [README](../README.md) for build and first use. Domain/customer administration is not part of this edition. [Preserved Italian history](GUIDE.it.md) describes an older edition.
 
-OnlyTweak is a portable Windows technician toolkit with an Italian interface, separate customer sessions, AD/workstation diagnostics, guided interventions and RSAT preparation. Current evidence is local fixtures and simulated environments. Real-domain, clean-VM, signing and pilot qualifications remain separate; this guide does not authorize those operations.
+## Personalization
 
-## First use
+Open **Personalizzazione**. Each setting shows its current configuration, user scope and recovery choices. Choose **Applica · …**, inspect the preview, then confirm. Cancel is the default confirmation action.
 
-Use the supplied self-contained x64 OnlyTweakWindows.exe. The UI does not require elevation on startup; privileged local actions use a separate elevated process. Check the current artifact manifest instead of treating historical package sizes as a requirement.
+Desktop icons can be selected independently: Questo PC, Cestino, Rete, File utente and Pannello di controllo. Both desktop registry branches are checkpointed together, preserving different original values and types. Windows themes and the desktop's own “show icons” choice can affect the final appearance.
 
-1. Open **Postazione tecnico** and inspect Windows PowerShell 5.1, modules and consoles.
-2. Inventory RSAT and install only the required AD/GPO/DNS/DFS/DHCP components from the approved corporate source or compatible local FoD folder. Windows Update/WSUS policy is not loosened.
-3. Under **Ambienti aziendali**, configure customer DNS domain, explicit DC, allowed FQDN targets and reviewed ordinary-user scope.
-4. Connect using the current identity or session-only network credentials from the Windows dialog. Starting a process does not validate the password; verify target authentication.
-5. Select a destination and procedure, inspect evidence and limits, then confirm any intended intervention.
-6. Export JSON/HTML only after reviewing content and destination.
+Explorer options include file extensions, hidden items, the start page, selection checkboxes and full title-bar path. Windows 11 also offers the unofficial classic-menu workaround. Rereading registry values does not prove the visual result. Sign out if needed; the app does not restart Explorer automatically.
 
-The single-window navigation preserves page state. Back/Alt+Left returns to the previous page; diagnostics must cancel and finish before leaving, while modifying actions must reach their outcome. Returning does not rerun an action. Customer sessions persist until explicit disconnect, profile change or application close. Native credential/file dialogs and external Microsoft tools keep their own identity/lifecycle.
+**Ripristina precedente** restores the captured values, including absence and original registry types. It stops if another tool changed the values or a prior operation left an incomplete checkpoint. Keep the checkpoint and inspect the issue; do not force repeated writes.
 
-## Local tweaks and diagnostics
+## Convenience and keep-awake
 
-The four HKCU tweaks control Windows 11 classic context menu, file extensions, hidden items and Explorer start location. Preview/confirmation, pre-change audit, checkpoint and reread are required. The classic menu is an unofficial workaround; a registry reread does not prove its visual effect on every Windows build.
+**Comodità e mantieni sveglio** contains guided Windows settings for clipboard history, suggestions and app notifications. Opening Windows does not mark a task completed. Clipboard cloud synchronization is not activated by OnlyTweak.
 
-Restore uses machine/SID-bound checkpoints with original type/value/absence and ownership of created keys. Incomplete, changed or externally modified state needs review; no automatic reset or Explorer restart occurs. Checksums/ACLs are not immutable protection against the same user or an administrator. Old 1.x checkpoints are not automatically imported.
+**Mantieni sveglio** offers 15/30 minutes or 1/2/4/8 hours, with an optional display-on request. Starting replaces the app's earlier request after confirmation. The session continues while you navigate and ends on expiry, **Termina**, or app exit. It does not change the power plan or prevent deliberate sleep, lid actions or every device policy.
 
-Network technical diagnostics include four-request ping, DNS A/AAAA/CNAME, TCP-port checks, connections/PIDs, routes and WinHTTP proxy. Windows tools add identity/groups and user gpresult. Inputs are typed and allowlisted; normal diagnostics have timeout/cancellation and bounded output. They use the app's local identity, not customer-worker credentials. Missing modules, partial reads, negative tests and confirmed failures are distinct outcomes.
+## Gaming
 
-## Enterprise workflows
+The level selector shows a cumulative checklist, not an automatic “boost” button. Every operation remains an explicit choice.
 
-| Area | Supported behavior |
+| Level | Tasks |
 |---|---|
-| Common problems | Domain/DC, DNS, authentication/time, AD replication, GPO, SYSVOL and workstation signals |
-| Technician/RSAT | Component/module/policy inventory, selective preparation and external Microsoft consoles |
-| AD | Paged user/group/computer search, cross-DC comparison and selected ordinary-user actions |
-| DFS/replication | Partitions/partners, SMB namespaces/targets, directional DFSR samples, SYSVOL/NETLOGON |
-| Workstation | Computer policy, DNS cache, spooler, local member secure channel, network reset, SFC/DISM |
-| Remote preparation | Export Inspect/WhatIf/Apply/Undo, GPO instructions and JEA module; no implicit remote setup |
+| Base | Game Mode, recording in the background, monitor refresh rate, driver/update review |
+| Balanced | Base plus animation reduction, an existing power plan, startup-app review |
+| Advanced | All previous tasks plus per-game GPU, windowed optimizations, HAGS and VRR where supported |
 
-Queries validate the selected DC identity/domain and retain the actual server in results. There is no silent fallback to another DC. Target changes clear prior search/selection; user writes remain bound to the profile's explicit DC.
+Guided entries remain **Da completare nelle impostazioni Windows**. Hardware and driver support must be checked there. Windowed optimizations are a Windows 11 feature for the relevant DirectX 10/11 presentation modes; they are not a universal gaming switch.
 
-Independent diagnostic collections preserve successful reads when another source fails. Empty events do not establish health. Partial collection remains inconclusive, while a directly observed issue remains visible. Update JEA modules through the approved channel; do not infer availability from an older contract.
+Automatic animation changes preserve the original client/menu/combo-animation settings. Power-plan selection preserves the original active plan and does not create or delete plans. Restore is available per operation; external changes or missing original plans block automatic recovery.
 
-For interventions distinguish accepted request, completed execution and observed effect. Native success/reboot codes alone do not prove repair. After uncertainty use **Rileggi stato** before retrying. Diagnostic cancellation targets its own process tree; modifying repairs are not generically force-killed or rolled back.
+Compare the same game, scene and graphics settings before/after one change. Observe fluidity, heat, noise and stability. The app has no FPS benchmark and promises no gain. Security protections, updates, virtualization and Windows packages remain untouched by the gaming path.
 
-## Data and permissions
+## Local tools
 
-Profiles/audit/checkpoints live under LocalAppData/OnlyTweak. Reports can contain enterprise identities, names, addresses and paths. No automatic telemetry is provided; follow the customer's retention and sharing policy.
+**Rete** contains typed diagnostics and separately confirmed resets. A negative ping/TCP result alone does not prove a general failure. A missing command, incomplete output, cancellation and an observed negative result remain distinct.
 
-Only fixed catalog operations are exposed. There is no free shell, downloaded script or bypass of ExecutionPolicy/App Control/AppLocker. Windows/AD delegation remains the authorization boundary. Use reviewed ordinary-user OUs and exclude protected/service/custom privileged accounts; detection cannot identify every service account without SPN. New passwords use protected local transport, but managed-memory copies cannot be universally excluded.
+**Manutenzione** exposes Windows maintenance tools. Repairs can take time and are not force-cancelled as if they were read-only diagnostics. Network resets can interrupt connectivity and require a manual restart.
 
-Spool cleanup is limited to SPL/SHD at the first level of the verified standard spool path. Windows protection controls are read-only. Local audit is not immutable and does not replace central logging.
+**Stampanti** shows local/connected queues. Purging one selected queue differs from cleaning every local spool job. Global cleanup permanently affects jobs from all users; read the confirmation.
 
-## Compatibility and verification
+## Local PowerShell Remoting / WinRM
 
-The technician app targets Windows 10 build 17763+ and Windows 11 x64 Intel/AMD. Server host, ARM64 and x86 are excluded. Actual support lifecycle and enterprise qualification are separate from technical startup. Planned remote targets are Server 2019/2022/2025; 2016 requires separate qualification.
+Open **Strumenti avanzati → PowerShell Remoting / WinRM**. Merely opening the page changes nothing. **Verifica** reads the local configuration through an elevated worker.
 
-WinRM uses Kerberos, optionally valid HTTPS. No automatic CredSSP/Basic/unencrypted/wildcard TrustedHosts fallback exists. Secure-channel repair is local on the affected member with appropriate identity/elevation, not a DC or a remote second-hop operation.
+Select an interface, then **Abilita sulla LAN privata**. The worker requires a private connection profile, one eligible IPv4 address and an active private firewall with blocked unsolicited inbound traffic. Existing listeners, an existing OnlyTweak endpoint/rule, broad WinRM ingress or an active recovery checkpoint cause a conflict instead of being overwritten.
 
-~~~bat
-build.cmd
-test.cmd --artifact --ui --read-only --render
-~~~
+The app starts WinRM, binds an HTTP listener to the selected address, registers **OnlyTweak.Local** with an administrators/SYSTEM descriptor, and finally enables its dedicated private-subnet firewall rule on TCP 5985. It never calls the broad Enable-PSRemoting setup, changes client trust/authentication, enables every endpoint or opens a public-network rule. Workgroup client trust, remote UAC/account behavior and end-to-end authentication are separate concerns; this page is not a client connection manager.
 
-Development needs Windows x64, .NET 10 SDK, PowerShell 7.4+ and dependency access. These public commands write repository-local dist/artifacts; managed agent runs use a verified isolated runtime copy. UI/render flags need an interactive desktop; simulated scaling is not physical DPI qualification. read-only adds host reads, not real AD access. GitHub Actions is currently disabled despite the retained workflow.
+**Ripristina precedente** compares the live configuration with the recorded state, removes only the recorded app-owned rule/endpoint/listener, and restores the original service state/start mode. External changes block recovery. A journaled partial operation can be undone when its live state matches; an unjournaled partial change requires manual review. Checkpoints are retained after restore.
 
-prepare-release.ps1 creates a local bundle/receipt with hashes, resolved packages/runtime and Authenticode state. Sign embedded scripts before building. Changed source/assets or externally changed executable invalidate an earlier receipt. RequireSigned checks actual bundled bytes; it does not install, publish or qualify an environment. Current unsigned artifacts remain for lab qualification.
+Actual administrative behavior, firewall isolation and authentication must be qualified in dedicated Windows VMs. Fixture success is not live WinRM qualification.
 
-See [architecture](ENTERPRISE.md), [UI behavior](UI-UX.md), [security](../SECURITY.md), and the proprietary [license](../LICENSE).
+## Data and recovery
+
+User audit/checkpoints: `%LOCALAPPDATA%\OnlyTweak`. Administrator WinRM checkpoint: `%PROGRAMDATA%\OnlyTweak\LocalRemoting`. Existing customer-profile data is not loaded, imported or removed. Local logs may reveal device/user information; review before sharing.
+
+Back/Alt+Left returns without rerunning an action. Leaving a diagnostic cancels it and waits; modifying operations must reach their outcome. **Rileggi stato** is required after uncertainty before retrying; rereading alone does not prove repair.
+
+See [technical details and sources](TECHNICAL.md), [UI qualification](UI-UX.md), [security](../SECURITY.md) and [license](../LICENSE).
