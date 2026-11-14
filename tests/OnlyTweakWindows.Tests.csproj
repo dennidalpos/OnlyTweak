@@ -13,6 +13,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode>true</RestoreLockedMode>
     <BaseOutputPath>../artifacts/tests/</BaseOutputPath>
   </PropertyGroup>
   <ItemGroup>

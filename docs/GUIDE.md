@@ -1,32 +1,32 @@
 # OnlyTweak user guide
 
-OnlyTweak is a portable utility for your own Windows PC. The UI is in Italian. Start with the [README](../README.md) for build and first use. Domain/customer administration is not part of this edition. [Preserved Italian history](GUIDE.it.md) describes an older edition.
+Use this guide to find features in the Italian interface and understand what happens when you run them. For setup and a first walkthrough, see the [README](../README.md#quick-start).
 
 ## Personalization
 
-Open **Personalizzazione**. Each setting shows its current configuration, user scope and recovery choices. Choose **Applica · …**, inspect the preview, then confirm. Cancel is the default confirmation action.
+Open **Personalizzazione**. Find the setting and read its current configuration and scope. Choose the relevant **Applica** button, then read the preview before selecting **Conferma**. **Annulla** is the default action.
 
 Desktop icons can be selected independently: Questo PC, Cestino, Rete, File utente and Pannello di controllo. Both desktop registry branches are checkpointed together, preserving different original values and types. Windows themes and the desktop's own “show icons” choice can affect the final appearance.
 
-Explorer options include file extensions, hidden items, the start page, selection checkboxes and full title-bar path. Windows 11 also offers the unofficial classic-menu workaround. Rereading registry values does not prove the visual result. Sign out if needed; the app does not restart Explorer automatically.
+Explorer options include file extensions, hidden items, the start page, selection checkboxes and full title-bar path. Windows 11 also offers the unofficial classic-menu workaround. Check the result in Explorer or on the desktop after the app reports the new setting. If the change is not visible, sign out and back in. Explorer stays open during the operation.
 
 **Ripristina precedente** restores the captured values, including absence and original registry types. It stops if another tool changed the values or a prior operation left an incomplete checkpoint. Keep the checkpoint and inspect the issue; do not force repeated writes.
 
 ## Convenience and keep-awake
 
-**Comodità e mantieni sveglio** contains guided Windows settings for clipboard history, suggestions and app notifications. Opening Windows does not mark a task completed. Clipboard cloud synchronization is not activated by OnlyTweak.
+From **Personalizzazione**, open **Comodità e mantieni sveglio**. Choose **Apri impostazioni** on a clipboard history, suggestions or notifications entry to open the relevant Windows page. Make and verify your choice in Windows. The OnlyTweak entry stays marked **Da completare nelle impostazioni Windows**. Clipboard cloud synchronization stays under your control in Windows.
 
-**Mantieni sveglio** offers 15/30 minutes or 1/2/4/8 hours, with an optional display-on request. Starting replaces the app's earlier request after confirmation. The session continues while you navigate and ends on expiry, **Termina**, or app exit. It does not change the power plan or prevent deliberate sleep, lid actions or every device policy.
+Open **Mantieni sveglio** on the same page. Choose 15 or 30 minutes, or 1, 2, 4 or 8 hours. Select **Mantieni acceso anche lo schermo** if you want to keep the display on. Choose **Avvia** and confirm to start or replace a session. The request continues while you navigate and ends when the timer expires, you confirm **Termina**, or the app closes. Windows still controls deliberate sleep, lid actions and device policy.
 
 ## Gaming
 
-The level selector shows a cumulative checklist, not an automatic “boost” button. Every operation remains an explicit choice.
+Open **Gaming** and choose a level. Each level includes the entries from the previous levels. Choose individual actions in the checklist.
 
 | Level | Tasks |
 |---|---|
-| Base | Game Mode, recording in the background, monitor refresh rate, driver/update review |
-| Balanced | Base plus animation reduction, an existing power plan, startup-app review |
-| Advanced | All previous tasks plus per-game GPU, windowed optimizations, HAGS and VRR where supported |
+| **Base** | Game Mode, recording in the background, monitor refresh rate, driver/update review |
+| **Bilanciato** (Balanced) | Base plus animation reduction, an existing power plan, startup-app review |
+| **Avanzato** (Advanced) | All previous tasks plus per-game GPU, windowed optimizations, HAGS and VRR where supported |
 
 Guided entries remain **Da completare nelle impostazioni Windows**. Hardware and driver support must be checked there. Windowed optimizations are a Windows 11 feature for the relevant DirectX 10/11 presentation modes; they are not a universal gaming switch.
 
@@ -36,11 +36,13 @@ Compare the same game, scene and graphics settings before/after one change. Obse
 
 ## Local tools
 
-**Rete** contains typed diagnostics and separately confirmed resets. A negative ping/TCP result alone does not prove a general failure. A missing command, incomplete output, cancellation and an observed negative result remain distinct.
+In **Rete**, open **Ping**, **Risoluzione DNS** or **Test porta TCP**. Enter a fully qualified DNS name. For DNS, choose **A**, **AAAA** or **CNAME**. For TCP, enter a port from 1 to 65535. **Avvia diagnosi** runs the check. Use **Annulla diagnosi** to stop it. A negative result describes the selected check from the current PC.
 
-**Manutenzione** exposes Windows maintenance tools. Repairs can take time and are not force-cancelled as if they were read-only diagnostics. Network resets can interrupt connectivity and require a manual restart.
+**Ripristino rete** contains separate actions for the DNS cache, Winsock and TCP/IP. Winsock and TCP/IP resets can interrupt connectivity and require a manual restart. Before resetting TCP/IP, record any static IP, gateway and DNS settings you may need to re-enter.
 
-**Stampanti** shows local/connected queues. Purging one selected queue differs from cleaning every local spool job. Global cleanup permanently affects jobs from all users; read the confirmation.
+In **Manutenzione → Verifica e riparazione**, choose **SFC · verifica** or **DISM · analizza componenti** to check Windows. Repairs have separate buttons and a confirmation. Let a repair finish and read the tool's summary.
+
+In **Stampanti**, select a printer and choose **Apri coda** to view its jobs. **Annulla lavori…** targets that printer's jobs. **Spooler… → Svuota tutte le code locali** permanently removes local spool jobs for all users.
 
 ## Local PowerShell Remoting / WinRM
 
@@ -58,6 +60,6 @@ Actual administrative behavior, firewall isolation and authentication must be qu
 
 User audit/checkpoints: `%LOCALAPPDATA%\OnlyTweak`. Administrator WinRM checkpoint: `%PROGRAMDATA%\OnlyTweak\LocalRemoting`. Existing customer-profile data is not loaded, imported or removed. Local logs may reveal device/user information; review before sharing.
 
-Back/Alt+Left returns without rerunning an action. Leaving a diagnostic cancels it and waits; modifying operations must reach their outcome. **Rileggi stato** is required after uncertainty before retrying; rereading alone does not prove repair.
+**Indietro** or **Alt+Left** returns to the previous page without rerunning an action. Leaving a running diagnostic requests cancellation and waits for it to finish. Let a modifying operation reach its outcome before navigating away. If a retry is blocked because the outcome is uncertain, use **Rileggi stato** and review the reread before trying again.
 
-See [technical details and sources](TECHNICAL.md), [UI qualification](UI-UX.md), [security](../SECURITY.md) and [license](../LICENSE).
+See the [UI screenshots](UI-UX.md#screenshots), [technical details and sources](TECHNICAL.md), [security](../SECURITY.md) and [license](../LICENSE).

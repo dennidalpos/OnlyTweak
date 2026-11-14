@@ -19,6 +19,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode>true</RestoreLockedMode>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <BaseOutputPath>artifacts/build/</BaseOutputPath>
   </PropertyGroup>

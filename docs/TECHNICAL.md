@@ -4,7 +4,7 @@ The main process runs as the desktop user. A separate elevated process accepts o
 
 ## Local operations
 
-ActionSpec connects previews, applicability, native execution and observations. LocalOperationExecutor records the request before execution and the final outcome afterward. Incomplete pre-reads block changes; unavailable final audit, truncated output or uncertain effects remain unverified. A complete reread is required before retrying an uncertain action.
+`ActionSpec` defines a local operation, including applicability, execution and any state observation. For a modifying operation with an observer, `LocalOperationExecutor` audits the request, reads the initial state, runs the operation and records its outcome. An incomplete initial read blocks the change. If the outcome is unverified, a complete reread is required before the app permits a retry of that action and scope in the current session.
 
 Registry settings preserve original value type/absence, created-key ownership and machine/user identity. Desktop icon settings capture both desktop branches. API preferences have separate persistent checkpoints. Checksums detect accidental corruption, not malicious rewriting by the same user or an administrator. Keep-awake is scoped to a dedicated thread and releases its execution-state request in finally.
 
