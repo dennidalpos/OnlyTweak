@@ -123,7 +123,7 @@ namespace OnlyTweakWindows
         private static void ConsumerUiTests() {
             Test("UI privata: home senza dominio e livelli gaming selezionabili",()=> {
                 var app=TestApp();using var host=new MainForm(app);ShowPage(host);
-                var titles=Descendants(host).OfType<DarkButton>().Where(b=>b.GlyphColor==Theme.Accent && b.Glyph!=null).Select(b=>b.Text).ToArray();
+                var titles=Descendants(host).OfType<DarkButton>().Where(b=>b.OpensArea && b.Glyph!=null).Select(b=>b.Text).ToArray();
                 Assert(new[]{"Personalizzazione","Gaming","Rete","Manutenzione","Stampanti","Strumenti avanzati"}.All(t=>titles.Contains(t)),"Home privata incompleta.");
                 host.Navigation.Push(new GamingPage(app));var levels=Descendants(host.Navigation.Current).OfType<ComboBox>().Single(b=>b.AccessibleName=="Livello gaming");
                 levels.SelectedIndex=2;Assert(Descendants(host.Navigation.Current).OfType<Button>().Any(b=>b.Text=="Ripristina precedente"),"Opzioni automatiche assenti.");

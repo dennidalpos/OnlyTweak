@@ -1,8 +1,15 @@
 # PowerShell 7.4+: Authenticode -Content preserves the embedded UTF-8 script bytes.
 Set-StrictMode -Version 3
+function Get-OnlyTweakNoticeFiles([string]$Root) {
+    foreach ($name in @('LICENSE','CREDITS.md','NOTICE.md')) { Get-Item -LiteralPath (Join-Path $Root $name) -ErrorAction Stop }
+    $licenses=@(Get-ChildItem -LiteralPath (Join-Path $Root 'licenses') -File -Recurse -ErrorAction Stop)
+    if (-not $licenses.Count) { throw 'Testi di licenza di terze parti assenti.' }
+    $licenses
+}
 function Get-OnlyTweakSourceFiles([string]$Root) {
     $files=@(Get-ChildItem -LiteralPath (Join-Path $Root 'src') -Filter '*.cs' -File -Recurse)
     $files+=@(Get-ChildItem -LiteralPath (Join-Path $Root 'scripts\local') -File | Where-Object Extension -in '.ps1','.psm1')
+    $files+=@(Get-OnlyTweakNoticeFiles $Root)
     foreach ($name in @('OnlyTweakWindows.csproj','app.manifest','packages.lock.json','global.json','assets/OnlyTweak.ico',
         'build.cmd','scripts/write-build-evidence.ps1','scripts/ReleaseEvidence.psm1','scripts/prepare-release.ps1')) {
         $files+=Get-Item -LiteralPath (Join-Path $Root $name)
@@ -65,4 +72,4 @@ function Get-OnlyTweakPublishedBuild([string]$Root) {
     Assert-OnlyTweakBuild $Root $inspection.Value
     [pscustomobject]@{Exe=$exe;ExeSha256=$hash;EvidenceSha256=$inspection.Sha256;Evidence=$inspection.Value}
 }
-Export-ModuleMember -Function Get-OnlyTweakSourceFiles,Invoke-OnlyTweakInspection,Assert-OnlyTweakBuild,Get-OnlyTweakPublishedBuild
+Export-ModuleMember -Function Get-OnlyTweakNoticeFiles,Get-OnlyTweakSourceFiles,Invoke-OnlyTweakInspection,Assert-OnlyTweakBuild,Get-OnlyTweakPublishedBuild

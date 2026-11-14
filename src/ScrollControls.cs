@@ -131,13 +131,7 @@ namespace OnlyTweakWindows
                     DarkButton card=child as DarkButton;
                     if (card!=null && !String.IsNullOrEmpty(card.Description))
                     {
-                        using (Font title=new Font(card.Font,FontStyle.Bold))
-                        using (Font detail=new Font(card.Font.FontFamily,Math.Max(8F,card.Font.Size-1F)))
-                        {
-                            int textWidth=Math.Max(1,target-card.Padding.Horizontal-20);
-                            int detailHeight=TextRenderer.MeasureText(card.Description,detail,new Size(textWidth,Int32.MaxValue),TextFormatFlags.WordBreak|TextFormatFlags.NoPrefix).Height;
-                            card.Height=Math.Max(74,card.Padding.Vertical+6+title.Height+4+detailHeight);
-                        }
+                        card.Height=card.ContentHeight(target);
                     }
                 }
                 flow.ResumeLayout(true);

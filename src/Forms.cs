@@ -9,41 +9,77 @@ namespace OnlyTweakWindows
 {
     internal sealed class HomePage : DarkPage
     {
+        private bool arrangingTiles;
         public HomePage(AppServices app) : base("OnlyTweakWindows","Personalizza, configura e mantieni il tuo PC Windows.")
         {
             ClientSize=new Size(960,760);
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);
             stack.Controls.Add(Theme.Label(app.OS.Summary+"\n"+app.DisplayIdentity+"  ·  "+(LocalPrivilege.IsAdministrator ? "Amministratore locale" : "Utente standard"),Theme.Muted));
-            // Quattro righe da 88: le schede restano alte almeno quanto Theme.Card e la nota finale resta visibile al 100%.
+            // La griglia passa a una colonna quando titolo e descrizione richiedono più spazio.
             TableLayoutPanel grid=new TableLayoutPanel { Height=4*88,ColumnCount=2,RowCount=4,BackColor=Theme.Background,Margin=new Padding(0,10,0,14) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));
             for (int i=0;i<4;i++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,25F));
-            AddTile(grid,"Personalizzazione","Desktop, Esplora file e comodità",Glyphs.Settings,delegate { Navigation.Push(new TweakPage(app)); });
-            AddTile(grid,"Gaming","Configurazione guidata a tre livelli",Glyphs.Apps,delegate { Navigation.Push(new GamingPage(app)); });
-            if (app.Catalog.Network.AllActions().Any()) AddTile(grid,"Rete","Indirizzi, DNS e ripristino",Glyphs.Network,delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Network)); });
-            if (app.Catalog.Maintenance.AllActions().Any()) AddTile(grid,"Manutenzione","Integrità Windows e spazio su disco",Glyphs.Repair,delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Maintenance)); });
-            if (app.Availability.File("winspool.drv")) AddTile(grid,"Stampanti","Stampanti, code e spooler",Glyphs.Print,delegate { Navigation.Push(new PrinterDialog(app)); });
-            Button tools=AddTile(grid,"Strumenti avanzati","Strumenti locali, WinRM e protezioni",Glyphs.Settings,delegate { Navigation.Push(new AdvancedPage(app)); });
+            AddTile(grid,"Personalizzazione","Desktop, Esplora file e comodità",Glyphs.Personalize,AppArea.Personalization,delegate { Navigation.Push(new TweakPage(app)); });
+            AddTile(grid,"Gaming","Configurazione guidata a tre livelli",Glyphs.Gaming,AppArea.Gaming,delegate { Navigation.Push(new GamingPage(app)); });
+            if (app.Catalog.Network.AllActions().Any()) AddTile(grid,"Rete","Indirizzi, DNS e ripristino",Glyphs.Network,AppArea.Network,delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Network)); });
+            if (app.Catalog.Maintenance.AllActions().Any()) AddTile(grid,"Manutenzione","Integrità Windows e spazio su disco",Glyphs.Repair,AppArea.Maintenance,delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Maintenance)); });
+            if (app.Availability.File("winspool.drv")) AddTile(grid,"Stampanti","Stampanti, code e spooler",Glyphs.Print,AppArea.Printers,delegate { Navigation.Push(new PrinterDialog(app)); });
+            Button tools=AddTile(grid,"Strumenti avanzati","Strumenti locali, WinRM e protezioni",Glyphs.Tools,AppArea.Advanced,delegate { Navigation.Push(new AdvancedPage(app)); });
             if (tools!=null && grid.Controls.Count%2==1) { grid.SetColumnSpan(tools,2); tools.Margin=new Padding(0,0,0,10); }
             grid.RowCount=Math.Max(1,(grid.Controls.Count+1)/2); grid.Height=grid.RowCount*88;
             grid.RowStyles.Clear(); for (int row=0;row<grid.RowCount;row++) grid.RowStyles.Add(new RowStyle(SizeType.Percent,100F/grid.RowCount));
             stack.Controls.Add(grid);
+            grid.SizeChanged+=delegate { ArrangeTiles(grid); };
+            grid.Layout+=delegate { ArrangeTiles(grid); };
+            ArrangeTiles(grid);
             Label note=Theme.Label("Leggi anteprima e limiti prima di applicare una modifica.\nElevazione richiesta soltanto per le operazioni locali che la richiedono.",Theme.Muted);
             stack.Controls.Add(note);
-            Footer.Controls.Add(Theme.Button("Cronologia",delegate { Navigation.Push(new TextDialog("Cronologia della sessione",app.History.Read(),Glyphs.History)); }));
+            Footer.Controls.Add(Theme.NavigationButton("Cronologia",delegate { Navigation.Push(new TextDialog("Cronologia della sessione",app.History.Read(),Glyphs.History,AppArea.Neutral)); }));
         }
-        private static Button AddTile(TableLayoutPanel grid,string title,string description,string glyph,EventHandler clicked)
+        private static Button AddTile(TableLayoutPanel grid,string title,string description,string glyph,AppArea area,EventHandler clicked)
         {
             int column=grid.Controls.Count%2,row=grid.Controls.Count/2;
-            DarkButton button=(DarkButton)Theme.Card(title,description,clicked,glyph); button.GlyphColor=Theme.Accent;
+            DarkButton button=(DarkButton)Theme.Card(title,description,clicked,glyph); button.OpensArea=true; button.Area=area; button.GlyphColor=AreaPalette.For(area).Accent;
             button.Dock=DockStyle.Fill; button.Margin=new Padding(column==0 ? 0 : 6,0,column==0 ? 6 : 0,10);
             grid.Controls.Add(button,column,row); return button;
+        }
+        private void ArrangeTiles(TableLayoutPanel grid)
+        {
+            if(arrangingTiles) return;
+            var tiles=grid.Controls.OfType<DarkButton>().ToArray();
+            if(tiles.Length==0) return;
+            float scale=tiles[0].VisualScale;
+            int columns=grid.Width<760*scale ? 1 : 2;
+            int rows=(tiles.Length+columns-1)/columns,gap=(int)Math.Ceiling(12*scale);
+            arrangingTiles=true;
+            grid.SuspendLayout();
+            try {
+                foreach(var tile in tiles) grid.SetColumnSpan(tile,1);
+                grid.ColumnCount=columns; grid.RowCount=rows;
+                grid.ColumnStyles.Clear();grid.RowStyles.Clear();
+                for(int i=0;i<columns;i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100F/columns));
+                int height=0;
+                for(int row=0;row<rows;row++) {
+                    int rowHeight=0;
+                    for(int col=0;col<columns;col++) {
+                        int i=row*columns+col;if(i>=tiles.Length) break;
+                        var tile=tiles[i];bool full=columns==2 && i==tiles.Length-1 && tiles.Length%2==1;
+                        grid.SetColumnSpan(tile,1);grid.SetCellPosition(tile,new TableLayoutPanelCellPosition(col,row));
+                        grid.SetColumnSpan(tile,full ? 2 : 1);
+                        tile.Margin=new Padding(col==0 ? 0 : gap/2,0,columns==2&&col==0&&!full ? gap/2 : 0,gap);
+                        int width=(full ? grid.Width : grid.Width/columns)-tile.Margin.Horizontal;
+                        rowHeight=Math.Max(rowHeight,tile.ContentHeight(width)+gap);
+                    }
+                    grid.RowStyles.Add(new RowStyle(SizeType.Absolute,rowHeight));height+=rowHeight;
+                }
+                if(grid.Height!=height) grid.Height=height;
+            } finally {grid.ResumeLayout(true);arrangingTiles=false;}
         }
     }
     internal sealed class TextDialog : DarkPage
     {
         public TextDialog(string title,string text) : this(title,text,Glyphs.Document) { }
-        public TextDialog(string title,string text,string glyph) : base(title,"Informazioni della sessione corrente.",glyph,null)
+        public TextDialog(string title,string text,string glyph,AppArea? area=null) : base(title,"Informazioni della sessione corrente.",glyph,null,area)
         {
             Content.Padding=new Padding(26,8,26,16); DarkOutput output=Theme.Output(); output.Text=text; Content.Controls.Add(output);
             Footer.Controls.Add(Theme.Button("Copia testo",delegate { if (output.TextLength>0 && !Theme.TryCopy(output.Text)) SetFeedback("Appunti occupati: impossibile copiare."); }));
@@ -51,7 +87,7 @@ namespace OnlyTweakWindows
     }
     internal sealed class MenuDialog : DarkPage
     {
-        public MenuDialog(AppServices app,MenuDefinition menu) : base(menu.Title,menu.Description,menu.Glyph,menu.Detail)
+        public MenuDialog(AppServices app,MenuDefinition menu) : base(menu.Title,menu.Description,menu.Glyph,menu.Detail,menu.Area)
         {
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack); AddActions(stack,app,menu);
             foreach (MenuDefinition child in menu.Children)
@@ -80,7 +116,9 @@ namespace OnlyTweakWindows
         // Card con glifo del tipo di azione e riga breve; il testo completo resta nel tooltip e per i lettori di schermo.
         internal static Button ActionCard(ActionSpec action,EventHandler clicked,ToolTip tips)
         {
-            Button card=Theme.Card(action.Title,action.CardText,clicked,Glyphs.ForAction(action)); card.AccessibleDescription=action.Description;
+            var card=(DarkButton)Theme.Card(action.Title,action.CardText,clicked,Glyphs.ForAction(action)); card.AccessibleDescription=action.Description;
+            card.OpensArea=action.OpensWindow; card.Caution=action.Confirmation!=null;
+            if(card.Caution) card.GlyphColor=Theme.Warning;
             if (action.CardText!=action.Description) tips.SetToolTip(card,action.Description);
             return card;
         }
@@ -102,6 +140,7 @@ namespace OnlyTweakWindows
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             status=Theme.Label("Scegli una stampante nell'elenco.",Theme.Muted);
             list=new DarkPrinterList { Dock=DockStyle.Fill,Margin=new Padding(0,0,0,12),Font=new Font("Segoe UI",10F) };
+            Area=AppArea.Printers;
             selection=Theme.Label("Nessuna stampante selezionata.",Theme.Accent);
             list.SelectedIndexChanged+=delegate {
                 PrinterItem item=list.SelectedItem as PrinterItem; selection.Text=item==null ? "Nessuna stampante selezionata." : item.Name;
@@ -118,7 +157,7 @@ namespace OnlyTweakWindows
             layout.SizeChanged+=delegate { selection.MaximumSize=new Size(Math.Max(100,layout.Width-60),0); status.MaximumSize=selection.MaximumSize; };
             layout.Controls.Add(status,0,0); layout.Controls.Add(list,0,1); layout.Controls.Add(selection,0,2); layout.Controls.Add(actions,0,3); Content.Controls.Add(layout);
             refresh=Theme.Button("Aggiorna",async delegate { await RefreshPrinters(); }); Footer.Controls.Add(refresh);
-            if (app.Catalog.Spool.AllActions().Any()) Footer.Controls.Add(Theme.Button("Spooler…",delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Spool)); }));
+            if (app.Catalog.Spool.AllActions().Any()) Footer.Controls.Add(Theme.NavigationButton("Spooler…",delegate { Navigation.Push(new MenuDialog(app,app.Catalog.Spool)); }));
             if (app.Availability.Target("ms-settings:printers")) Footer.Controls.Add(Theme.Button("Stampanti e scanner",async delegate { await ActionDispatcher.Invoke(this,app,app.Catalog.Settings("printers.settings","Stampanti e scanner","Impostazioni Windows","ms-settings:printers"),SetFeedback); }));
             if (app.Catalog.ClassicPrinterView.Applicable) Footer.Controls.Add(Theme.Button("Vista classica",async delegate { await ActionDispatcher.Invoke(this,app,app.Catalog.ClassicPrinterView,SetFeedback); }));
             if (loadOnShown) Shown+=async delegate { await RefreshPrinters(); };
@@ -126,7 +165,7 @@ namespace OnlyTweakWindows
         private void AddPrinterButton(FlowLayoutPanel actions,string title,string mode)
         {
             if (!app.Availability.File("rundll32.exe") || !app.Availability.File("printui.dll")) return;
-            Button button=Theme.Button(title,async delegate { await OpenPrinter(mode,title); });
+            Button button=Theme.NavigationButton(title,async delegate { await OpenPrinter(mode,title); });
             button.Enabled=false; selectedButtons.Add(button); actions.Controls.Add(button);
         }
         private async Task OpenPrinter(string mode,string title)

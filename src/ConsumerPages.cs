@@ -34,23 +34,23 @@ namespace OnlyTweakWindows
             stack.Controls.Add(Theme.Label(item.Description,Theme.Text));
             stack.Controls.Add(Theme.Label("Guidata · utente corrente · disponibilità da verificare in Windows",Theme.Muted));
             var state=Theme.Label(item.State,Theme.Muted);stack.Controls.Add(state);
-            var button=Theme.Button("Apri impostazioni",async delegate {
+            var button=Theme.NavigationButton("Apri impostazioni",async delegate {
                 var action=app.Catalog.Settings(item.Id,item.Title,item.Description,item.Target);
                 await ActionDispatcher.Invoke(page,app,action,text=>state.Text=text+"\n"+item.State);
             });
             button.Enabled=app.OS.Build>=item.MinimumBuild && app.Availability.Target(item.Target);
             if(!button.Enabled) state.Text="Non disponibile su questa versione o installazione Windows.";
             stack.Controls.Add(button);
-            stack.Controls.Add(Theme.Button("Fonte e dettagli",delegate {
+            stack.Controls.Add(Theme.NavigationButton("Fonte e dettagli",delegate {
                 page.Navigation.Push(new TextDialog(item.Title,item.Description+"\n\nFonte Microsoft:\n"+item.Source+"\n\n"+item.State));
             }));
         }
     }
     internal sealed class ConveniencePage : DarkPage
     {
-        internal ConveniencePage(AppServices app) : base("Comodità","Impostazioni personali e sessioni temporanee.",Glyphs.Settings,null) {
+        internal ConveniencePage(AppServices app) : base("Comodità","Impostazioni personali e sessioni temporanee.",Glyphs.Settings,null,AppArea.Personalization) {
             var stack=new StackPanel();Content.Controls.Add(stack);
-            stack.Controls.Add(Theme.Button("Mantieni sveglio",delegate {Navigation.Push(new AwakePage(app));}));
+            stack.Controls.Add(Theme.NavigationButton("Mantieni sveglio",delegate {Navigation.Push(new AwakePage(app));}));
             foreach(var item in ConsumerCatalog.Convenience) ConsumerCatalog.AddGuided(stack,this,app,item);
         }
     }
@@ -60,7 +60,7 @@ namespace OnlyTweakWindows
         private readonly StackPanel sections=new();
         private readonly List<Action> refreshers=new();
         internal override void ResumePage() {foreach(var refresh in refreshers) refresh();}
-        internal GamingPage(AppServices app) : base("Gaming","Tre livelli progressivi: scegli ogni opzione, confronta un cambiamento alla volta.",Glyphs.Settings,null) {
+        internal GamingPage(AppServices app) : base("Gaming","Tre livelli progressivi: scegli ogni opzione, confronta un cambiamento alla volta.",Glyphs.Gaming,null,AppArea.Gaming) {
             this.app=app;Content.Controls.Add(sections);
             sections.Controls.Add(Theme.Label("Nessun aumento FPS garantito. Defender, firewall, aggiornamenti e virtualizzazione restano invariati.",Theme.Muted));
             var levels=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Livello gaming"};
@@ -90,7 +90,7 @@ namespace OnlyTweakWindows
             void Refresh() {try {status.Text="Stato: "+app.Preferences.Describe(id);} catch(Exception ex) {status.Text="Stato sconosciuto: "+ex.Message;}}
             refreshers.Add(Refresh);
             Refresh();
-            sections.Controls.Add(Theme.Button("Fonte e dettagli",delegate {
+            sections.Controls.Add(Theme.NavigationButton("Fonte e dettagli",delegate {
                 Navigation.Push(new TextDialog(id=="power" ? "Piano energetico" : "Animazioni Windows",
                     "API Microsoft utilizzata per lettura e modifica:\n"+(id=="power" ?
                     "https://learn.microsoft.com/en-us/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme" :
@@ -110,7 +110,7 @@ namespace OnlyTweakWindows
     internal sealed class AwakePage : DarkPage
     {
         private readonly System.Windows.Forms.Timer timer=new() {Interval=1000};
-        internal AwakePage(AppServices app) : base("Mantieni sveglio","Sessione temporanea: termina alla scadenza o alla chiusura dell'app.",Glyphs.Settings,null) {
+        internal AwakePage(AppServices app) : base("Mantieni sveglio","Sessione temporanea: termina alla scadenza o alla chiusura dell'app.",Glyphs.Settings,null,AppArea.Personalization) {
             var stack=new StackPanel();Content.Controls.Add(stack);
             stack.Controls.Add(Theme.Label("Utente corrente · senza elevazione · nessun piano energetico modificato\nFonte: Microsoft SetThreadExecutionState / PowerToys Awake.",Theme.Muted));
             var duration=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Durata mantieni sveglio"};
@@ -135,10 +135,10 @@ namespace OnlyTweakWindows
     }
     internal sealed class AdvancedPage : DarkPage
     {
-        internal AdvancedPage(AppServices app) : base("Strumenti avanzati","Operazioni locali, accesso remoto in ingresso e informazioni sulle protezioni.",Glyphs.Settings,null) {
+        internal AdvancedPage(AppServices app) : base("Strumenti avanzati","Operazioni locali, accesso remoto in ingresso e informazioni sulle protezioni.",Glyphs.Tools,null,AppArea.Advanced) {
             var stack=new StackPanel();Content.Controls.Add(stack);
-            stack.Controls.Add(Theme.Button("PowerShell Remoting / WinRM",delegate {Navigation.Push(new RemotingPage(app));}));
-            if(app.Security.AvailableDefinitions(app.Availability).Any()) stack.Controls.Add(Theme.Button("Compatibilità e protezioni",delegate {Navigation.Push(new SecurityDialog(app));}));
+            stack.Controls.Add(Theme.NavigationButton("PowerShell Remoting / WinRM",delegate {Navigation.Push(new RemotingPage(app));}));
+            if(app.Security.AvailableDefinitions(app.Availability).Any()) stack.Controls.Add(Theme.NavigationButton("Compatibilità e protezioni",delegate {Navigation.Push(new SecurityDialog(app));}));
             MenuDialog.AddLocalActions(stack,this,app,app.Catalog.Tools);
         }
     }

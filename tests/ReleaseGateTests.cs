@@ -35,6 +35,17 @@ namespace OnlyTweakWindows
                 Assert(packs.Contains("Microsoft.NETCore.App.Runtime.win-x64") && packs.Contains("Microsoft.WindowsDesktop.App.Runtime.win-x64") &&
                     !packs.Any(p=>p.Contains("AspNetCore",StringComparison.Ordinal)),"Inventario usa download non inclusi nel bundle.");
                 Assert(!output.Contains(root,StringComparison.OrdinalIgnoreCase),"Percorso della postazione nei metadati consegnati.");
+                var expectedFiles=document.RootElement.GetProperty("SourceFiles").EnumerateArray().Select(s=>s.GetProperty("Name").GetString())
+                    .Where(n=>n is "LICENSE" or "CREDITS.md" or "NOTICE.md" || n.StartsWith("licenses/",StringComparison.Ordinal)).Append("OnlyTweakWindows.exe");
+                string publishedRoot=Path.Combine(root,"dist");
+                var actualFiles=Directory.GetFiles(publishedRoot,"*",SearchOption.AllDirectories).Select(p=>Path.GetRelativePath(publishedRoot,p).Replace('\\','/'));
+                Assert(expectedFiles.OrderBy(n=>n,StringComparer.Ordinal).SequenceEqual(actualFiles.OrderBy(n=>n,StringComparer.Ordinal)),"Inventario pubblicato diverso da EXE e avvisi associati alla build.");
+                foreach(var source in document.RootElement.GetProperty("SourceFiles").EnumerateArray()) {
+                    string name=source.GetProperty("Name").GetString();
+                    if(name is not ("LICENSE" or "CREDITS.md" or "NOTICE.md") && !name.StartsWith("licenses/",StringComparison.Ordinal)) continue;
+                    string published=Path.Combine(root,"dist",name);
+                    Assert(File.Exists(published) && File.ReadAllBytes(published).SequenceEqual(File.ReadAllBytes(Path.Combine(root,name))),"Avviso assente/diverso nella pubblicazione: "+name);
+                }
             });
             Test("consegna: EXE/sorgente/assets divergenti e script incorporato non firmato bloccati",()=> {
                 string root=Directory.GetCurrentDirectory(),fixture=Path.Combine(Path.GetTempPath(),"OnlyTweak-release-test-"+Guid.NewGuid().ToString("N"));
@@ -49,12 +60,17 @@ namespace OnlyTweakWindows
                     Copy("obj/project.assets.json"); Copy("dist/OnlyTweakWindows.exe"); Copy("artifacts/build-evidence/publish.json");
                     string delivery=Path.Combine(fixture,"artifacts/delivery/2.0.0");
                     owned.Add(Path.Combine(delivery,"manifest.json")); owned.Add(Path.Combine(delivery,"OnlyTweakWindows.exe"));
+                    var notices=evidence.RootElement.GetProperty("Metadata").GetProperty("SourceFiles").EnumerateArray()
+                        .Select(s=>s.GetProperty("Name").GetString()).Where(n=>n is "LICENSE" or "CREDITS.md" or "NOTICE.md" || n.StartsWith("licenses/",StringComparison.Ordinal)).ToArray();
+                    foreach(string notice in notices) owned.Add(Path.Combine(delivery,notice));
                     string prepare="& "+PsLiteral(Path.Combine(fixture,"scripts/prepare-release.ps1"))+" -RequireSigned; ";
                     string mock="function global:Get-AuthenticodeSignature { param($LiteralPath,$Content,$SourcePathOrExtension) [pscustomobject]@{Status='Valid'} }; ";
                     // Signature statuses are simulated. This proves the gate logic, not Authenticode qualification.
                     ReleasePowerShell(mock+prepare);
                     using (JsonDocument manifest=JsonDocument.Parse(File.ReadAllText(Path.Combine(delivery,"manifest.json"))))
                         Assert(manifest.RootElement.GetProperty("embeddedScripts").GetArrayLength()==2,"Firme risorse non inventariate.");
+                    foreach(string notice in notices)
+                        Assert(File.ReadAllBytes(Path.Combine(delivery,notice)).SequenceEqual(File.ReadAllBytes(Path.Combine(root,notice))),"Avviso non conservato nella consegna: "+notice);
                     void Reject(string script,string expected) {
                         string output=ReleasePowerShell(mock+"try { "+script+"; throw 'GateAcceptedInvalidFixture' } catch { if ($_.Exception.Message -notlike "+PsLiteral("*"+expected+"*")+") { throw }; 'REJECTED' }");
                         Assert(output.Contains("REJECTED",StringComparison.Ordinal),"Gate non fallito.");
@@ -62,6 +78,8 @@ namespace OnlyTweakWindows
                     string sourcePath=Path.Combine(fixture,"scripts/local/LocalDiagnostics.ps1"); byte[] original=File.ReadAllBytes(sourcePath);
                     File.AppendAllText(sourcePath,"\r\n# source signed/changed after publish\r\n");
                     Reject(prepare,"Sorgente diverso"); File.WriteAllBytes(sourcePath,original);
+                    string noticePath=Path.Combine(fixture,"NOTICE.md");original=File.ReadAllBytes(noticePath);
+                    File.AppendAllText(noticePath,"\nChanged notice\n");Reject(prepare,"Sorgente diverso");File.WriteAllBytes(noticePath,original);
                     string assetsPath=Path.Combine(fixture,"obj/project.assets.json"); original=File.ReadAllBytes(assetsPath);
                     File.AppendAllText(assetsPath," "); Reject(prepare,"Assets diversi"); File.WriteAllBytes(assetsPath,original);
                     string exePath=Path.Combine(fixture,"dist/OnlyTweakWindows.exe");

@@ -19,9 +19,10 @@ namespace OnlyTweakWindows
         {
 
             if (WorkerHost.TryRun(args)) return 0;
-            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+            Application.SetHighDpiMode(args.Contains("--render-only") || args.Contains("--render") ? HighDpiMode.SystemAware : HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            if(args.Contains("--render-only")) {Test("render UI senza esecuzione azioni",Render);return failed==0 ? 0 : 1;}
             if(args.Contains("--features")) {NewFeatureTests();if(args.Contains("--ui")) UiTests();if(args.Contains("--render")) Render();Console.WriteLine("RISULTATO: "+passed+" superati, "+failed+" falliti.");return failed==0 ? 0 : 1;}
             NewFeatureTests(); ConsumerTests(); SpoolTests(); OtherTests(); SecurityTests(); CompatibilityTests();
             if (args.Contains("--render")) Test("render UI senza esecuzione azioni",Render);
@@ -220,7 +221,7 @@ namespace OnlyTweakWindows
             }
             Assert(System.Diagnostics.FileVersionInfo.GetVersionInfo(path).FileMajorPart==2,"Versione prodotto errata.");
             Assert(new FileInfo(path).Length>10000000,"Runtime autonomo non incorporato.");
-            Assert(Directory.GetFiles(Path.GetDirectoryName(path)).Length==1,"La directory dist deve contenere soltanto l'EXE.");
+            Assert(Directory.GetFiles(Path.GetDirectoryName(path),"*.exe").Length==1 && Directory.GetFiles(Path.GetDirectoryName(path),"*.dll").Length==0,"La pubblicazione richiede binari esterni al singolo EXE.");
             ReleaseGateTests();
         }
         private static void PumpUntil(Func<bool> condition)
@@ -360,7 +361,7 @@ namespace OnlyTweakWindows
                 foreach (ActionSpec action in app.Catalog.Tools.Actions.Where(a=>!a.IsDiagnostic)) Assert(action.OpensWindow,"Strumento non diretto: "+action.Id);
                 Assert(app.Catalog.PrinterDialog("/p","Proprietà","Test").OpensWindow&&!app.Catalog.PurgePrinter("Test").OpensWindow,"Classificazione stampanti errata.");
             });
-            Test("UI: icone, testo completo nel tooltip ed eyebrow solo nella home",delegate {
+            Test("UI: icone, testo completo nel tooltip e intestazioni essenziali",delegate {
                 AppServices app=TestApp();
                 using (MenuDialog form=new MenuDialog(app,app.Catalog.Network))
                 {
@@ -374,8 +375,8 @@ namespace OnlyTweakWindows
                 }
                 using (MainForm form=new MainForm(app))
                 {
-                    Assert(Descendants(form).OfType<Label>().Any(l=>l.Text.StartsWith("ONLYTWEAK",StringComparison.Ordinal)),"Eyebrow assente nella home.");
-                    Assert(Descendants(form).OfType<DarkButton>().Count(b=>b.Glyph!=null && b.GlyphColor==Theme.Accent)==6,"Tessere home senza icona.");
+                    Assert(!Descendants(form).OfType<Label>().Any(l=>l.Text.StartsWith("ONLYTWEAK",StringComparison.Ordinal)),"Intestazione home ridondante.");
+                    Assert(Descendants(form).OfType<DarkButton>().Count(b=>b.Glyph!=null && b.OpensArea && b.Area!=null)==6,"Tessere home senza icona.");
                 }
                 using (MenuDialog form=new MenuDialog(app,app.Catalog.Spool))
                 {
@@ -479,6 +480,7 @@ namespace OnlyTweakWindows
                 for (int i=0;i<forms.Count;i++)
                 {
                     using (DarkPage form=forms[i])
+                    using (RenderScale renderScale=new RenderScale(scale))
                     using (MainForm renderHost=new MainForm(app,form is HomePage ? form : null))
                     {
                         foreach (DarkPrinterList list in Descendants(form).OfType<DarkPrinterList>())
@@ -494,17 +496,35 @@ namespace OnlyTweakWindows
                         IntPtr handle=form.Handle;
                         form.PerformLayout();
                         Application.DoEvents();
-                        if (scale!=1F) form.Scale(new SizeF(scale,scale));
+                        if (scale!=1F) {
+                            renderHost.AutoScaleMode=AutoScaleMode.None;form.AutoScaleMode=AutoScaleMode.None;
+                            renderScale.Prepare(renderHost);
+                            renderHost.Scale(new SizeF(scale,scale));
+                            renderScale.Apply(renderHost);
+                            renderHost.ClientSize=new Size((int)(960*scale),(int)(760*scale));
+                        }
                         form.PerformLayout();
                         foreach (Control child in Descendants(form)) child.PerformLayout();
                         foreach (FlowLayoutPanel panel in Descendants(form).OfType<FlowLayoutPanel>()) panel.AutoScrollPosition=Point.Empty;
                         foreach (StackPanel panel in Descendants(form).OfType<StackPanel>()) panel.ScrollTo(0);
                         form.Update();
                         CaptureForm(form,Path.Combine(folder,String.Format("{0:00}-{1:0}.png",i,scale*100)));
+                        if(form is HomePage) {
+                            Size previous=renderHost.ClientSize;
+                            renderHost.ClientSize=new Size((int)(660*scale),(int)(540*scale));Application.DoEvents();
+                            Assert(Descendants(form).OfType<DarkButton>().Where(b=>b.Glyph!=null && b.OpensArea).All(b=>b.Font.SizeInPoints>=10*scale-0.1F),"Caratteri ridimensionati nuovamente durante il rendering.");
+                            Assert(Descendants(form).OfType<DarkButton>().Where(b=>b.Glyph!=null && b.OpensArea).Select(b=>b.Left).Distinct().Count()==1,"Home minima non adattata alla scala "+scale+": "+String.Join(";",Descendants(form).OfType<DarkButton>().Where(b=>b.Glyph!=null && b.OpensArea).Select(b=>$"{b.Text} x={b.Left} w={b.Width} f={b.Font.Size} dpi={b.DeviceDpi} scale={b.VisualScale}")));
+                            CaptureForm(form,Path.Combine(folder,"home-min-"+(scale*100).ToString("0")+".png"));
+                            foreach(var panel in Descendants(form).OfType<StackPanel>()) panel.ScrollTo(Int32.MaxValue);
+                            Application.DoEvents();
+                            CaptureForm(form,Path.Combine(folder,"home-min-bottom-"+(scale*100).ToString("0")+".png"));
+                            renderHost.ClientSize=previous;Application.DoEvents();
+                        }
+
                         if(form is GamingPage) {
                             var selector=Descendants(form).OfType<ComboBox>().Single(c=>c.AccessibleName=="Livello gaming");
                             foreach(int level in new[]{1,2}) {
-                                selector.SelectedIndex=level;Application.DoEvents();form.PerformLayout();
+                                selector.SelectedIndex=level;renderScale.Apply(renderHost);Application.DoEvents();form.PerformLayout();
                                 foreach(StackPanel panel in Descendants(form).OfType<StackPanel>()) {panel.PerformLayout();panel.ScrollTo(0);}
                                 CaptureForm(form,Path.Combine(folder,"gaming-level-"+(level+1)+"-"+(scale*100).ToString("0")+".png"));
                                 foreach(StackPanel panel in Descendants(form).OfType<StackPanel>()) panel.ScrollTo(Int32.MaxValue);

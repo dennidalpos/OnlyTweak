@@ -23,6 +23,7 @@
     <BaseOutputPath>artifacts/build/</BaseOutputPath>
   </PropertyGroup>
   <ItemGroup>
+    <None Update="LICENSE;CREDITS.md;NOTICE.md;licenses/**/*" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Compile Include="src/**/*.cs" />
     <EmbeddedResource Include="assets/OnlyTweak.ico" LogicalName="OnlyTweak.Icon" />
     <EmbeddedResource Include="scripts/local/*.ps*" LogicalName="OnlyTweak.%(Filename)%(Extension)" />

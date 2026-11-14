@@ -55,7 +55,7 @@ namespace OnlyTweakWindows
             if(app.LastResult is StepResult result && result.ActionId.StartsWith("winrm.",StringComparison.Ordinal))
                 state.Text=result.State+" · "+result.Summary;
         }
-        internal RemotingPage(AppServices app) : base("PowerShell Remoting / WinRM","Abilita la ricezione sul PC locale, soltanto sulla LAN privata selezionata.",Glyphs.Network,null) {
+        internal RemotingPage(AppServices app) : base("PowerShell Remoting / WinRM","Abilita la ricezione sul PC locale, soltanto sulla LAN privata selezionata.",Glyphs.Network,null,AppArea.Advanced) {
             this.app=app;
             var stack=new StackPanel();Content.Controls.Add(stack);
             stack.Controls.Add(Theme.Label("Avanzata · richiede amministratore · Windows PowerShell 5.1\nFonte: Microsoft WSMan e Register-PSSessionConfiguration.\nNon configura altri PC, credenziali, TrustedHosts o autenticazione meno restrittiva.",Theme.Muted));

@@ -56,6 +56,8 @@ test.cmd --artifact --ui --read-only --render
 
 Build publishes `dist/OnlyTweakWindows.exe` with a hashed receipt at `artifacts/build-evidence/publish.json`. The custom executable harness uses synthetic backends and isolated PowerShell fixtures. `--artifact` checks the published bundle, so build first; `--ui` and `--render` need an interactive desktop. `--read-only` adds real host reads. Tests do not apply administrative changes to the development PC.
 
+For any permitted redistribution, keep the companion LICENSE, CREDITS.md, NOTICE.md and `licenses/` directory with the executable. Build and local delivery include them; the executable alone is not the complete redistribution package. [CREDITS](CREDITS.md) records the component licenses and Windows-runtime terms requiring owner/legal review.
+
 Build/test/render outputs stay in `dist/` and `artifacts/`. Restore may update `packages.lock.json` for the selected SDK; review that change separately.
 
 Prepare a local delivery bundle after a successful build:

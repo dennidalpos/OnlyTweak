@@ -45,4 +45,14 @@ $manifest=[ordered]@{
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $folder 'manifest.json') -Encoding utf8
 Copy-Item -LiteralPath $exe -Destination (Join-Path $folder 'OnlyTweakWindows.exe') -Force
 if ((Get-FileHash -LiteralPath (Join-Path $folder 'OnlyTweakWindows.exe') -Algorithm SHA256).Hash -cne $build.ExeSha256) { throw 'Copia EXE non coerente con il manifest.' }
+foreach ($notice in @(Get-OnlyTweakNoticeFiles $root)) {
+    $relative=[IO.Path]::GetRelativePath($root,$notice.FullName)
+    $destination=Join-Path $folder $relative
+    [void][IO.Directory]::CreateDirectory((Split-Path $destination))
+    Copy-Item -LiteralPath $notice.FullName -Destination $destination -Force
+    $bound=@($build.Evidence.Metadata.SourceFiles | Where-Object Name -CEQ $relative.Replace('\','/'))
+    if ($bound.Count -ne 1 -or (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -cne $bound[0].Sha256) {
+        throw ('Avviso di licenza diverso dalla build: '+$relative)
+    }
+}
 Write-Output ('Consegna locale: '+$folder+'; firma '+$signature.Status)

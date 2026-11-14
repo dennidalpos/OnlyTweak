@@ -13,7 +13,7 @@ namespace OnlyTweakWindows
         private readonly Button refresh;
         private bool loading;
         public SecurityDialog(AppServices app,bool loadOnShown=true) : base("Compatibilità e protezioni","Computer locale, tutti gli utenti.",Glyphs.Shield,
-            "Letture dello stato e accesso alle pagine Windows. Le modifiche si effettuano negli strumenti di sistema.")
+            "Letture dello stato e accesso alle pagine Windows. Le modifiche si effettuano negli strumenti di sistema.",AppArea.Advanced)
         {
             this.app=app;
             StackPanel stack=new StackPanel(); Content.Controls.Add(stack);

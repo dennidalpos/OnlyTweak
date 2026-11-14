@@ -125,6 +125,7 @@ namespace OnlyTweakWindows
         }
         private static void NavigationTests()
         {
+            AreaThemeTests();
 
 
             Test("navigazione: finestra unica, ritorno e conservazione parametri",()=> {

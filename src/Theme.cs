@@ -6,13 +6,28 @@ using System.Windows.Forms;
 
 namespace OnlyTweakWindows
 {
+    internal enum AppArea { Neutral, Personalization, Gaming, Network, Maintenance, Printers, Advanced }
+
+    internal sealed record AreaPalette(Color Surface,Color Hover,Color Pressed,Color Accent,Color Secondary)
+    {
+        private static readonly AreaPalette[] Palettes={
+            new(Theme.Surface,Theme.Raised,Color.FromArgb(20,28,39),Theme.Border,Theme.Muted),
+            new(Color.FromArgb(43,32,65),Color.FromArgb(57,43,83),Color.FromArgb(35,26,54),Color.FromArgb(197,170,255),Color.FromArgb(208,194,230)),
+            new(Color.FromArgb(62,29,48),Color.FromArgb(80,39,62),Color.FromArgb(50,23,39),Color.FromArgb(255,156,201),Color.FromArgb(234,192,211)),
+            new(Color.FromArgb(22,44,62),Color.FromArgb(29,58,80),Color.FromArgb(17,35,50),Color.FromArgb(115,202,255),Color.FromArgb(182,211,232)),
+            new(Color.FromArgb(23,47,39),Color.FromArgb(30,63,51),Color.FromArgb(18,38,31),Color.FromArgb(117,224,171),Color.FromArgb(183,219,202)),
+            new(Color.FromArgb(52,44,23),Color.FromArgb(69,58,30),Color.FromArgb(42,35,18),Color.FromArgb(239,211,117),Color.FromArgb(223,213,180)),
+            new(Color.FromArgb(60,36,25),Color.FromArgb(78,48,33),Color.FromArgb(49,28,20),Color.FromArgb(255,178,132),Color.FromArgb(235,201,180))
+        };
+        internal static AreaPalette For(AppArea area) => Palettes[(int)area];
+    }
     // Codici di Segoe Fluent Icons (compatibili con Segoe MDL2 Assets):
     // https://learn.microsoft.com/en-us/windows/apps/design/style/segoe-fluent-icons-font
     internal static class Glyphs
     {
         public const string Print="",Personalize="",Network="",Repair="",Shield="",Contact="",
             Apps="",History="",Info="",Warning="",OpenWindow="",Diagnostic="",Settings="",
-            Delete="",Document="";
+            Delete="",Document="",Gaming="\uE7FC",Tools="\uE90F";
         public static string ForAction(ActionSpec action)
         { return action.Confirmation!=null ? Warning : action.OpensWindow ? OpenWindow : Diagnostic; }
     }
@@ -45,6 +60,12 @@ namespace OnlyTweakWindows
             button.Description=description; button.AccessibleDescription=description; button.Glyph=glyph;
             button.AutoSize=false; button.Height=74; button.TextAlign=ContentAlignment.MiddleLeft;
             button.Padding=new Padding(16,8,16,8); button.Margin=new Padding(0,0,0,10); button.UseMnemonic=false;
+            return button;
+        }
+        public static Button NavigationButton(string text,EventHandler clicked,AppArea? area=null)
+        {
+            var button=(DarkButton)Button(text,clicked); button.OpensArea=true; button.Area=area;
+            button.TextAlign=ContentAlignment.MiddleLeft;
             return button;
         }
         public static Label Label(string text,Color color)
@@ -130,6 +151,7 @@ namespace OnlyTweakWindows
     // la finestra si sposta, si disattiva o si chiude: non resta sospeso sopra altre finestre.
     internal sealed class InfoIcon : Control
     {
+        internal Color FocusColor=Theme.Accent;
         internal const int DetailDuration=10000;
         private readonly ToolTip tips;
         private bool hovered;
@@ -156,45 +178,70 @@ namespace OnlyTweakWindows
         protected override void OnLeave(EventArgs e) { Invalidate(); HideDetail(); base.OnLeave(e); }
         protected override void OnPaint(PaintEventArgs e)
         {
-            Color color=Focused||hovered ? Theme.Accent : Theme.Muted;
+            Color color=Focused||hovered ? FocusColor : Theme.Muted;
             using (Font icon=Theme.IconFont(12F))
             {
                 if (icon!=null) TextRenderer.DrawText(e.Graphics,Glyphs.Info,icon,ClientRectangle,color,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPadding);
                 else TextRenderer.DrawText(e.Graphics,"i",Font,ClientRectangle,color,TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine);
             }
-            if (Focused&&ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(1,1,Width-3,Height-3),Theme.Accent,Theme.Background);
+            if (Focused&&ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(1,1,Width-3,Height-3),FocusColor,Theme.Background);
         }
     }
     internal sealed class DarkButton : Button
     {
         public string Description,Glyph;
         public bool Caution;
+        public bool OpensArea;
+        public AppArea? Area;
+        internal Color FocusColor=Theme.Accent;
         public Color GlyphColor=Theme.Muted;
         private bool hovered,pressed;
+        internal float VisualScale => Math.Max(DeviceDpi/96F,Font.Size/10F);
         public DarkButton() { SetStyle(ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.AllPaintingInWmPaint|ControlStyles.ResizeRedraw,true); }
+        internal int ContentHeight(int width)
+        {
+            using var title=new Font(Font,FontStyle.Bold);
+            using var detail=new Font(Font.FontFamily,Math.Max(8F,Font.Size-1F));
+            using var icon=String.IsNullOrEmpty(Glyph) ? null : Theme.IconFont(Font.SizeInPoints*1.6F);
+            int available=Math.Max(1,width-Padding.Horizontal-20-(OpensArea ? (int)Math.Ceiling(22*VisualScale) : 0)-(icon==null ? 0 : icon.Height+8));
+            int detailHeight=TextRenderer.MeasureText(Description??"",detail,new Size(available,Int32.MaxValue),TextFormatFlags.WordBreak|TextFormatFlags.NoPrefix).Height;
+            return Math.Max((int)Math.Ceiling(74*VisualScale),Padding.Vertical+6+title.Height+4+detailHeight);
+        }
         public override Size GetPreferredSize(Size proposedSize)
         {
             if (!String.IsNullOrEmpty(Description)) return base.GetPreferredSize(proposedSize);
             Size text=TextRenderer.MeasureText(Text,Font,Size.Empty,TextFormatFlags.SingleLine);
-            return new Size(Math.Max(MinimumSize.Width,text.Width+Padding.Horizontal+32),Math.Max(MinimumSize.Height,text.Height+Padding.Vertical+18));
+            return new Size(Math.Max(MinimumSize.Width,text.Width+Padding.Horizontal+(int)Math.Ceiling((OpensArea ? 60 : 32)*VisualScale)),Math.Max(MinimumSize.Height,text.Height+Padding.Vertical+18));
         }
         protected override void OnMouseEnter(EventArgs e) { hovered=true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hovered=false; pressed=false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { pressed=true; Invalidate(); base.OnMouseDown(e); }
         protected override void OnMouseUp(MouseEventArgs e) { pressed=false; Invalidate(); base.OnMouseUp(e); }
         protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnEnter(EventArgs e) { Invalidate(); base.OnEnter(e); }
+        protected override void OnLeave(EventArgs e) { pressed=false; Invalidate(); base.OnLeave(e); }
+        protected override void OnKeyDown(KeyEventArgs e) { if(e.KeyCode==Keys.Space) {pressed=true;Invalidate();} base.OnKeyDown(e); }
+        protected override void OnKeyUp(KeyEventArgs e) { pressed=false;Invalidate();base.OnKeyUp(e); }
+        internal AreaPalette Palette => AreaPalette.For(Area??AppArea.Neutral);
+        internal Color StateBackground(bool hover,bool down) => !Enabled ? Theme.Surface : OpensArea ? (down ? Palette.Pressed : hover ? Palette.Hover : Palette.Surface) :
+            down ? (BackColor==Theme.Accent ? Color.FromArgb(91,206,177) : Theme.Selection) : hover ? (BackColor==Theme.Accent ? Color.FromArgb(132,237,210) : Theme.Raised) : BackColor;
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(Parent==null ? Theme.Background : Parent.BackColor); e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
-            Color emphasis=Caution ? Theme.Warning : Theme.Accent;
-            Color background=BackColor;
-            if (Enabled&&(hovered||pressed)) background=BackColor==Theme.Accent ? Color.FromArgb(132,237,210) : Theme.Raised;
+            Color emphasis=Caution ? Theme.Warning : OpensArea ? Palette.Accent : FocusColor;
+            Color background=StateBackground(hovered,pressed);
             using (GraphicsPath shape=Theme.Round(new Rectangle(1,1,Width-3,Height-3),8))
             using (SolidBrush fill=new SolidBrush(background))
-            using (Pen border=new Pen(Enabled&&(Caution||Focused||hovered) ? emphasis : Theme.Border))
+            using (Pen border=new Pen(Enabled&&(OpensArea||Caution||Focused||hovered) ? emphasis : Theme.Border))
             { e.Graphics.FillPath(fill,shape); e.Graphics.DrawPath(border,shape); }
             Rectangle text=new Rectangle(Padding.Left+10,Padding.Top+3,Math.Max(1,Width-Padding.Horizontal-20),Math.Max(1,Height-Padding.Vertical-6));
             Color color=Enabled ? ForeColor : Theme.Muted;
+            if(OpensArea) {
+                float scale=VisualScale,x=Width-Padding.Right-12*scale,y=Height/2F;
+                using(var pen=new Pen(Enabled ? emphasis : Theme.Muted,1.6F*scale))
+                    e.Graphics.DrawLines(pen,new[]{new PointF(x-4*scale,y-5*scale),new PointF(x+scale,y),new PointF(x-4*scale,y+5*scale)});
+                text.Width=Math.Max(1,text.Width-(int)Math.Ceiling(22*scale));
+            }
             TextFormatFlags flags=TextFormatFlags.EndEllipsis|TextFormatFlags.SingleLine|TextFormatFlags.VerticalCenter;
             flags|=TextAlign==ContentAlignment.MiddleLeft ? TextFormatFlags.Left : TextFormatFlags.HorizontalCenter;
             if (!UseMnemonic) flags|=TextFormatFlags.NoPrefix; else if (!ShowKeyboardCues) flags|=TextFormatFlags.HidePrefix;
@@ -207,7 +254,7 @@ namespace OnlyTweakWindows
                         {
                             // Colonna icona a sinistra; titolo e descrizione si spostano a destra.
                             int column=icon.Height+8;
-                            TextRenderer.DrawText(e.Graphics,Glyph,icon,new Rectangle(text.X,0,column,Height),Enabled ? GlyphColor : Theme.Border,
+                            TextRenderer.DrawText(e.Graphics,Glyph,icon,new Rectangle(text.X,0,column,Height),Enabled ? (Caution ? Theme.Warning : OpensArea ? Palette.Accent : GlyphColor) : Theme.Border,
                                 TextFormatFlags.NoPadding|TextFormatFlags.SingleLine|TextFormatFlags.VerticalCenter|TextFormatFlags.Left);
                             text=new Rectangle(text.X+column,text.Y,Math.Max(1,text.Width-column),text.Height);
                         }
@@ -216,7 +263,7 @@ namespace OnlyTweakWindows
                 {
                     int titleHeight=titleFont.Height+4;
                     TextRenderer.DrawText(e.Graphics,Text,titleFont,new Rectangle(text.X,text.Y,text.Width,titleHeight),color,flags);
-                    TextRenderer.DrawText(e.Graphics,Description,descriptionFont,new Rectangle(text.X,text.Y+titleHeight,text.Width,Math.Max(1,text.Height-titleHeight)),Theme.Muted,
+                    TextRenderer.DrawText(e.Graphics,Description,descriptionFont,new Rectangle(text.X,text.Y+titleHeight,text.Width,Math.Max(1,text.Height-titleHeight)),Enabled&&OpensArea ? Palette.Secondary : Theme.Muted,
                         TextFormatFlags.Left|TextFormatFlags.WordBreak|TextFormatFlags.EndEllipsis|TextFormatFlags.NoPrefix);
                 }
             }
@@ -235,8 +282,9 @@ namespace OnlyTweakWindows
         protected readonly GlyphLabel Heading;
         protected override void Dispose(bool disposing) { if (disposing) Tips.Dispose(); base.Dispose(disposing); }
         public DarkPage(string title,string subtitle) : this(title,subtitle,null,null) { }
-        public DarkPage(string title,string subtitle,string glyph,string detail)
+        public DarkPage(string title,string subtitle,string glyph,string detail,AppArea? area=null)
         {
+            Area=area;
             Tips=new ToolTip { AutoPopDelay=InfoIcon.DetailDuration,InitialDelay=400,ReshowDelay=100,OwnerDraw=true };
             Tips.Popup+=delegate(object sender,PopupEventArgs e) {
                 Size size=TextRenderer.MeasureText(Tips.GetToolTip(e.AssociatedControl)??"",Font,new Size(420,0),TextFormatFlags.WordBreak);
@@ -257,12 +305,6 @@ namespace OnlyTweakWindows
             Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.Percent,100)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             TableLayoutPanel header=new TableLayoutPanel { Dock=DockStyle.Top,AutoSize=true,ColumnCount=2,Padding=new Padding(26,22,26,8),Margin=Padding.Empty };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-            // L'eyebrow identifica l'app solo nella home; nelle finestre secondarie basta il titolo della finestra.
-            if (title=="OnlyTweakWindows")
-            {
-                Label eyebrow=Theme.Label("ONLYTWEAK  /  WINDOWS",Theme.Accent); eyebrow.Font=new Font("Segoe UI",8F,FontStyle.Bold);
-                header.Controls.Add(eyebrow,0,0); header.SetColumnSpan(eyebrow,2);
-            }
             Label heading=Theme.Heading(title,glyph); Heading=(GlyphLabel)heading;
             Subtitle=Theme.Label(subtitle,Theme.Muted);
             header.Controls.Add(heading,0,1); header.SetColumnSpan(heading,2); header.Controls.Add(Subtitle,0,2);
@@ -294,6 +336,33 @@ namespace OnlyTweakWindows
         { if (IsDisposed) return; Feedback.Text=text; Feedback.Visible=!String.IsNullOrEmpty(text); Feedback.MaximumSize=new Size(Math.Max(100,ClientSize.Width-16),0); }
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         internal NavigationService Navigation { get; set; }
+        internal AppArea? Area;
+        internal void ApplyArea(AppArea inherited)
+        {
+            Area??=inherited;
+            Color accent=AreaPalette.For(Area.Value).Accent;
+            if(this is not ConfirmDialog) Heading.GlyphColor=accent;
+            ApplyControls(this,accent);
+        }
+        private void ApplyControls(Control parent,Color accent)
+        {
+            parent.ControlAdded-=AreaControlAdded;
+            parent.ControlAdded+=AreaControlAdded;
+            foreach(Control control in parent.Controls) {
+                if(control is DarkButton button) {
+                    button.FocusColor=accent;
+                    if(button.OpensArea) button.Area??=Area;
+                    button.Invalidate();
+                }
+                if(control is GlyphLabel label && label!=Heading) {label.GlyphColor=accent;label.Invalidate();}
+                if(control is InfoIcon infoIcon) {infoIcon.FocusColor=accent;infoIcon.Invalidate();}
+                ApplyControls(control,accent);
+            }
+        }
+        private void AreaControlAdded(object sender,ControlEventArgs e)
+        {
+            if(Area.HasValue) ApplyControls((Control)sender,AreaPalette.For(Area.Value).Accent);
+        }
         internal string PageTitle => Heading.Text;
         internal Button BackButton => CloseAction;
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]

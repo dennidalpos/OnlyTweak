@@ -72,6 +72,7 @@ namespace OnlyTweakWindows
         }
         private void Add(DarkPage page)
         {
+            page.ApplyArea(stack.Count>0 ? Current.Area??AppArea.Neutral : AppArea.Neutral);
             if(stack.Count>0) {focused[Current]=Current.ActiveControl;Current.HideTips();host.Controls.Remove(Current);}
             stack.Add(page);page.Navigation=this;retained.Add(page);Display();
         }
@@ -82,6 +83,7 @@ namespace OnlyTweakWindows
             host.Text=page.PageTitle=="OnlyTweakWindows" ? page.PageTitle : page.PageTitle+" · OnlyTweakWindows";
             host.AcceptButton=page.AcceptButton;host.CancelButton=page.CancelButton;
             page.ResumePage();
+            page.ApplyArea(page.Area??AppArea.Neutral);
             if(host.Visible) page.ActivatePage();
             if(page is ConfirmDialog) page.BackButton.Focus();
             else if(focused.TryGetValue(page,out var focus) && focus!=null && !focus.IsDisposed) focus.Focus();

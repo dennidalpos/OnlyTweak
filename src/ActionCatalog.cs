@@ -11,6 +11,8 @@ namespace OnlyTweakWindows
         public string Title, Description, Glyph, Detail;
         public readonly List<ActionSpec> Actions = new List<ActionSpec>();
         public readonly List<MenuDefinition> Children = new List<MenuDefinition>();
+        internal AppArea? Area;
+        internal void SetArea(AppArea area) {Area=area;foreach(var child in Children) child.SetArea(area);}
         public MenuDefinition(string title, string description, string glyph, string detail) { Title=title; Description=description; Glyph=glyph; Detail=detail; }
         public void Prune()
         {
@@ -109,6 +111,8 @@ namespace OnlyTweakWindows
                 diagnostics.Actions.Add(LocalDiagnostics.Entry(app,entry.Item1,entry.Item2,entry.Item3));
             Network.Children.Add(diagnostics);
             Tools.Actions.Add(LocalDiagnostics.Entry(app,"local.identity","Identità e gruppi","Account, gruppi e privilegi dell'app."));
+            Spool.SetArea(AppArea.Printers); Network.SetArea(AppArea.Network);
+            Maintenance.SetArea(AppArea.Maintenance); Tools.SetArea(AppArea.Advanced);
             ApplySummaries();
             foreach (MenuDefinition menu in new[] { Spool,Network,Maintenance,Tools }) menu.Prune();
         }

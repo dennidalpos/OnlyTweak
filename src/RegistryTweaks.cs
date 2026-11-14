@@ -165,7 +165,7 @@ namespace OnlyTweakWindows
         internal string Preview(string id,bool? enabled)
         {
             var definition=Get(id);var checkpoint=Load(id);
-            return "Account desktop corrente Â· HKCU\\"+definition.Path+"\nValore: "+(definition.Name.Length==0 ? "(Predefinito)" : definition.Name)+
+            return "Account desktop corrente · HKCU\\"+definition.Path+"\nValore: "+(definition.Name.Length==0 ? "(Predefinito)" : definition.Name)+
                 "\nStato: "+Describe(id)+"\nRichiesta: "+(enabled.HasValue ? enabled.Value ? definition.On : definition.Off : checkpoint==null ? "Nessun checkpoint disponibile" : "Ripristina precedente")+
                 (id=="classic" ? "\nTweak non ufficiale, dipendente dalla build. La verifica riguarda soltanto il registro." : "")+
                 "\nPotrebbe essere necessario disconnettersi. Nessun riavvio automatico di Explorer.";
@@ -218,7 +218,7 @@ namespace OnlyTweakWindows
         internal ActionSpec Action(string id,bool? enabled)
         {
             var definition=Get(id);string title=enabled.HasValue ? enabled.Value ? definition.On : definition.Off : "Ripristina precedente";
-            var action=new ActionSpec("tweak."+id+"."+(enabled?.ToString()??"restore"),title,Preview(id,enabled),"Utente desktop corrente Â· HKCU",log=>Apply(id,enabled,log)) {Confirmation=Preview(id,enabled)};
+            var action=new ActionSpec("tweak."+id+"."+(enabled?.ToString()??"restore"),title,Preview(id,enabled),"Utente desktop corrente · HKCU",log=>Apply(id,enabled,log)) {Confirmation=Preview(id,enabled)};
             action.Observe=(log,token)=> {
                 var values=definition.Paths.Select(p=>store.Read(p,definition.Name)).ToArray();var checkpoint=Load(id);
                 bool? satisfied=checkpoint==null ? null : new[]{checkpoint.Last}.Concat(checkpoint.AdditionalLast).Zip(values).All(v=>v.First.Matches(v.Second));
@@ -231,25 +231,25 @@ namespace OnlyTweakWindows
     {
         private readonly List<Action> refreshers=new();
         internal override void ResumePage() {foreach(var refresh in refreshers) refresh();}
-        internal TweakPage(AppServices app) : base("Personalizzazione","Personalizzazioni dell'utente desktop corrente, con recupero persistente.",Glyphs.Settings,null)
+        internal TweakPage(AppServices app) : base("Personalizzazione","Personalizzazioni dell'utente desktop corrente, con recupero persistente.",Glyphs.Personalize,null,AppArea.Personalization)
         {
             StackPanel stack=new();Content.Controls.Add(stack);
-            stack.Controls.Add(Theme.Button("ComoditÃ  e mantieni sveglio",delegate {Navigation.Push(new ConveniencePage(app));}));
+            stack.Controls.Add(Theme.NavigationButton("Comodità e mantieni sveglio",delegate {Navigation.Push(new ConveniencePage(app));}));
             foreach(var definition in app.Tweaks.Definitions.OrderBy(d=>d.Id.StartsWith("desktop.") ? 0 : 1)) {
                 stack.Controls.Add(Theme.Section(definition.Title,Glyphs.Settings));
-                stack.Controls.Add(Theme.Label("Utente corrente Â· senza elevazione Â· eventuale disconnessione\n"+
-                    "Fonte: "+(definition.Id.StartsWith("desktop.") ? "Microsoft Â· Icone desktop" : definition.Id=="classic" ? "Workaround registro non ufficiale" : "Impostazioni Esplora file"),Theme.Muted));
+                stack.Controls.Add(Theme.Label("Utente corrente · senza elevazione · eventuale disconnessione\n"+
+                    "Fonte: "+(definition.Id.StartsWith("desktop.") ? "Microsoft · Icone desktop" : definition.Id=="classic" ? "Workaround registro non ufficiale" : "Impostazioni Esplora file"),Theme.Muted));
                 Label state=Theme.Label("",Theme.Muted);stack.Controls.Add(state);
                 void Refresh() {try {state.Text=app.Tweaks.Describe(definition.Id);} catch(Exception ex) {state.Text="Stato sconosciuto: "+ex.Message;}}
                 refreshers.Add(Refresh);Refresh();
-                stack.Controls.Add(Theme.Button("Fonte e dettagli",delegate {
+                stack.Controls.Add(Theme.NavigationButton("Fonte e dettagli",delegate {
                     Navigation.Push(new TextDialog(definition.Title,"Fonte sulla funzione Windows:\n"+definition.Source+
                         "\n\nLa scrittura diretta del registro richiede verifica sulla build in uso; la fonte non certifica il workaround.\n"+
                         "Ambito: utente corrente. Potrebbe essere necessaria la disconnessione."));
                 }));
                 if(definition.Id=="classic") stack.Controls.Add(Theme.Label("Tweak non ufficiale: l'effetto dipende dalla build Windows 11.",Theme.Warning));
                 foreach(bool? enabled in new bool?[] {true,false,null}) {
-                    bool? choice=enabled;string title=choice.HasValue ? "Applica Â· "+(choice.Value ? definition.On : definition.Off) : "Ripristina precedente";
+                    bool? choice=enabled;string title=choice.HasValue ? "Applica · "+(choice.Value ? definition.On : definition.Off) : "Ripristina precedente";
                     stack.Controls.Add(Theme.Button(title,async delegate {
                         try {await OperationDialog.Open(this,app,app.Tweaks.Action(definition.Id,choice));}
                         catch(Exception ex) {SetFeedback(ex.Message);}
