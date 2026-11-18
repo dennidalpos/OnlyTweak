@@ -42,3 +42,7 @@ Area checks cover inheritance, dynamic controls, neutral history, confirmation c
 Render runs use a stable SystemAware DPI context and scale the host window and fonts together. The production app and test runs without render flags use PerMonitorV2. To exercise UI checks in that mode, omit `--render` from the [test command](../README.md#build-and-test).
 
 The current checks do not establish clean-VM behavior of real desktop changes, power/animation writes, firewall rules or external WinRM authentication. Those changes must be qualified on dedicated Windows 10/11 machines. Historical Italian notes and retired enterprise captures describe previous revisions only.
+
+## Editable settings
+
+Enableable functions expose validated, per-user settings that are saved in the user profile and shown with their defaults. WinRM accepts a TCP port (1024-65535), up to eight private IPv4 addresses or CIDR networks allowed by the firewall rule (empty means the selected private subnet), the allowed users (local administrators, or also Remote Management Users), the endpoint name and an idle timeout. The elevated worker receives the values only as a closed-grammar suffix of the action identifier and validates them again; undo follows the checkpoint, not the current fields. Keep-awake saves a custom duration and the screen option. Functions without meaningful parameters (network resets, spooler, SFC/DISM) have no settings.

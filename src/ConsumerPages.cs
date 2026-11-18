@@ -116,15 +116,22 @@ namespace OnlyTweakWindows
         internal AwakePage(AppServices app) : base("Mantieni sveglio","Sessione temporanea: termina alla scadenza o alla chiusura dell'app.",Glyphs.Settings,null,AppArea.Personalization) {
             var stack=new StackPanel();Content.Controls.Add(stack);
             stack.Controls.Add(Theme.Label("Utente corrente · senza elevazione · nessun piano energetico modificato\nFonte: Microsoft SetThreadExecutionState / PowerToys Awake.",Theme.Muted));
+            var saved=app.Settings.Awake();
+            var presets=new[]{15,30,60,120,240,480};
             var duration=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Durata mantieni sveglio"};
-            duration.Items.AddRange(new[]{"15 minuti","30 minuti","1 ora","2 ore","4 ore","8 ore"});duration.SelectedIndex=2;
-            var display=new CheckBox {Text="Mantieni acceso anche lo schermo",AutoSize=true,ForeColor=Theme.Text};
-            var state=Theme.Label("",Theme.Muted);stack.Controls.Add(state);stack.Controls.Add(duration);stack.Controls.Add(display);
+            duration.Items.AddRange(new[]{"15 minuti","30 minuti","1 ora","2 ore","4 ore","8 ore","Personalizzata"});
+            int preset=Array.IndexOf(presets,saved.Minutes);duration.SelectedIndex=preset>=0 ? preset : presets.Length;
+            var custom=new NumericUpDown {Minimum=1,Maximum=1440,Value=Math.Clamp(saved.Minutes,1,1440),BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Minuti personalizzati",Enabled=preset<0};
+            duration.SelectedIndexChanged+=delegate {custom.Enabled=duration.SelectedIndex==presets.Length;if(!custom.Enabled) custom.Value=presets[duration.SelectedIndex];};
+            var display=new CheckBox {Text="Mantieni acceso anche lo schermo",AutoSize=true,ForeColor=Theme.Text,Checked=saved.KeepScreen};
+            var state=Theme.Label("",Theme.Muted);stack.Controls.Add(state);stack.Controls.Add(duration);
+            stack.Controls.Add(Theme.Label("Minuti personalizzati (1-1440)",Theme.Muted));stack.Controls.Add(custom);stack.Controls.Add(display);
             void Refresh() {state.Text=app.Awake.Error!=null ? "Errore: "+app.Awake.Error : app.Awake.Active ? "Attivo fino alle "+app.Awake.Expires?.ToLocalTime().ToString("HH:mm") : "Inattivo";}
             Refresh();timer.Tick+=delegate {Refresh();};timer.Start();
             foreach(bool start in new[]{true,false}) {
                 bool enable=start;stack.Controls.Add(Theme.Button(enable ? "Avvia" : "Termina",async delegate {
-                    var time=TimeSpan.FromMinutes(new[]{15,30,60,120,240,480}[duration.SelectedIndex]);bool screen=display.Checked;
+                    var time=TimeSpan.FromMinutes((int)custom.Value);bool screen=display.Checked;
+                    if(enable) app.Settings.Save(new AwakeSettings {Minutes=(int)custom.Value,KeepScreen=screen});
                     var action=new ActionSpec(enable ? "awake.start" : "awake.stop",enable ? "Avvia mantieni sveglio" : "Termina mantieni sveglio",
                         "Sessione temporanea senza modifiche permanenti.","Utente desktop corrente",log=> {if(enable) app.Awake.Start(time,screen);else app.Awake.Stop();log("Sessione aggiornata.");}) {
                         Confirmation=enable ? "Durata: "+time.TotalMinutes+" minuti. Schermo acceso: "+(screen ? "sì" : "no")+". Sostituisce la sessione attiva e può aumentare i consumi." : "Termina la sessione mantieni sveglio dell'app.",

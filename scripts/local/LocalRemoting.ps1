@@ -6,6 +6,49 @@ $script:RemotingRoot=Join-Path $env:ProgramData 'OnlyTweak\LocalRemoting'
 $script:EndpointName='OnlyTweak.Local'
 $script:RuleName='OnlyTweak-Private-LocalRemoting'
 $script:AdminSddl='O:NSG:BAD:P(A;;GA;;;BA)(A;;GA;;;SY)'
+$script:RemoteManagementSddl='O:NSG:BAD:P(A;;GA;;;BA)(A;;GA;;;SY)(A;;GA;;;RM)'
+$script:EndpointSddl=$script:AdminSddl
+$script:Port=5985
+$script:RemoteAddresses=@()
+$script:IdleSeconds=0
+function Test-PrivateIPv4([string]$text) {
+    $ip=$null;if(![Net.IPAddress]::TryParse($text,[ref]$ip) -or $ip.AddressFamily -ne 'InterNetwork'){return $false}
+    $b=$ip.GetAddressBytes()
+    return ($b[0] -eq 10) -or ($b[0] -eq 172 -and $b[1] -ge 16 -and $b[1] -le 31) -or ($b[0] -eq 192 -and $b[1] -eq 168)
+}
+# Parameters arrive only as a strict query on the action id (port, remote, who, name, idle). Every value is validated again here.
+function Read-RemotingSettings([string]$query) {
+    $settings=[pscustomobject]@{Port=5985;Remote=@();Who='admins';EndpointName='OnlyTweak.Local';IdleSeconds=0}
+    if(!$query){return $settings}
+    if($query.Length -gt 512 -or $query -notmatch '^[A-Za-z0-9._,/=&-]+$'){throw 'InvalidSettings'}
+    $seen=@{}
+    foreach($pair in $query.Split('&')){
+        $kv=$pair.Split('=');if($kv.Count -ne 2 -or $seen.ContainsKey($kv[0])){throw 'InvalidSettings'};$seen[$kv[0]]=$true
+        switch($kv[0]){
+            'port' {$n=0;if(![int]::TryParse($kv[1],[ref]$n) -or $n -lt 1024 -or $n -gt 65535){throw 'InvalidSettings'};$settings.Port=$n}
+            'who' {if($kv[1] -cnotin @('admins','rmu')){throw 'InvalidSettings'};$settings.Who=$kv[1]}
+            'name' {if($kv[1] -cnotmatch '^[A-Za-z][A-Za-z0-9._-]{2,31}$'){throw 'InvalidSettings'};$settings.EndpointName=$kv[1]}
+            'idle' {$n=0;if(![int]::TryParse($kv[1],[ref]$n) -or $n -lt 300 -or $n -gt 86400){throw 'InvalidSettings'};$settings.IdleSeconds=$n}
+            'remote' {
+                $items=@($kv[1].Split(',') | Where-Object {$_});if($items.Count -lt 1 -or $items.Count -gt 8){throw 'InvalidSettings'}
+                $list=@();foreach($item in $items){
+                    $parts=$item.Split('/');$length=32
+                    if($parts.Count -gt 2 -or !(Test-PrivateIPv4 $parts[0])){throw 'InvalidSettings'}
+                    if($parts.Count -eq 2 -and (![int]::TryParse($parts[1],[ref]$length) -or $length -lt 8 -or $length -gt 32)){throw 'InvalidSettings'}
+                    $list+=([Net.IPAddress]::Parse($parts[0]).ToString()+'/'+$length)
+                }
+                $settings.Remote=@($list | Sort-Object -Unique)
+            }
+            default {throw 'InvalidSettings'}
+        }
+    }
+    return $settings
+}
+function Use-RemotingSettings($settings) {
+    $script:Port=[int]$settings.Port;$script:EndpointName=[string]$settings.EndpointName;$script:IdleSeconds=[int]$settings.IdleSeconds
+    $script:RemoteAddresses=@($settings.Remote)
+    $script:EndpointSddl=if([string]$settings.Who -ceq 'rmu'){$script:RemoteManagementSddl}else{$script:AdminSddl}
+}
 function Assert-Administrator {
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     try {if (!(New-Object Security.Principal.WindowsPrincipal($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {throw 'ElevationRequired'}} finally {$identity.Dispose()}
@@ -92,13 +135,14 @@ function Assert-RemotingFirewall {
     foreach ($rule in @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Enabled True -Action Allow)) {
         $port=$rule | Get-NetFirewallPortFilter;$service=$rule | Get-NetFirewallServiceFilter;$application=$rule | Get-NetFirewallApplicationFilter
         if ([string]$port.Protocol -in @('TCP','6','Any','256') -and
-            (@($port.LocalPort | Where-Object {$_ -in @('5985','5986') -or $_ -match '^\d+-\d+$'}).Count -gt 0 -or
+            (@($port.LocalPort | Where-Object {$_ -in @('5985','5986',[string]$script:Port) -or $_ -match '^\d+-\d+$'}).Count -gt 0 -or
              ('Any' -in @($port.LocalPort) -and ([string]$service.Service -eq 'WinRM' -or
               ([string]$service.Service -eq 'Any' -and [string]$application.Program -in @('Any','System')))))) {throw 'ExistingIngressConflict'}
     }
 }
 function Update-RemotingJournal($state) {$state.Last=Read-LocalRemotingConfiguration;Save-RemotingState $state}
 function Subnet-Canonical([string]$value) {
+    if(!$value.Contains('/')){$single=$null;if([Net.IPAddress]::TryParse($value,[ref]$single) -and $single.AddressFamily -eq 'InterNetwork'){return $single.ToString()+'/32'};return ''}
     $parts=$value.Split('/');if($parts.Count -ne 2){return ''}
     $ip=$null;if(![Net.IPAddress]::TryParse($parts[0],[ref]$ip) -or $ip.AddressFamily -ne 'InterNetwork'){return ''}
     $length=0
@@ -109,9 +153,15 @@ function Subnet-Canonical([string]$value) {
     } elseif(![int]::TryParse($parts[1],[ref]$length) -or $length -lt 0 -or $length -gt 32){return ''}
     return $ip.ToString()+'/'+$length
 }
-function Invoke-LocalRemoting([string]$action,[int]$index=0) {
+function Invoke-LocalRemoting([string]$action,[int]$index=0,$settings=$null) {
     Assert-Administrator
-    $current=Read-LocalRemotingConfiguration;$saved=Load-RemotingState
+    $saved=Load-RemotingState
+    # Undo and inspect follow the checkpoint; a new enable uses the requested settings.
+    $active=$settings
+    if($saved -and $saved.Phase -ne 'Restored' -and $saved.PSObject.Properties['Settings'] -and $saved.Settings){$active=$saved.Settings}
+    if(!$active){$active=Read-RemotingSettings ''}
+    Use-RemotingSettings $active
+    $current=Read-LocalRemotingConfiguration
     if ($action -eq 'winrm.inspect') {
         $configured=$false
         if ($saved -and $saved.Phase -eq 'Applied' -and (Hash-Value $current) -ceq (Hash-Value $saved.Last)) {
@@ -150,44 +200,47 @@ function Invoke-LocalRemoting([string]$action,[int]$index=0) {
     if ($saved -and $saved.Phase -ne 'Restored') {throw 'ActiveCheckpointRequiresRestore'}
     if (@($current.Listeners).Count -gt 0 -or $current.Endpoint -or $current.Rule) {throw 'ExistingConfigurationConflict'}
     Assert-RemotingFirewall
-    $state=[pscustomobject]@{SchemaVersion=1;Computer=$env:COMPUTERNAME;Phase='Applying';Network=$network;Before=$current;Last=$current}
+    $state=[pscustomobject]@{SchemaVersion=1;Computer=$env:COMPUTERNAME;Phase='Applying';Network=$network;Settings=$active;Before=$current;Last=$current}
     Save-RemotingState $state
     Set-Service WinRM -StartupType Automatic;Start-Service WinRM;Update-RemotingJournal $state
     # Bind only to the selected private address. No wildcard listener or automatic firewall exception.
-    New-Item -Path WSMan:\localhost\Listener -Address ('IP:'+$network.Address) -Transport HTTP -Port 5985 -Force | Out-Null
+    New-Item -Path WSMan:\localhost\Listener -Address ('IP:'+$network.Address) -Transport HTTP -Port $script:Port -Force | Out-Null
     Update-RemotingJournal $state
-    Register-PSSessionConfiguration -Name $script:EndpointName -SecurityDescriptorSddl $script:AdminSddl -AccessMode Remote -NoServiceRestart -Force | Out-Null
+    $endpointArguments=@{Name=$script:EndpointName;SecurityDescriptorSddl=$script:EndpointSddl;AccessMode='Remote';NoServiceRestart=$true;Force=$true}
+    if($script:IdleSeconds -gt 0){$endpointArguments.TransportOption=(New-PSTransportOption -IdleTimeoutSec $script:IdleSeconds -MaxIdleTimeoutSec $script:IdleSeconds)}
+    Register-PSSessionConfiguration @endpointArguments | Out-Null
     Update-RemotingJournal $state
     Restart-Service WinRM -ErrorAction Stop;Update-RemotingJournal $state
     # Firewall opening is the last mutation, after endpoint restrictions and selected network are reread.
     if ((Hash-Value (Get-PrivateRemotingNetwork $index)) -cne (Hash-Value $network)) {throw 'NetworkChanged'}
     if (!$state.Last.Endpoint -or !$state.Last.Endpoint.Sddl) {throw 'EndpointSecurityNotReadable'}
     $actual=New-Object Security.AccessControl.RawSecurityDescriptor($state.Last.Endpoint.Sddl)
-    $expected=New-Object Security.AccessControl.RawSecurityDescriptor($script:AdminSddl)
+    $expected=New-Object Security.AccessControl.RawSecurityDescriptor($script:EndpointSddl)
     if ($actual.GetSddlForm('All') -cne $expected.GetSddlForm('All')) {throw 'EndpointSecurityMismatch'}
     Assert-RemotingFirewall
+    $remote=if(@($script:RemoteAddresses).Count -gt 0){@($script:RemoteAddresses)}else{$network.Subnet}
     New-NetFirewallRule -PolicyStore PersistentStore -Name $script:RuleName -DisplayName 'OnlyTweak: PowerShell LAN privata' -Direction Inbound -Action Allow -Enabled False `
-        -Profile Private -InterfaceAlias $network.Alias -LocalAddress $network.Address -RemoteAddress $network.Subnet -Protocol TCP -LocalPort 5985 -Service WinRM | Out-Null
+        -Profile Private -InterfaceAlias $network.Alias -LocalAddress $network.Address -RemoteAddress $remote -Protocol TCP -LocalPort $script:Port -Service WinRM | Out-Null
     Update-RemotingJournal $state
     Enable-NetFirewallRule -PolicyStore PersistentStore -Name $script:RuleName;Update-RemotingJournal $state
     $effective=Get-NetFirewallRule -PolicyStore ActiveStore -Name $script:RuleName -ErrorAction Stop
     if (!$state.Last.Rule -or $state.Last.Rule.Enabled -ne 'True' -or $state.Last.Rule.Profile -ne 'Private' -or
         $state.Last.Rule.LocalAddress -notcontains $network.Address -or
-        @($state.Last.Rule.RemoteAddress | Where-Object {(Subnet-Canonical $_) -ceq $network.Subnet}).Count -ne 1 -or
+        ((@($state.Last.Rule.RemoteAddress | ForEach-Object {Subnet-Canonical $_} | Sort-Object) -join ',') -cne ((@($remote | ForEach-Object {Subnet-Canonical $_} | Sort-Object)) -join ',')) -or
         !$effective -or [string]$effective.Enabled -ne 'True') {throw 'FirewallVerificationFailed'}
     $state.Phase='Applied';Save-RemotingState $state
-    return @{Action=$action;Computer=$env:COMPUTERNAME;ReadComplete=$true;Configured=$true;Restored=$false;Endpoint=$script:EndpointName;Network=$network;Configuration=$state.Last}
+    return @{Action=$action;Computer=$env:COMPUTERNAME;ReadComplete=$true;Configured=$true;Restored=$false;Endpoint=$script:EndpointName;Network=$network;Settings=$active;Configuration=$state.Last}
 }
 # Entry point: a single bounded, typed request on stdin; no command text or external script path.
 $result=@{State='Inconclusive';Summary='WinRM non verificato.';Evidence=@();AuthenticationVerified=$false;ErrorCode='';Data=$null}
 try {
     $line=[Console]::In.ReadLine()
     if (!$line -or $line.Length -gt 16384) {throw 'InvalidRequest'}
-    $request=$line | ConvertFrom-Json;$action=[string]$request.ActionId;$index=0
-    if ($action -match '^winrm\.enable\.([1-9][0-9]{0,8})$') {$index=[int]$Matches[1]}
+    $request=$line | ConvertFrom-Json;$action=[string]$request.ActionId;$index=0;$settings=$null
+    if ($action -match '^winrm\.enable\.([1-9][0-9]{0,8})(?:\?(.+))?$') {$index=[int]$Matches[1];$settings=Read-RemotingSettings $Matches[2];$action='winrm.enable.'+$index}
     elseif ($action -notin @('winrm.inspect','winrm.undo')) {throw 'InvalidAction'}
     if ($action -ne 'winrm.inspect' -and $request.Confirmed -ne $true) {throw 'ConfirmationRequired'}
-    $result.Data=Invoke-LocalRemoting $action $index
+    $result.Data=Invoke-LocalRemoting $action $index $settings
     $result.State='Success';$result.Summary=if($action -eq 'winrm.inspect'){'Configurazione locale letta; autenticazione da un altro PC non collaudata.'}elseif($action -eq 'winrm.undo'){'Configurazione precedente ripristinata e riletta.'}else{'WinRM configurato sulla LAN privata; connessione e credenziali remote da collaudare.'}
 } catch {
     $result.State=if($action -eq 'winrm.inspect'){'Inconclusive'}else{'Unverified'}

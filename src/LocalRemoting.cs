@@ -25,10 +25,15 @@ namespace OnlyTweakWindows
         }
         internal static int InterfaceIndex(string id) {
             if(id is "winrm.inspect" or "winrm.undo") return 0;
-            var match=Regex.Match(id??"",@"^winrm\.enable\.([1-9][0-9]{0,8})$");
+            var match=Regex.Match(id??"",@"^winrm\.enable\.([1-9][0-9]{0,8})(?:\?([^?]+))?$");
             if(!match.Success || !Int32.TryParse(match.Groups[1].Value,out int index)) throw new ArgumentException("Azione WinRM non consentita.");
+            if(match.Groups[2].Success) try {RemotingSettings.FromQuery(match.Groups[2].Value);} catch(ArgumentException ex) {throw new ArgumentException("Azione WinRM non consentita: "+ex.Message);}
             return index;
         }
+        // Identificativo dell'azione senza il suffisso dei parametri, come lo riporta il risultato del worker.
+        internal static string BaseId(string id) { int cut=(id??"").IndexOf('?'); return cut<0 ? id : id.Substring(0,cut); }
+        internal static string EnableId(int index,RemotingSettings settings) { string query=settings.Validated().Query(); return "winrm.enable."+index+(query.Length==0 ? "" : "?"+query); }
+        internal static RemotingSettings SettingsOf(string id) { int cut=(id??"").IndexOf('?'); return cut<0 ? new RemotingSettings() : RemotingSettings.FromQuery(id.Substring(cut+1)); }
         internal static StepResult Run(string id,CancellationToken cancellation=default) {
             InterfaceIndex(id);
             var request=new OperationRequest {ActionId=id,Target=Environment.MachineName,Confirmed=id!="winrm.inspect"};
@@ -67,7 +72,7 @@ namespace OnlyTweakWindows
             this.app=app;
             var stack=new StackPanel();Content.Controls.Add(stack);
             stack.Controls.Add(Theme.Label("Avanzata · richiede amministratore · Windows PowerShell 5.1\nFonte: Microsoft WSMan e Register-PSSessionConfiguration.\nNon configura altri PC, credenziali, TrustedHosts o autenticazione meno restrittiva.",Theme.Muted));
-            stack.Controls.Add(Theme.Label("Endpoint: OnlyTweak.Local · porta TCP 5985 · amministratori locali\nLa connessione da un altro PC domestico richiede configurazione e collaudo separati sul client.",Theme.Muted));
+            stack.Controls.Add(Theme.Label("Predefiniti: endpoint OnlyTweak.Local · porta TCP 5985 · amministratori locali · sottorete privata. Puoi modificarli sotto.\nLa connessione da un altro PC domestico richiede configurazione e collaudo separati sul client.",Theme.Muted));
             var interfaces=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Interfaccia LAN privata"};
             try {
                 interfaces.Items.AddRange(app.RemotingInterfaces());
@@ -75,6 +80,23 @@ namespace OnlyTweakWindows
                 else stack.Controls.Add(Theme.Label("Nessuna scheda attiva con un indirizzo IPv4 trovata. Collega la LAN e riapri la pagina.",Theme.Warning));
             } catch(Exception ex) {stack.Controls.Add(Theme.Label("Interfacce non leggibili: "+ex.Message,Theme.Warning));}
             stack.Controls.Add(Theme.Label("Scegli l'interfaccia. Il worker verifica che sia privata e abbia un solo IPv4 idoneo.",Theme.Muted));stack.Controls.Add(interfaces);
+            // Impostazioni modificabili: valori validati, salvati per l'utente e passati al worker come suffisso a grammatica chiusa.
+            var saved=app.Settings.Remoting();
+            if(app.Settings.LoadError!=null) stack.Controls.Add(Theme.Label(app.Settings.LoadError,Theme.Warning));
+            stack.Controls.Add(Theme.Section("Impostazioni dell'abilitazione",Glyphs.Settings));
+            var port=new NumericUpDown {Minimum=1024,Maximum=65535,Value=saved.Port,BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Porta TCP"};
+            var remote=new TextBox {BackColor=Theme.Surface,ForeColor=Theme.Text,PlaceholderText="Vuoto = sottorete privata della scheda · es. 192.168.1.20, 192.168.1.0/24",Text=String.Join(", ",saved.Remote),AccessibleName="Indirizzi remoti ammessi"};
+            var who=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Utenti ammessi"};
+            who.Items.AddRange(new object[]{"Amministratori locali","Amministratori locali e Remote Management Users"});who.SelectedIndex=saved.Who=="rmu" ? 1 : 0;
+            var endpoint=new TextBox {BackColor=Theme.Surface,ForeColor=Theme.Text,Text=saved.EndpointName,AccessibleName="Nome endpoint"};
+            var idle=new NumericUpDown {Minimum=0,Maximum=1440,Increment=5,Value=saved.IdleMinutes,BackColor=Theme.Surface,ForeColor=Theme.Text,AccessibleName="Timeout di inattività in minuti"};
+            RemotingSettings Collect() => new RemotingSettings {Port=(int)port.Value,Remote=RemotingSettings.ParseRemote(remote.Text),Who=who.SelectedIndex==1 ? "rmu" : "admins",EndpointName=endpoint.Text.Trim(),IdleMinutes=(int)idle.Value}.Validated();
+            foreach(var (caption,control) in new (string,Control)[]{("Porta TCP (1024-65535)",port),("Indirizzi remoti ammessi (solo IPv4 privati)",remote),("Utenti ammessi",who),("Nome endpoint",endpoint),("Timeout di inattività in minuti (0 = predefinito di Windows, altrimenti 5-1440)",idle)}) {
+                stack.Controls.Add(Theme.Label(caption,Theme.Muted));stack.Controls.Add(control);
+            }
+            stack.Controls.Add(Theme.Button("Ripristina valori predefiniti",delegate {
+                var d=new RemotingSettings();port.Value=d.Port;remote.Text="";who.SelectedIndex=0;endpoint.Text=d.EndpointName;idle.Value=d.IdleMinutes;
+            }));
             state=Theme.Label("Da verificare. Nessuna modifica applicata all'apertura di questa pagina.",Theme.Muted);stack.Controls.Add(state);
             foreach(string mode in new[]{"inspect","enable","undo"}) {
                 string selected=mode;
@@ -83,7 +105,9 @@ namespace OnlyTweakWindows
                         string id="winrm."+selected;
                         if(selected=="enable") {
                             if(interfaces.SelectedItem is not LocalInterface nic) throw new InvalidOperationException("Seleziona un'interfaccia disponibile.");
-                            id+="."+nic.Index;
+                            var settings=Collect();
+                            id=LocalRemoting.EnableId(nic.Index,settings);
+                            app.Settings.Save(settings);
                         }
                         await OperationDialog.Open(this,app,LocalRemoting.Action(id));
                         state.Text="Consulta il risultato della verifica o dell'operazione. L'apertura della pagina non certifica la connessione remota.";

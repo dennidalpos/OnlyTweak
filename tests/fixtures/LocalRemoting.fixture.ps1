@@ -6,6 +6,7 @@ function Clone($value) {$value | ConvertTo-Json -Depth 28 -Compress | ConvertFro
 function Assert-Fixture($condition,[string]$message) {if (!$condition) {throw $message}}
 function Reset-Fixture {
     $script:Config=[pscustomobject]@{Service=[pscustomobject]@{State='Stopped';StartMode='Manual'};Listeners=@();Endpoint=$null;Rule=$null}
+    $script:ExpectPort=5985;$script:ExpectName='OnlyTweak.Local';$script:ExpectSddl=$script:AdminSddl;$script:ExpectRemote='192.0.2.0/24';$script:ExpectIdle=0
     $script:Saved=$null;$script:Category='Private';$script:Multiple=$false;$script:FailListener=$false;$script:FailEndpoint=$false;$script:Ingress=$false;$script:Writes=0
 }
 function Assert-Administrator {}
@@ -33,21 +34,24 @@ function Stop-Service {param($Name,$ErrorAction) $script:Writes++;$script:Config
 function Restart-Service {param($Name,$ErrorAction) $script:Writes++}
 function New-Item {param($Path,$Address,$Transport,$Port,[switch]$Force)
     if($script:FailListener){throw 'FixtureListenerFailed'}
-    Assert-Fixture ($Address -eq 'IP:192.0.2.10' -and $Transport -eq 'HTTP' -and $Port -eq 5985) 'BroadListener'
+    Assert-Fixture ($Address -eq 'IP:192.0.2.10' -and $Transport -eq 'HTTP' -and $Port -eq $script:ExpectPort) 'BroadListener'
     $script:Writes++;$script:Config.Listeners=@([pscustomobject]@{Name='Listener_fixture';Keys=@(('Address='+$Address),'Transport=HTTP');Values=@();PSPath='WSMan:\localhost\Listener\Listener_fixture'})
 }
-function Register-PSSessionConfiguration {param($Name,$SecurityDescriptorSddl,$AccessMode,[switch]$NoServiceRestart,[switch]$Force)
-    Assert-Fixture ($Name -eq 'OnlyTweak.Local' -and $SecurityDescriptorSddl -ceq $script:AdminSddl -and $AccessMode -eq 'Remote') 'EndpointBroadened'
+function New-PSTransportOption {param($IdleTimeoutSec,$MaxIdleTimeoutSec) Assert-Fixture ($IdleTimeoutSec -eq $MaxIdleTimeoutSec) 'IdleMismatch';[pscustomobject]@{Idle=$IdleTimeoutSec}}
+function Register-PSSessionConfiguration {param($Name,$SecurityDescriptorSddl,$AccessMode,[switch]$NoServiceRestart,[switch]$Force,$TransportOption)
+    Assert-Fixture ($Name -eq $script:ExpectName -and $SecurityDescriptorSddl -ceq $script:ExpectSddl -and $AccessMode -eq 'Remote') 'EndpointBroadened'
+    $applied=0;if($TransportOption){$applied=$TransportOption.Idle}
+    Assert-Fixture ($applied -eq $script:ExpectIdle) 'IdleNotApplied'
     $script:Writes++;$script:Config.Endpoint=[pscustomobject]@{Name=$Name;Sddl=$SecurityDescriptorSddl}
     if($script:FailEndpoint){throw 'FixtureEndpointPartialFailure'}
 }
-function Unregister-PSSessionConfiguration {param($Name,[switch]$NoServiceRestart,[switch]$Force) $script:Writes++;$script:Config.Endpoint=$null}
+function Unregister-PSSessionConfiguration {param($Name,[switch]$NoServiceRestart,[switch]$Force) Assert-Fixture ($Name -eq $script:ExpectName) 'ForeignEndpointRemoval';$script:Writes++;$script:Config.Endpoint=$null}
 function Get-ChildItem {param($Path) $script:Config.Listeners}
 function Remove-Item {param($LiteralPath,[switch]$Recurse) Assert-Fixture ($LiteralPath -eq 'WSMan:\localhost\Listener\Listener_fixture') 'ForeignListenerRemoval';$script:Writes++;$script:Config.Listeners=@()}
 function New-NetFirewallRule {
     param($PolicyStore,$Name,$DisplayName,$Direction,$Action,$Enabled,$Profile,$InterfaceAlias,$LocalAddress,$RemoteAddress,$Protocol,$LocalPort,$Service)
     Assert-Fixture ($script:Config.Endpoint -and $script:Config.Listeners.Count -eq 1 -and $Enabled -eq 'False' -and $Profile -eq 'Private' -and
-        $InterfaceAlias -eq 'LAN-12' -and $LocalAddress -eq '192.0.2.10' -and $RemoteAddress -eq '192.0.2.0/24' -and $Service -eq 'WinRM') 'FirewallBroadenedOrOpenedEarly'
+        $InterfaceAlias -eq 'LAN-12' -and $LocalAddress -eq '192.0.2.10' -and (@($RemoteAddress) -join ',') -eq $script:ExpectRemote -and $LocalPort -eq $script:ExpectPort -and $Service -eq 'WinRM') 'FirewallBroadenedOrOpenedEarly'
     $script:Writes++;$script:Config.Rule=[pscustomobject]@{Name=$Name;Enabled=$Enabled;Profile=$Profile;LocalAddress=@($LocalAddress);RemoteAddress=@($RemoteAddress)}
 }
 function Enable-NetFirewallRule {param($PolicyStore,$Name) $script:Writes++;$script:Config.Rule.Enabled='True'}
@@ -99,3 +103,17 @@ Reset-Fixture
 Reject-Fixture {Invoke-LocalRemoting 'winrm.enable.13' 12} 'InvalidAction'
 Assert-Fixture ($script:Writes -eq 0) 'InvalidActionModifiedHost'
 'WINRM_FIXTURES_PASSED'
+
+# Editable settings: validated, applied to the listener, endpoint and firewall rule, and followed by undo from the checkpoint.
+Reset-Fixture
+foreach($bad in @('port=80','port=70000','remote=8.8.8.8','remote=0.0.0.0/0','remote=192.168.1.0/4','name=a','name=1bad','idle=10','who=everyone','foo=1','port=5986&port=5987','port=5986;calc','remote=','remote=192.168.1.1,192.168.1.2,192.168.1.3,192.168.1.4,192.168.1.5,192.168.1.6,192.168.1.7,192.168.1.8,192.168.1.9')) {
+    Reject-Fixture {Read-RemotingSettings $bad} 'InvalidSettings'
+}
+$custom=Read-RemotingSettings 'port=5986&remote=192.168.1.20,192.168.1.0/24&who=rmu&name=Custom.Endpoint&idle=900'
+Assert-Fixture ($custom.Port -eq 5986 -and $custom.Who -eq 'rmu' -and $custom.IdleSeconds -eq 900 -and @($custom.Remote).Count -eq 2) 'SettingsNotParsed'
+$script:ExpectPort=5986;$script:ExpectName='Custom.Endpoint';$script:ExpectSddl=$script:RemoteManagementSddl;$script:ExpectRemote='192.168.1.0/24,192.168.1.20/32';$script:ExpectIdle=900
+$before=Hash-Value $script:Config
+$result=Invoke-LocalRemoting 'winrm.enable.12' 12 $custom
+Assert-Fixture ($result.Configured -and $script:Saved.Settings.Port -eq 5986 -and $script:Saved.Settings.EndpointName -eq 'Custom.Endpoint') 'CustomSettingsNotVerified'
+$undo=Invoke-LocalRemoting 'winrm.undo'
+Assert-Fixture ($undo.Restored -and (Hash-Value $script:Config) -ceq $before) 'CustomStateNotRestored'

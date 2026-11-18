@@ -58,10 +58,11 @@ namespace OnlyTweakWindows
         public readonly AwakeService Awake;
         internal readonly string DisplayIdentity;
         internal readonly Func<LocalInterface[]> RemotingInterfaces;
+        internal readonly UserSettingsStore Settings;
         public AppServices() : this(new WindowsSecurityBackend()) { }
         internal AppServices(ISecurityBackend security) : this(security,EnvironmentInfo.Profile,null) { }
         internal AppServices(ISecurityBackend security,OsProfile os,FeatureAvailability availability,IOperationAudit localAudit=null,
-            IRegistryStore registry=null,IPreferenceBackend preferences=null,IAwakeBackend awake=null,string displayIdentity=null,Func<LocalInterface[]> remotingInterfaces=null,string tweakFolder=null)
+            IRegistryStore registry=null,IPreferenceBackend preferences=null,IAwakeBackend awake=null,string displayIdentity=null,Func<LocalInterface[]> remotingInterfaces=null,string tweakFolder=null,string settingsFolder=null)
         {
             LocalOperations=new LocalOperationExecutor(localAudit);
             OS=os;
@@ -72,6 +73,7 @@ namespace OnlyTweakWindows
             Awake=new AwakeService(awake??new WindowsAwakeBackend());
             DisplayIdentity=displayIdentity??EnvironmentInfo.Account;
             RemotingInterfaces=remotingInterfaces??LocalRemoting.Interfaces;
+            Settings=new UserSettingsStore(settingsFolder);
             Spool = new SpoolService(new WindowsSpoolBackend());
             Catalog = new ActionCatalog(this);
         }

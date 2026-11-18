@@ -32,6 +32,30 @@ namespace OnlyTweakWindows
         }
         private static void ConsumerTests()
         {
+            Test("impostazioni utente: WinRM validate, id a grammatica chiusa e salvataggio",()=> {
+                var custom=new RemotingSettings {Port=5986,Remote=RemotingSettings.ParseRemote("192.168.1.20, 192.168.1.0/24"),Who="rmu",EndpointName="Custom.Endpoint",IdleMinutes=15}.Validated();
+                string id=LocalRemoting.EnableId(9,custom);
+                Assert(id=="winrm.enable.9?port=5986&remote=192.168.1.0/24,192.168.1.20/32&who=rmu&name=Custom.Endpoint&idle=900","Id: "+id);
+                Assert(LocalRemoting.InterfaceIndex(id)==9 && LocalRemoting.BaseId(id)=="winrm.enable.9" && LocalRemoting.EnableId(9,LocalRemoting.SettingsOf(id))==id,"Round trip.");
+                Assert(LocalRemoting.EnableId(9,new RemotingSettings())=="winrm.enable.9","Predefiniti nell'id.");
+                foreach(string bad in new[]{"winrm.enable.9?port=80","winrm.enable.9?remote=8.8.8.8","winrm.enable.9?remote=0.0.0.0/0","winrm.enable.9?name=a","winrm.enable.9?idle=10","winrm.enable.9?who=all",
+                    "winrm.enable.9?port=5986;calc","winrm.enable.9?port=5986&port=5987","winrm.enable.9?foo=1","winrm.enable.9?","winrm.enable.9?remote="})
+                    Throws(()=>LocalRemoting.InterfaceIndex(bad),"consentita");
+                Throws(()=>new RemotingSettings {Port=80}.Validated(),"Porta");
+                Throws(()=>RemotingSettings.ParseRemote("8.8.8.8"),"privati");
+                Throws(()=>RemotingSettings.ParseRemote("192.168.1.0/4"),"Prefisso");
+                string folder=Path.Combine(Path.GetTempPath(),"onlytweak-settings-"+Guid.NewGuid().ToString("N"));
+                try {
+                    var store=new UserSettingsStore(folder);
+                    Assert(store.Remoting().IsDefault && store.Awake().Minutes==60,"Predefiniti iniziali.");
+                    store.Save(custom);store.Save(new AwakeSettings {Minutes=45,KeepScreen=true});
+                    var reopened=new UserSettingsStore(folder);
+                    Assert(reopened.Remoting().Port==5986 && reopened.Remoting().Who=="rmu" && reopened.Awake().Minutes==45 && reopened.Awake().KeepScreen,"Salvataggio perso.");
+                    File.WriteAllText(Path.Combine(folder,"settings.json"),"{\"SchemaVersion\":1,\"Remoting\":{\"Port\":80}}");
+                    var broken=new UserSettingsStore(folder);
+                    Assert(broken.Remoting().IsDefault && broken.LoadError!=null,"File alterato non gestito.");
+                } finally { if(Directory.Exists(folder)) Directory.Delete(folder,true); }
+            });
             Test("report operazione: rilevamento WinRM leggibile e conflitto evidenziato",()=> {
                 string listener="{\"Name\":\"Listener_1\",\"Keys\":[\"Address=*\",\"Transport=HTTP\"],\"Values\":[{\"Name\":\"Address\",\"Value\":\"*\"},{\"Name\":\"Enabled\",\"Value\":\"true\"},"+
                     "{\"Name\":\"ListeningOn_1\",\"Value\":\"192.168.1.5\"},{\"Name\":\"ListeningOn_2\",\"Value\":\"fe80::1%7\"},{\"Name\":\"Port\",\"Value\":\"5985\"},{\"Name\":\"Transport\",\"Value\":\"HTTP\"}]}";

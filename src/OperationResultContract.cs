@@ -54,7 +54,7 @@ namespace OnlyTweakWindows
             if(request.ActionId.StartsWith("winrm.",StringComparison.Ordinal) && result.Data is JsonElement data) {
                 return Field(data,"ReadComplete",JsonValueKind.True) && Boolean(data,"Configured") &&
                     Text(data,"Computer") && data.GetProperty("Computer").GetString()==Environment.MachineName &&
-                    Text(data,"Action") && data.GetProperty("Action").GetString()==request.ActionId &&
+                    Text(data,"Action") && data.GetProperty("Action").GetString()==LocalRemoting.BaseId(request.ActionId) &&
                     (request.ActionId=="winrm.inspect" || request.ActionId=="winrm.undo" && Field(data,"Restored",JsonValueKind.True) ||
                      request.ActionId.StartsWith("winrm.enable.",StringComparison.Ordinal) && Field(data,"Configured",JsonValueKind.True));
             }
