@@ -7,9 +7,9 @@ The Windows Forms app uses one window with internal pages. Home exposes Personal
 These screenshots show the Italian, dark Windows Forms interface of OnlyTweakWindows 2.0.0, captured on 14 November 2026. The render harness opened the actual application windows with a synthetic Windows 11 profile, a demo account and simulated 150% scaling. Each PNG is 1462 × 1196 pixels.
 
 - [Home](../assets/screenshots/home.png) shows the six areas and the session history button. The image is embedded in the [README](../README.md).
-- Personalization shows the current state and the controls for showing, hiding or restoring the This PC desktop icon.
+- Personalization lists each setting as a compact row: title and current state, then radio buttons for the options and the previous state, followed by Apply and Details.
 
-  ![Personalization page with the This PC icon state and show, hide, and restore buttons](../assets/screenshots/personalization.png)
+  ![Personalization page with one row per setting, radio buttons for the options, and an Apply button](../assets/screenshots/personalization.png)
 
 - Gaming shows the Advanced selection, which includes the Base and Balanced checklists. The scrollable page opens with Game Mode and background recording.
 
@@ -29,7 +29,7 @@ The home grid switches to one column when the available width is below 760 logic
 
 **Indietro** or **Alt+Left** returns to the earlier page and preserves its controls and results. Leaving an active diagnostic requests cancellation and waits for it to finish. A modifying action must finish before you can leave it. **Annulla** is the default action on a confirmation page.
 
-Personalization offers explicit apply/show/hide choices and restore, with state, scope and recovery warnings. The desktop settings are independent and recover their compound values together. Gaming levels are cumulative checklists with per-action controls; guided settings remain incomplete, even after opening Windows. Hardware-dependent features are checked in Windows rather than inferred as available.
+Personalization offers one row per setting with radio buttons for the available choices and the previous state; Apply stays disabled until the selection differs from the current state, and restore is enabled only when a checkpoint exists. State, scope and recovery warnings are kept. The desktop settings are independent and recover their compound values together. Gaming levels are cumulative checklists with per-action controls; guided settings remain incomplete, even after opening Windows. Hardware-dependent features are checked in Windows rather than inferred as available.
 
 Keep-awake shows active/inactive/error and expiry. Its request survives page navigation and ends when the app closes. WinRM starts in an unverified state and never changes configuration on page entry. Verification and modifications require the local elevated worker.
 

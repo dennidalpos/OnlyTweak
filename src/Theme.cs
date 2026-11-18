@@ -200,6 +200,41 @@ namespace OnlyTweakWindows
             if (Focused&&ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(1,1,Width-3,Height-3),FocusColor,Theme.Background);
         }
     }
+    // Radio button nel tema scuro: cerchio con contorno, punto Accent se selezionato, focus visibile da tastiera.
+    // Le frecce spostano la selezione fra i radio dello stesso contenitore.
+    internal sealed class DarkRadio : RadioButton
+    {
+        private bool hovered;
+        public DarkRadio()
+        {
+            SetStyle(ControlStyles.UserPaint|ControlStyles.OptimizedDoubleBuffer|ControlStyles.AllPaintingInWmPaint|ControlStyles.ResizeRedraw,true);
+            AutoSize=true; Font=new Font("Segoe UI",10F); ForeColor=Theme.Text; Cursor=Cursors.Hand; Margin=new Padding(0,4,20,4);
+        }
+        private int Box => (int)Math.Ceiling(18*Math.Max(DeviceDpi/96F,Font.Size/10F));
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            Size text=TextRenderer.MeasureText(Text,Font,Size.Empty,TextFormatFlags.SingleLine|TextFormatFlags.NoPrefix);
+            return new Size(Box+10+text.Width+4,Math.Max(Box,text.Height)+8);
+        }
+        protected override void OnMouseEnter(EventArgs e) { hovered=true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hovered=false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnCheckedChanged(EventArgs e) { Invalidate(); base.OnCheckedChanged(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnEnter(EventArgs e) { Invalidate(); base.OnEnter(e); }
+        protected override void OnLeave(EventArgs e) { Invalidate(); base.OnLeave(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(Parent==null ? Theme.Background : Parent.BackColor); e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+            int box=Box,top=(Height-box)/2;
+            Color edge=!Enabled ? Theme.Border : Checked||hovered||Focused ? Theme.Accent : Theme.Border;
+            using (var pen=new Pen(edge,Checked ? 2F : 1.5F)) e.Graphics.DrawEllipse(pen,2,top+1,box-3,box-3);
+            if (Checked)
+                using (var dot=new SolidBrush(Enabled ? Theme.Accent : Theme.Muted)) { int d=box/2-1; e.Graphics.FillEllipse(dot,2+(box-3-d)/2f,top+1+(box-3-d)/2f,d,d); }
+            var area=new Rectangle(box+10,0,Math.Max(1,Width-box-10),Height);
+            TextRenderer.DrawText(e.Graphics,Text,Font,area,Enabled ? ForeColor : Theme.Muted,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.SingleLine|TextFormatFlags.NoPrefix);
+            if (Focused&&ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics,new Rectangle(box+6,3,Math.Max(1,Width-box-8),Height-6),Theme.Accent,Theme.Background);
+        }
+    }
     internal sealed class DarkButton : Button
     {
         public string Description,Glyph;

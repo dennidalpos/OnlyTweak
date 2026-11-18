@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -236,37 +237,50 @@ namespace OnlyTweakWindows
             StackPanel stack=new();Content.Controls.Add(stack);
             var convenience=Theme.NavigationButton("Comodità e mantieni sveglio",delegate {Navigation.Push(new ConveniencePage(app));});
             convenience.Margin=new Padding(5,5,5,14); stack.Controls.Add(convenience);
-            foreach(var definition in app.Tweaks.Definitions.OrderBy(d=>d.Id.StartsWith("desktop.") ? 0 : 1)) {
-                stack.Controls.Add(Theme.Section(definition.Title,Glyphs.Settings));
-                stack.Controls.Add(Theme.Label("Utente corrente · senza elevazione · eventuale disconnessione\n"+
-                    "Fonte: "+(definition.Id.StartsWith("desktop.") ? "Microsoft · Icone desktop" : definition.Id=="classic" ? "Workaround registro non ufficiale" : "Impostazioni Esplora file"),Theme.Muted));
-                Label state=Theme.Label("",Theme.Muted);stack.Controls.Add(state);
-                void Refresh() {try {state.Text=app.Tweaks.Describe(definition.Id);} catch(Exception ex) {state.Text="Stato sconosciuto: "+ex.Message;}}
-                refreshers.Add(Refresh);Refresh();
-                if(definition.Id=="classic") stack.Controls.Add(Theme.Label("Tweak non ufficiale: l'effetto dipende dalla build Windows 11.",Theme.Warning));
-                // Gerarchia: Applica (primaria) · Ripristina (secondaria) · Fonte e dettagli (terziaria), su una sola riga.
-                var actions=new List<Button>();
-                foreach(bool? enabled in new bool?[] {true,false,null}) {
-                    bool? choice=enabled;string title=choice.HasValue ? "Applica · "+(choice.Value ? definition.On : definition.Off) : "Ripristina precedente";
-                    EventHandler run=async delegate {
-                        try {await OperationDialog.Open(this,app,app.Tweaks.Action(definition.Id,choice));}
-                        catch(Exception ex) {SetFeedback(ex.Message);}
-                    };
-                    // Le due scelte Applica sono alternative di pari peso: il riempimento resta per l'unica azione primaria di una sezione.
-                    actions.Add(Theme.Button(title,run));
-                }
-                // Il link informativo precede le azioni: la riga sotto contiene solo ciò che modifica Windows.
-                var source=Theme.QuietButton("Fonte e dettagli",delegate {
-                    Navigation.Push(new TextDialog(definition.Title,"Fonte sulla funzione Windows:\n"+definition.Source+
-                        "\n\nLa scrittura diretta del registro richiede verifica sulla build in uso; la fonte non certifica il workaround.\n"+
-                        "Ambito: utente corrente. Potrebbe essere necessaria la disconnessione."));
-                });
-                source.Margin=new Padding(0,0,0,4);
-                stack.Controls.Add(source);
-                stack.Controls.Add(Theme.ActionRow(actions.ToArray()));
-
-            }
+            stack.Controls.Add(Theme.Label("Valgono per l'utente corrente, senza elevazione. Alcune modifiche richiedono la disconnessione. Scegli un'opzione e premi Applica.",Theme.Muted));
+            foreach(var definition in app.Tweaks.Definitions.OrderBy(d=>d.Id.StartsWith("desktop.") ? 0 : 1)) AddRow(stack,app,definition);
             Footer.Controls.Add(Theme.Button("Aggiorna stato",delegate {ResumePage();}));
+        }
+        // Una voce = titolo e stato su una riga, poi le scelte come radio button con Applica sulla stessa riga.
+        private void AddRow(StackPanel stack,AppServices app,TweakDefinition definition)
+        {
+            var row=new FlowLayoutPanel { AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,WrapContents=true,FlowDirection=FlowDirection.LeftToRight,BackColor=Theme.Background,Margin=new Padding(0,0,0,6),Padding=new Padding(0,6,0,6) };
+            var title=new Label { Text=definition.Title,AutoSize=true,ForeColor=Theme.Text,BackColor=Color.Transparent,Font=new Font("Segoe UI",10F,FontStyle.Bold),Margin=new Padding(0,0,14,2),UseMnemonic=false };
+            var state=new Label { AutoSize=true,ForeColor=Theme.Muted,BackColor=Color.Transparent,Margin=new Padding(0,1,0,2),UseMnemonic=false };
+            var heading=new FlowLayoutPanel { AutoSize=true,WrapContents=false,BackColor=Theme.Background,Margin=Padding.Empty };heading.Controls.Add(title);heading.Controls.Add(state);
+            row.Controls.Add(heading);row.SetFlowBreak(heading,true);
+            var radios=new (bool? Value,DarkRadio Radio)[] {(true,new DarkRadio {Text=definition.On}),(false,new DarkRadio {Text=definition.Off}),(null,new DarkRadio {Text="Ripristina precedente"})};
+            foreach(var item in radios) { item.Radio.AccessibleName=definition.Title+": "+item.Radio.Text; row.Controls.Add(item.Radio); }
+            var apply=Theme.PrimaryButton("Applica",async delegate {
+                var selected=radios.FirstOrDefault(r=>r.Radio.Checked);if(selected.Radio==null) return;
+                try {await OperationDialog.Open(this,app,app.Tweaks.Action(definition.Id,selected.Value));}
+                catch(Exception ex) {SetFeedback(ex.Message);}
+            });
+            apply.MinimumSize=new Size(90,36);apply.Margin=new Padding(8,2,8,2);apply.AccessibleName="Applica: "+definition.Title;
+            var details=Theme.QuietButton("Dettagli",delegate {
+                Navigation.Push(new TextDialog(definition.Title,"Fonte sulla funzione Windows:\n"+definition.Source+
+                    "\n\nLa scrittura diretta del registro richiede verifica sulla build in uso; la fonte non certifica il workaround.\n"+
+                    "Ambito: utente corrente. Potrebbe essere necessaria la disconnessione."+
+                    (definition.Id=="classic" ? "\n\nTweak non ufficiale: l'effetto dipende dalla build Windows 11." : "")));
+            });
+            details.MinimumSize=new Size(70,36);details.Margin=new Padding(0,2,0,2);details.AccessibleName="Dettagli: "+definition.Title;
+            row.Controls.Add(apply);row.Controls.Add(details);
+            bool? current=null;
+            void Update() {
+                try {
+                    string text=app.Tweaks.Describe(definition.Id);state.Text="· "+text;
+                    current=text==definition.On || (definition.Id=="classic" && text.StartsWith("Tweak presente",StringComparison.Ordinal)) ? true : text==definition.Off ? false : null;
+                } catch(Exception ex) {state.Text="· Stato sconosciuto: "+ex.Message;current=null;}
+                radios[2].Radio.Enabled=app.Tweaks.HasCheckpoint(definition.Id);
+                if(!radios[2].Radio.Enabled && radios[2].Radio.Checked) radios[2].Radio.Checked=false;
+                apply.Enabled=radios.Any(r=>r.Radio.Checked && !(r.Value.HasValue && r.Value==current));
+            }
+            foreach(var item in radios) item.Radio.CheckedChanged+=delegate {
+                apply.Enabled=radios.Any(r=>r.Radio.Checked && !(r.Value.HasValue && r.Value==current));
+            };
+            refreshers.Add(Update);Update();
+            if(current.HasValue) radios.First(r=>r.Value==current).Radio.Checked=true;
+            stack.Controls.Add(row);
         }
     }
 }
