@@ -40,10 +40,9 @@ namespace OnlyTweakWindows
             });
             button.Enabled=app.OS.Build>=item.MinimumBuild && app.Availability.Target(item.Target);
             if(!button.Enabled) state.Text="Non disponibile su questa versione o installazione Windows.";
-            stack.Controls.Add(button);
-            stack.Controls.Add(Theme.NavigationButton("Fonte e dettagli",delegate {
+            stack.Controls.Add(Theme.ActionRow(button,Theme.QuietButton("Fonte e dettagli",delegate {
                 page.Navigation.Push(new TextDialog(item.Title,item.Description+"\n\nFonte Microsoft:\n"+item.Source+"\n\n"+item.State));
-            }));
+            })));
         }
     }
     internal sealed class ConveniencePage : DarkPage
@@ -90,21 +89,25 @@ namespace OnlyTweakWindows
             void Refresh() {try {status.Text="Stato: "+app.Preferences.Describe(id);} catch(Exception ex) {status.Text="Stato sconosciuto: "+ex.Message;}}
             refreshers.Add(Refresh);
             Refresh();
-            sections.Controls.Add(Theme.NavigationButton("Fonte e dettagli",delegate {
+            var actions=new List<Button>();
+            foreach(bool restore in new[]{false,true}) {
+                bool undo=restore;
+                EventHandler run=async delegate {
+                    try {
+                        string value=undo ? null : choice();if(!undo && value==null) throw new InvalidOperationException("Seleziona un piano disponibile.");
+                        await OperationDialog.Open(this,app,app.Preferences.Action(id,value));Refresh();
+                    } catch(Exception ex) {SetFeedback(ex.Message);}
+                };
+                actions.Add(undo ? Theme.Button("Ripristina precedente",run) : Theme.PrimaryButton("Applica",run));
+            }
+            actions.Add(Theme.QuietButton("Fonte e dettagli",delegate {
                 Navigation.Push(new TextDialog(id=="power" ? "Piano energetico" : "Animazioni Windows",
                     "API Microsoft utilizzata per lettura e modifica:\n"+(id=="power" ?
                     "https://learn.microsoft.com/en-us/windows/win32/api/powersetting/nf-powersetting-powersetactivescheme" :
                     "https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfow")+
                     "\n\nCheckpoint persistente dello stato precedente. Nessuna modifica ai parametri interni dei piani energetici."));
             }));
-            foreach(bool restore in new[]{false,true}) {
-                bool undo=restore;sections.Controls.Add(Theme.Button(undo ? "Ripristina precedente" : "Applica",async delegate {
-                    try {
-                        string value=undo ? null : choice();if(!undo && value==null) throw new InvalidOperationException("Seleziona un piano disponibile.");
-                        await OperationDialog.Open(this,app,app.Preferences.Action(id,value));Refresh();
-                    } catch(Exception ex) {SetFeedback(ex.Message);}
-                }));
-            }
+            sections.Controls.Add(Theme.ActionRow(actions.ToArray()));
         }
     }
     internal sealed class AwakePage : DarkPage

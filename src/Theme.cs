@@ -62,6 +62,19 @@ namespace OnlyTweakWindows
             button.Padding=new Padding(16,8,16,8); button.Margin=new Padding(0,0,0,10); button.UseMnemonic=false;
             return button;
         }
+        // Gerarchia delle azioni: primaria (riempita) per ciò che modifica, secondaria per ripristino/alternative,
+        // terziaria (testo) per informazioni. Il testo scuro su Accent supera 4.5:1.
+        public static Button PrimaryButton(string text,EventHandler clicked)
+        { var button=Button(text,clicked); button.BackColor=Accent; button.ForeColor=Background; button.Font=new Font("Segoe UI",10F,FontStyle.Bold); return button; }
+        public static Button QuietButton(string text,EventHandler clicked)
+        { var button=(DarkButton)Button(text,clicked); button.Quiet=true; button.Padding=new Padding(0,0,0,0); return button; }
+        // Riga di azioni affiancate: evita la pila verticale di pulsanti di pari peso.
+        public static FlowLayoutPanel ActionRow(params Button[] buttons)
+        {
+            var row=new FlowLayoutPanel { AutoSize=true,AutoSizeMode=AutoSizeMode.GrowAndShrink,WrapContents=true,FlowDirection=FlowDirection.LeftToRight,
+                BackColor=Background,Margin=new Padding(0,0,0,6) };
+            row.Controls.AddRange(buttons); return row;
+        }
         public static Button NavigationButton(string text,EventHandler clicked,AppArea? area=null)
         {
             var button=(DarkButton)Button(text,clicked); button.OpensArea=true; button.Area=area;
@@ -192,6 +205,8 @@ namespace OnlyTweakWindows
         public string Description,Glyph;
         public bool Caution;
         public bool OpensArea;
+        // Azione terziaria: testo accentato senza superficie né bordo finché non è in hover, premuta o attiva da tastiera.
+        public bool Quiet;
         public AppArea? Area;
         internal Color FocusColor=Theme.Accent;
         public Color GlyphColor=Theme.Muted;
@@ -233,9 +248,9 @@ namespace OnlyTweakWindows
             using (GraphicsPath shape=Theme.Round(new Rectangle(1,1,Width-3,Height-3),8))
             using (SolidBrush fill=new SolidBrush(background))
             using (Pen border=new Pen(Enabled&&(OpensArea||Caution||Focused||hovered) ? emphasis : Theme.Border))
-            { e.Graphics.FillPath(fill,shape); e.Graphics.DrawPath(border,shape); }
+            { if (!Quiet||hovered||pressed||Focused) { e.Graphics.FillPath(fill,shape); e.Graphics.DrawPath(border,shape); } }
             Rectangle text=new Rectangle(Padding.Left+10,Padding.Top+3,Math.Max(1,Width-Padding.Horizontal-20),Math.Max(1,Height-Padding.Vertical-6));
-            Color color=Enabled ? ForeColor : Theme.Muted;
+            Color color=Enabled ? (Quiet ? Theme.Accent : ForeColor) : Theme.Muted;
             if(OpensArea) {
                 float scale=VisualScale,x=Width-Padding.Right-12*scale,y=Height/2F;
                 using(var pen=new Pen(Enabled ? emphasis : Theme.Muted,1.6F*scale))

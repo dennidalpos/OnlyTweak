@@ -234,7 +234,8 @@ namespace OnlyTweakWindows
         internal TweakPage(AppServices app) : base("Personalizzazione","Personalizzazioni dell'utente desktop corrente, con recupero persistente.",Glyphs.Personalize,null,AppArea.Personalization)
         {
             StackPanel stack=new();Content.Controls.Add(stack);
-            stack.Controls.Add(Theme.NavigationButton("Comodità e mantieni sveglio",delegate {Navigation.Push(new ConveniencePage(app));}));
+            var convenience=Theme.NavigationButton("Comodità e mantieni sveglio",delegate {Navigation.Push(new ConveniencePage(app));});
+            convenience.Margin=new Padding(5,5,5,14); stack.Controls.Add(convenience);
             foreach(var definition in app.Tweaks.Definitions.OrderBy(d=>d.Id.StartsWith("desktop.") ? 0 : 1)) {
                 stack.Controls.Add(Theme.Section(definition.Title,Glyphs.Settings));
                 stack.Controls.Add(Theme.Label("Utente corrente · senza elevazione · eventuale disconnessione\n"+
@@ -242,19 +243,27 @@ namespace OnlyTweakWindows
                 Label state=Theme.Label("",Theme.Muted);stack.Controls.Add(state);
                 void Refresh() {try {state.Text=app.Tweaks.Describe(definition.Id);} catch(Exception ex) {state.Text="Stato sconosciuto: "+ex.Message;}}
                 refreshers.Add(Refresh);Refresh();
-                stack.Controls.Add(Theme.NavigationButton("Fonte e dettagli",delegate {
+                if(definition.Id=="classic") stack.Controls.Add(Theme.Label("Tweak non ufficiale: l'effetto dipende dalla build Windows 11.",Theme.Warning));
+                // Gerarchia: Applica (primaria) · Ripristina (secondaria) · Fonte e dettagli (terziaria), su una sola riga.
+                var actions=new List<Button>();
+                foreach(bool? enabled in new bool?[] {true,false,null}) {
+                    bool? choice=enabled;string title=choice.HasValue ? "Applica · "+(choice.Value ? definition.On : definition.Off) : "Ripristina precedente";
+                    EventHandler run=async delegate {
+                        try {await OperationDialog.Open(this,app,app.Tweaks.Action(definition.Id,choice));}
+                        catch(Exception ex) {SetFeedback(ex.Message);}
+                    };
+                    // Le due scelte Applica sono alternative di pari peso: il riempimento resta per l'unica azione primaria di una sezione.
+                    actions.Add(Theme.Button(title,run));
+                }
+                // Il link informativo precede le azioni: la riga sotto contiene solo ciò che modifica Windows.
+                var source=Theme.QuietButton("Fonte e dettagli",delegate {
                     Navigation.Push(new TextDialog(definition.Title,"Fonte sulla funzione Windows:\n"+definition.Source+
                         "\n\nLa scrittura diretta del registro richiede verifica sulla build in uso; la fonte non certifica il workaround.\n"+
                         "Ambito: utente corrente. Potrebbe essere necessaria la disconnessione."));
-                }));
-                if(definition.Id=="classic") stack.Controls.Add(Theme.Label("Tweak non ufficiale: l'effetto dipende dalla build Windows 11.",Theme.Warning));
-                foreach(bool? enabled in new bool?[] {true,false,null}) {
-                    bool? choice=enabled;string title=choice.HasValue ? "Applica · "+(choice.Value ? definition.On : definition.Off) : "Ripristina precedente";
-                    stack.Controls.Add(Theme.Button(title,async delegate {
-                        try {await OperationDialog.Open(this,app,app.Tweaks.Action(definition.Id,choice));}
-                        catch(Exception ex) {SetFeedback(ex.Message);}
-                    }));
-                }
+                });
+                source.Margin=new Padding(0,0,0,4);
+                stack.Controls.Add(source);
+                stack.Controls.Add(Theme.ActionRow(actions.ToArray()));
 
             }
             Footer.Controls.Add(Theme.Button("Aggiorna stato",delegate {ResumePage();}));
