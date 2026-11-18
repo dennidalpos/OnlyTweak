@@ -191,6 +191,15 @@ try {
     $result.State='Success';$result.Summary=if($action -eq 'winrm.inspect'){'Configurazione locale letta; autenticazione da un altro PC non collaudata.'}elseif($action -eq 'winrm.undo'){'Configurazione precedente ripristinata e riletta.'}else{'WinRM configurato sulla LAN privata; connessione e credenziali remote da collaudare.'}
 } catch {
     $result.State=if($action -eq 'winrm.inspect'){'Inconclusive'}else{'Unverified'}
-    $result.ErrorCode='LocalRemotingNotVerified';$result.Summary='Operazione non verificata: '+$_.Exception.Message+'. Verifica stato e checkpoint prima di riprovare.'
+    $result.ErrorCode='LocalRemotingNotVerified'
+    # Prerequisiti controllati prima di qualsiasi modifica: messaggio con la correzione da fare, senza invitare al retry.
+    $known=@{
+        PrivateNetworkRequired='Nessuna modifica applicata: la scheda scelta non è su una rete Privata. Impostala su Privata in Impostazioni > Rete e Internet > proprietà della connessione, poi riprova.'
+        SinglePrivateIPv4Required='Nessuna modifica applicata: la scheda scelta deve avere un solo indirizzo IPv4 valido con prefisso fra /8 e /30. Controlla la configurazione IP della scheda.'
+        PrivateFirewallRequired='Nessuna modifica applicata: il firewall del profilo Privato deve essere attivo e bloccare il traffico in ingresso per impostazione predefinita.'
+        ExistingIngressConflict='Nessuna modifica applicata: esiste già una regola firewall in ingresso che consente WinRM (TCP 5985/5986). Rimuovila o verificala prima di riprovare.'
+    }
+    $message=[string]$_.Exception.Message
+    $result.Summary=if($known.ContainsKey($message)){$known[$message]}else{'Operazione non verificata: '+$message+'. Verifica stato e checkpoint prima di riprovare.'}
 }
 $result | ConvertTo-Json -Depth 28 -Compress
