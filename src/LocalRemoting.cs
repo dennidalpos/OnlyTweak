@@ -13,8 +13,16 @@ namespace OnlyTweakWindows
     {
         internal static LocalInterface[] Interfaces()=>NetworkInterface.GetAllNetworkInterfaces()
             .Where(n=>n.OperationalStatus==OperationalStatus.Up && n.NetworkInterfaceType!=NetworkInterfaceType.Loopback)
-            .Where(n=>n.GetIPProperties().GetIPv4Properties()!=null && n.GetIPProperties().UnicastAddresses.Any(a=>a.Address.AddressFamily==AddressFamily.InterNetwork))
-            .Select(n=>new LocalInterface(n.GetIPProperties().GetIPv4Properties().Index,n.Name)).ToArray();
+            .Select(Describe).Where(i=>i!=null).ToArray();
+        // Ogni scheda è letta separatamente: filtri e binding senza IPv4 (errore 10043) non devono azzerare l'elenco.
+        internal static LocalInterface Describe(NetworkInterface adapter) {
+            try {
+                var properties=adapter.GetIPProperties();
+                var ipv4=properties.GetIPv4Properties();
+                if(ipv4==null || !properties.UnicastAddresses.Any(a=>a.Address.AddressFamily==AddressFamily.InterNetwork)) return null;
+                return new LocalInterface(ipv4.Index,adapter.Name);
+            } catch(NetworkInformationException) { return null; }
+        }
         internal static int InterfaceIndex(string id) {
             if(id is "winrm.inspect" or "winrm.undo") return 0;
             var match=Regex.Match(id??"",@"^winrm\.enable\.([1-9][0-9]{0,8})$");
@@ -64,6 +72,7 @@ namespace OnlyTweakWindows
             try {
                 interfaces.Items.AddRange(app.RemotingInterfaces());
                 if(interfaces.Items.Count>0) interfaces.SelectedIndex=0;
+                else stack.Controls.Add(Theme.Label("Nessuna scheda attiva con un indirizzo IPv4 trovata. Collega la LAN e riapri la pagina.",Theme.Warning));
             } catch(Exception ex) {stack.Controls.Add(Theme.Label("Interfacce non leggibili: "+ex.Message,Theme.Warning));}
             stack.Controls.Add(Theme.Label("Scegli l'interfaccia. Il worker verifica che sia privata e abbia un solo IPv4 idoneo.",Theme.Muted));stack.Controls.Add(interfaces);
             state=Theme.Label("Da verificare. Nessuna modifica applicata all'apertura di questa pagina.",Theme.Muted);stack.Controls.Add(state);

@@ -188,6 +188,9 @@ namespace OnlyTweakWindows
             foreach (PrinterItem item in app.Printers.Read()) Console.WriteLine("Stampante: " + item);
             List<string> network=new List<string>(); ProcessService.ReadNetwork(network.Add);
             Console.WriteLine("Diagnostica rete: " + network.Count + " righe lette (indirizzi non riportati nel test).");
+            var remoting=LocalRemoting.Interfaces();
+            Assert(remoting.All(i=>i.Index>0 && !String.IsNullOrEmpty(i.Name)),"Schede WinRM non valide.");
+            Console.WriteLine("Schede WinRM idonee all'elenco: " + remoting.Length + ".");
         }
         private static void VerifyArtifact()
         {
