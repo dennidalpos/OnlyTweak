@@ -42,8 +42,8 @@ namespace OnlyTweakWindows
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute,12));
             Label scope=Theme.Label("Ambito: " + action.Scope,Theme.Muted);
             Label warning=Theme.Label(startAutomatically ? "Risultato e avanzamento dell'operazione." : action.Confirmation ?? "Premi Esegui per avviare questa azione.",Theme.Muted);
-            layout.SizeChanged+=delegate { scope.MaximumSize=new Size(Math.Max(100,layout.ClientSize.Width-12),0); warning.MaximumSize=scope.MaximumSize; };
-            output=Theme.Output(); output.Text="Pronto. Nessuna operazione eseguita."; output.Margin=new Padding(0,3,0,3);
+            layout.SizeChanged+=delegate { scope.MaximumSize=new Size(Math.Max(100,layout.ClientSize.Width-12),0); warning.MaximumSize=scope.MaximumSize; status.MaximumSize=scope.MaximumSize; };
+            output=Theme.Output(); output.WrapLines=true; output.Text="Pronto. Nessuna operazione eseguita."; output.Margin=new Padding(0,3,0,3);
             status=Theme.Label("Verifica disponibilità...",Theme.Muted); status.Margin=new Padding(0,10,0,6);
             progress=new ActivityBar { Dock=DockStyle.Fill,Visible=false,Margin=Padding.Empty };
             layout.Controls.Add(scope,0,0); layout.Controls.Add(warning,0,1); layout.Controls.Add(output,0,2); layout.Controls.Add(status,0,3); layout.Controls.Add(progress,0,4);
@@ -98,7 +98,7 @@ namespace OnlyTweakWindows
                 app.LastResult=result;
                 if (action.Restart!=null) Enqueue(action.Restart);
                 Enqueue(result.State+" · "+result.Summary);
-                if(result.Data!=null) Enqueue(result.Data.ToString());
+                {string report=OperationReport.Describe(result);if(report.Length>0) Enqueue(report);}
                 status.Text=result.Summary;
                 if(result.State!=StepState.Success) status.ForeColor=Theme.Warning;
                 app.History.Add((result.State==StepState.Success ? "TERMINATA" : String.IsNullOrEmpty(result.ErrorCode) ? result.State.ToString() : "ERRORE")+" · "+action.Title);
@@ -124,7 +124,7 @@ namespace OnlyTweakWindows
             cancellation=new CancellationTokenSource();cancel.Visible=true;cancel.Enabled=true;
             try {
                 StepResult result=await Task.Run(()=>action.RequiresElevation ? LocalPrivilege.Execute(action.Id,Enqueue,cancellation.Token,true) : app.LocalOperations.Read(action,Enqueue,cancellation.Token));
-                app.LocalOperations.Observe(action,result,true);Enqueue(result.Summary);if(result.Data!=null) Enqueue(result.Data.ToString());status.Text=result.Summary;
+                app.LocalOperations.Observe(action,result,true);Enqueue(result.Summary);{string report=OperationReport.Describe(result);if(report.Length>0) Enqueue(report);}status.Text=result.Summary;
                 app.History.Add("RILETTURA · "+action.Title+" · "+result.State);
             } catch(Exception ex) {Enqueue(ex.Message);status.Text="Rilettura incompleta.";}
             finally {outputTimer.Stop();FlushOutput();running=false;BlocksPush=false;reading=false;app.Coordinator.Leave();read.Enabled=true;run.Enabled=true;CloseAction.Enabled=true;cancel.Enabled=false;cancel.Visible=action.IsDiagnostic;cancellation.Dispose();cancellation=null;}

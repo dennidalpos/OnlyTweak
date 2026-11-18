@@ -171,6 +171,10 @@ namespace OnlyTweakWindows
             editor.Resize+=delegate { MeasureText(); }; editor.KeyUp+=delegate { SyncPosition(); }; editor.MouseWheel+=delegate { SyncPosition(); };
             AccessibleName="Risultato e cronologia dell'operazione";
         }
+        // Con WrapLines le righe lunghe vanno a capo nella finestra: niente scorrimento orizzontale.
+        private bool wrap;
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool WrapLines { get { return wrap; } set { wrap=value; editor.WordWrap=value; MeasureText(); } }
         public override string Text { get { return editor==null ? "" : editor.Text; } set { if (editor!=null) { editor.Text=value; editor.SelectionStart=0; editor.SelectionLength=0; } } }
         public int TextLength { get { return editor.TextLength; } }
         public void Clear() { editor.Clear(); }
@@ -178,9 +182,10 @@ namespace OnlyTweakWindows
         private void MeasureText()
         {
             if (syncing) return;
-            int width=0;
-            foreach (string line in editor.Lines) width=Math.Max(width,TextRenderer.MeasureText(line,editor.Font,Size.Empty,TextFormatFlags.NoPadding|TextFormatFlags.NoPrefix|TextFormatFlags.SingleLine).Width);
-            textWidth=width+16; textHeight=Math.Max(1,editor.Lines.Length)*editor.Font.Height+8;
+            int width=0,lines=Math.Max(1,editor.Lines.Length);
+            if (wrap) { if (editor.IsHandleCreated) lines=Math.Max(lines,(int)SendMessage(editor.Handle,0x00ba,IntPtr.Zero,IntPtr.Zero)); }
+            else foreach (string line in editor.Lines) width=Math.Max(width,TextRenderer.MeasureText(line,editor.Font,Size.Empty,TextFormatFlags.NoPadding|TextFormatFlags.NoPrefix|TextFormatFlags.SingleLine).Width);
+            textWidth=wrap ? 0 : width+16; textHeight=lines*editor.Font.Height+8;
             PerformLayout(); SyncPosition();
         }
         protected override void OnLayout(LayoutEventArgs e)
@@ -188,7 +193,7 @@ namespace OnlyTweakWindows
             if (editor==null) return;
             int gutter=Math.Max(14,Font.Height), inset=10;
             bool v=textHeight>ClientSize.Height-2*inset;
-            bool h=textWidth>ClientSize.Width-2*inset-(v ? gutter : 0);
+            bool h=!wrap && textWidth>ClientSize.Width-2*inset-(v ? gutter : 0);
             v=textHeight>ClientSize.Height-2*inset-(h ? gutter : 0);
             int w=Math.Max(1,ClientSize.Width-2*inset-(v ? gutter : 0)),height=Math.Max(1,ClientSize.Height-2*inset-(h ? gutter : 0));
             editor.SetBounds(inset,inset,w,height); vertical.SetBounds(ClientSize.Width-gutter-1,1,gutter,ClientSize.Height-(h ? gutter : 0)-2);
@@ -211,6 +216,7 @@ namespace OnlyTweakWindows
         }
         protected override void OnPaint(PaintEventArgs e) { base.OnPaint(e); using (Pen pen=new Pen(Theme.Border)) e.Graphics.DrawRectangle(pen,0,0,Width-1,Height-1); }
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window,int message,IntPtr wParam,ref Point point);
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window,int message,IntPtr wParam,IntPtr lParam);
     }
     internal sealed class PrinterItems : List<object>
     {

@@ -32,6 +32,15 @@ namespace OnlyTweakWindows
         }
         private static void ConsumerTests()
         {
+            Test("report operazione: rilevamento WinRM leggibile e conflitto evidenziato",()=> {
+                string listener="{\"Name\":\"Listener_1\",\"Keys\":[\"Address=*\",\"Transport=HTTP\"],\"Values\":[{\"Name\":\"Address\",\"Value\":\"*\"},{\"Name\":\"Enabled\",\"Value\":\"true\"},"+
+                    "{\"Name\":\"ListeningOn_1\",\"Value\":\"192.168.1.5\"},{\"Name\":\"ListeningOn_2\",\"Value\":\"fe80::1%7\"},{\"Name\":\"Port\",\"Value\":\"5985\"},{\"Name\":\"Transport\",\"Value\":\"HTTP\"}]}";
+                string state="{\"Data\":{\"Action\":\"winrm.inspect\",\"Configuration\":{\"Service\":{\"State\":\"Running\",\"StartMode\":\"Auto\"},\"Listeners\":["+listener+"],\"Endpoint\":null,\"Rule\":null},\"CheckpointPhase\":\"Absent\"}}";
+                var data=System.Text.Json.JsonDocument.Parse("{\"RequestAccepted\":true,\"ExecutionCompleted\":false,\"EffectVerified\":false,\"AuditComplete\":true,\"Before\":"+state+",\"After\":"+state+"}").RootElement.Clone();
+                string text=OperationReport.Describe(data,"winrm.enable.9");
+                Assert(text.Contains("richiesta sì · esecuzione no") && text.Contains("IPv4 in ascolto: 192.168.1.5 (+1 IPv6)") && text.Contains("identico a prima") && text.Contains("Conflitto:"),text);
+                Assert(text.Split('\n').All(l=>l.Length<140) && !text.Contains("{"),"Report non compatto.");
+            });
             Test("desktop: errore sul secondo valore conserva checkpoint incompleto",()=>WithTweaks((store,service,reopen,folder)=> {
                 var definition=service.Definitions.Single(d=>d.Id=="desktop.recycle");store.FailAt=2;
                 try {service.Apply(definition.Id,true,Ignore);throw new Exception("Errore ignorato.");} catch(IOException) {}

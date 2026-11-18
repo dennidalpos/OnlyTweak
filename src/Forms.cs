@@ -81,7 +81,7 @@ namespace OnlyTweakWindows
         public TextDialog(string title,string text) : this(title,text,Glyphs.Document) { }
         public TextDialog(string title,string text,string glyph,AppArea? area=null) : base(title,"Informazioni della sessione corrente.",glyph,null,area)
         {
-            Content.Padding=new Padding(26,8,26,16); DarkOutput output=Theme.Output(); output.Text=text; Content.Controls.Add(output);
+            Content.Padding=new Padding(26,8,26,16); DarkOutput output=Theme.Output(); output.WrapLines=true; output.Text=text; Content.Controls.Add(output);
             Footer.Controls.Add(Theme.Button("Copia testo",delegate { if (output.TextLength>0 && !Theme.TryCopy(output.Text)) SetFeedback("Appunti occupati: impossibile copiare."); }));
         }
     }

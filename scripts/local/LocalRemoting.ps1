@@ -197,6 +197,11 @@ try {
         PrivateNetworkRequired='Nessuna modifica applicata: la scheda scelta non è su una rete Privata. Impostala su Privata in Impostazioni > Rete e Internet > proprietà della connessione, poi riprova.'
         SinglePrivateIPv4Required='Nessuna modifica applicata: la scheda scelta deve avere un solo indirizzo IPv4 valido con prefisso fra /8 e /30. Controlla la configurazione IP della scheda.'
         PrivateFirewallRequired='Nessuna modifica applicata: il firewall del profilo Privato deve essere attivo e bloccare il traffico in ingresso per impostazione predefinita.'
+        ExistingConfigurationConflict='Nessuna modifica applicata: WinRM ha già un listener, un endpoint o una regola firewall OnlyTweak creati fuori dall''app (per esempio da winrm quickstart o Enable-PSRemoting). L''app non li sovrascrive né li rimuove: verifica la configurazione esistente da Windows PowerShell con "winrm enumerate winrm/config/listener" e rimuovila tu se non serve.'
+        StoppedServiceWithExistingConfiguration='Nessuna modifica applicata: il servizio WinRM è fermo ma esiste già una configurazione (listener o endpoint). Verificala prima di riprovare.'
+        ActiveCheckpointRequiresRestore='Nessuna modifica applicata: esiste già una configurazione creata dall''app. Usa "Ripristina precedente" prima di abilitarla di nuovo.'
+        ExternalConfigurationChange='Ripristino bloccato: la configurazione WinRM è stata modificata fuori dall''app dopo l''abilitazione. L''app non tocca modifiche esterne: verificale e correggile manualmente.'
+        ElevationRequired='Nessuna modifica applicata: servono privilegi di amministratore. Conferma la richiesta di elevazione di Windows.'
         ExistingIngressConflict='Nessuna modifica applicata: esiste già una regola firewall in ingresso che consente WinRM (TCP 5985/5986). Rimuovila o verificala prima di riprovare.'
     }
     $message=[string]$_.Exception.Message
