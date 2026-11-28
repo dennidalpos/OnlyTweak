@@ -1,0 +1,10 @@
+# Preserve upstream license bytes, including their original whitespace and line endings.
+licenses/** -text -whitespace
+
+# Use LF for PowerShell tooling and fixtures.
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+
+# Keep embedded scripts byte-for-byte, including Authenticode signatures.
+scripts/local/*.ps1 -text !eol
+scripts/local/*.psm1 -text !eol
